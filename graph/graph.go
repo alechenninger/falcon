@@ -223,7 +223,7 @@ func (g *Graph) GetSubjects(objectType schema.TypeName, objectID schema.ID, rela
 type UsersetSubject struct {
 	SubjectType     schema.TypeName
 	SubjectRelation schema.RelationName
-	SubjectIDs      []schema.ID
+	SubjectIDs      *roaring.Bitmap
 }
 
 // GetUsersetSubjects returns all userset subject tuples for the given object
@@ -264,15 +264,10 @@ func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.I
 		}
 
 		if bm, ok := g.tuples[key]; ok && !bm.IsEmpty() {
-			ids := bm.ToArray()
-			subjectIDs := make([]schema.ID, len(ids))
-			for i, id := range ids {
-				subjectIDs[i] = schema.ID(id)
-			}
 			results = append(results, UsersetSubject{
 				SubjectType:     ref.Type,
 				SubjectRelation: ref.Relation,
-				SubjectIDs:      subjectIDs,
+				SubjectIDs:      bm,
 			})
 		}
 	}

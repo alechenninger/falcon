@@ -110,18 +110,20 @@ func (g *Graph) checkDirectAndUserset(subjectType schema.TypeName, subjectID sch
 	for _, us := range usersets {
 		// For each userset tuple (e.g., @group:1#member), check if the subject
 		// satisfies that userset
-		for _, usSubjectID := range us.SubjectIDs {
+		usOT, ok := g.schema.Types[us.SubjectType]
+		if !ok {
+			continue
+		}
+		usRel, ok := usOT.Relations[us.SubjectRelation]
+		if !ok {
+			continue
+		}
+
+		it := us.SubjectIDs.Iterator()
+		for it.HasNext() {
+			usSubjectID := schema.ID(it.Next())
 			// Check if subjectType:subjectID is in us.SubjectType:usSubjectID#us.SubjectRelation
 			// e.g., is user:alice in group:1#member?
-			usOT, ok := g.schema.Types[us.SubjectType]
-			if !ok {
-				continue
-			}
-			usRel, ok := usOT.Relations[us.SubjectRelation]
-			if !ok {
-				continue
-			}
-
 			ok, err := g.checkRelation(subjectType, subjectID, us.SubjectType, usSubjectID, usRel, visited)
 			if err != nil {
 				return false, err
