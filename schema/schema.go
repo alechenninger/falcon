@@ -3,19 +3,29 @@
 // how relations are computed from other relations or by traversing the graph.
 package schema
 
+// TypeName identifies an object type (e.g., "document", "folder", "user").
+// This is used for both object types and subject types.
+type TypeName string
+
+// RelationName identifies a relation on an object type (e.g., "viewer", "editor").
+type RelationName string
+
+// ID is a unique identifier for an object or subject within its type.
+type ID uint32
+
 // Schema defines the complete authorization model, mapping type names to their
 // definitions.
 type Schema struct {
-	Types map[string]*ObjectType
+	Types map[TypeName]*ObjectType
 }
 
 // ObjectType defines a type of object in the authorization graph (e.g.,
 // "document", "folder", "user").
 type ObjectType struct {
 	// Name is the type identifier (e.g., "document").
-	Name string
+	Name TypeName
 	// Relations maps relation names to their definitions.
-	Relations map[string]*Relation
+	Relations map[RelationName]*Relation
 }
 
 // Relation defines a named relation on an object type. A relation can be
@@ -30,7 +40,7 @@ type ObjectType struct {
 // on this object, or an arrow traversal to another object.
 type Relation struct {
 	// Name is the relation identifier (e.g., "viewer", "editor", "parent").
-	Name string
+	Name RelationName
 	// TargetTypes specifies what subjects can be assigned to this relation.
 	// Each entry defines a subject type and optionally a subject relation.
 	//
@@ -49,21 +59,21 @@ type Relation struct {
 // relation's TargetTypes.
 type SubjectRef struct {
 	// Type is the subject's object type (e.g., "user", "group", "folder").
-	Type string
+	Type TypeName
 	// Relation is the subject's relation (e.g., "member"). Empty string means
 	// direct subject (no relation).
-	Relation string
+	Relation RelationName
 }
 
 // Ref creates a SubjectRef for direct subjects (no relation).
 // Example: Ref("user") allows @user:1
-func Ref(subjectType string) SubjectRef {
+func Ref(subjectType TypeName) SubjectRef {
 	return SubjectRef{Type: subjectType}
 }
 
 // RefWithRelation creates a SubjectRef for userset subjects.
 // Example: RefWithRelation("group", "member") allows @group:1#member
-func RefWithRelation(subjectType, relation string) SubjectRef {
+func RefWithRelation(subjectType TypeName, relation RelationName) SubjectRef {
 	return SubjectRef{Type: subjectType, Relation: relation}
 }
 
@@ -78,7 +88,7 @@ type Userset struct {
 	// ComputedRelation references another relation on the same object.
 	// For example, "editor" userset on a "viewer" relation means editors are
 	// also viewers.
-	ComputedRelation string
+	ComputedRelation RelationName
 
 	// TupleToUserset defines an arrow traversal: follow TuplesetRelation to
 	// find target objects, then check ComputedUsersetRelation on those targets.
@@ -92,10 +102,10 @@ type Userset struct {
 type TupleToUserset struct {
 	// TuplesetRelation is the relation to follow to find target objects.
 	// For example, "parent" to find the parent folder of a document.
-	TuplesetRelation string
+	TuplesetRelation RelationName
 	// ComputedUsersetRelation is the relation to check on the target objects.
 	// For example, "viewer" to check if the subject is a viewer of the parent.
-	ComputedUsersetRelation string
+	ComputedUsersetRelation RelationName
 }
 
 // Direct creates a Userset that checks direct tuple membership.
@@ -104,13 +114,13 @@ func Direct() Userset {
 }
 
 // Computed creates a Userset that references another relation on the same object.
-func Computed(relation string) Userset {
+func Computed(relation RelationName) Userset {
 	return Userset{ComputedRelation: relation}
 }
 
 // Arrow creates a Userset that follows a relation and checks a permission on
 // the target. This is the "tuple to userset" operation in Zanzibar terminology.
-func Arrow(throughRelation, checkRelation string) Userset {
+func Arrow(throughRelation, checkRelation RelationName) Userset {
 	return Userset{
 		TupleToUserset: &TupleToUserset{
 			TuplesetRelation:        throughRelation,

@@ -19,14 +19,14 @@ var ctx = context.Background()
 //   - document: has "parent" pointing to folder, "viewer"/"editor" computed from parent
 func testSchema() *schema.Schema {
 	return &schema.Schema{
-		Types: map[string]*schema.ObjectType{
+		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
 				Name:      "user",
-				Relations: map[string]*schema.Relation{},
+				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"group": {
 				Name: "group",
-				Relations: map[string]*schema.Relation{
+				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
 						Name: "member",
 						TargetTypes: []schema.SubjectRef{
@@ -37,7 +37,7 @@ func testSchema() *schema.Schema {
 			},
 			"folder": {
 				Name: "folder",
-				Relations: map[string]*schema.Relation{
+				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
 						Name: "parent",
 						TargetTypes: []schema.SubjectRef{
@@ -59,7 +59,7 @@ func testSchema() *schema.Schema {
 			},
 			"document": {
 				Name: "document",
-				Relations: map[string]*schema.Relation{
+				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
 						Name: "parent",
 						TargetTypes: []schema.SubjectRef{
@@ -101,9 +101,9 @@ func TestCheck_DirectMembership(t *testing.T) {
 
 	// Add user 1 as a direct viewer of document 100
 	const (
-		user1  uint32 = 1
-		user2  uint32 = 2
-		doc100 uint32 = 100
+		user1  = 1
+		user2  = 2
+		doc100 = 100
 	)
 
 	if err := g.AddTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
@@ -135,9 +135,9 @@ func TestCheck_ComputedRelation(t *testing.T) {
 
 	// Add user 1 as an editor of document 100
 	const (
-		user1  uint32 = 1
-		user2  uint32 = 2
-		doc100 uint32 = 100
+		user1  = 1
+		user2  = 2
+		doc100 = 100
 	)
 
 	if err := g.AddTuple(ctx, "document", doc100, "editor", "user", user1, ""); err != nil {
@@ -179,10 +179,10 @@ func TestCheck_ArrowTraversal(t *testing.T) {
 	// Setup: folder 10 is parent of document 100
 	// User 1 is a viewer of folder 10
 	const (
-		user1    uint32 = 1
-		user2    uint32 = 2
-		folder10 uint32 = 10
-		doc100   uint32 = 100
+		user1    = 1
+		user2    = 2
+		folder10 = 10
+		doc100   = 100
 	)
 
 	// Document 100's parent is folder 10
@@ -221,10 +221,10 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 	// Setup: folder 20 is parent of folder 10, folder 10 is parent of document 100
 	// User 1 is a viewer of folder 20
 	const (
-		user1    uint32 = 1
-		folder10 uint32 = 10
-		folder20 uint32 = 20
-		doc100   uint32 = 100
+		user1    = 1
+		folder10 = 10
+		folder20 = 20
+		doc100   = 100
 	)
 
 	// Document 100's parent is folder 10
@@ -306,8 +306,8 @@ func TestRemoveTuple(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		user1  uint32 = 1
-		doc100 uint32 = 100
+		user1  = 1
+		doc100 = 100
 	)
 
 	// Add then remove
@@ -344,13 +344,13 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		alice   uint32 = 1
-		bob     uint32 = 2
-		charlie uint32 = 3
+		alice   = 1
+		bob     = 2
+		charlie = 3
 
-		doc1 uint32 = 101
-		doc2 uint32 = 102
-		doc3 uint32 = 103
+		doc1 = 101
+		doc2 = 102
+		doc3 = 103
 	)
 
 	// Alice can view doc1
@@ -370,11 +370,11 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		subjectType string
-		subjectID   uint32
-		objectType  string
-		objectID    uint32
-		relation    string
+		subjectType schema.TypeName
+		subjectID   schema.ID
+		objectType  schema.TypeName
+		objectID    schema.ID
+		relation    schema.RelationName
 		want        bool
 	}{
 		{"alice can view doc1", "user", alice, "document", doc1, "viewer", true},
@@ -408,8 +408,8 @@ func TestCheck_DirectRelationOnly(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		user1   uint32 = 1
-		group10 uint32 = 10
+		user1   = 1
+		group10 = 10
 	)
 
 	// Add user1 as member of group10
@@ -434,9 +434,9 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		doc100 uint32 = 100
-		group1 uint32 = 1
-		alice  uint32 = 1 // Same ID as group1!
+		doc100 = 100
+		group1 = 1
+		alice  = 1 // Same ID as group1!
 	)
 
 	// Add group:1#member as viewers of doc100 (userset subject)
@@ -476,8 +476,8 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		doc100 uint32 = 100
-		id1    uint32 = 1 // Same ID for user and group
+		doc100 = 100
+		id1    = 1 // Same ID for user and group
 	)
 
 	// Alice (user:1) is a member of group:1
@@ -538,11 +538,11 @@ func TestCheck_UsersetSubject(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		alice   uint32 = 1
-		bob     uint32 = 2
-		charlie uint32 = 3
-		group1  uint32 = 10
-		doc100  uint32 = 100
+		alice   = 1
+		bob     = 2
+		charlie = 3
+		group1  = 10
+		doc100  = 100
 	)
 
 	// Alice and Bob are members of group 1
@@ -593,12 +593,12 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		alice   uint32 = 1
-		bob     uint32 = 2
-		charlie uint32 = 3
-		group1  uint32 = 10
-		group2  uint32 = 20
-		doc100  uint32 = 100
+		alice   = 1
+		bob     = 2
+		charlie = 3
+		group1  = 10
+		group2  = 20
+		doc100  = 100
 	)
 
 	// Alice is a member of group 1 only
@@ -653,11 +653,11 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		alice   uint32 = 1
-		bob     uint32 = 2
-		charlie uint32 = 3
-		group1  uint32 = 10
-		doc100  uint32 = 100
+		alice   = 1
+		bob     = 2
+		charlie = 3
+		group1  = 10
+		doc100  = 100
 	)
 
 	// Alice is a member of group 1
@@ -709,9 +709,9 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		alice  uint32 = 1
-		group1 uint32 = 10
-		doc100 uint32 = 100
+		alice  = 1
+		group1 = 10
+		doc100 = 100
 	)
 
 	// Alice is a member of group 1
@@ -763,11 +763,11 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		alice    uint32 = 1
-		bob      uint32 = 2
-		group1   uint32 = 10
-		folder10 uint32 = 100
-		doc200   uint32 = 200
+		alice    = 1
+		bob      = 2
+		group1   = 10
+		folder10 = 100
+		doc200   = 200
 	)
 
 	// Alice is a member of group 1
@@ -828,18 +828,18 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	// Create a schema where "resource" has a "viewer" relation that allows
 	// both "user" and "serviceAccount" as direct subjects
 	s := &schema.Schema{
-		Types: map[string]*schema.ObjectType{
+		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
 				Name:      "user",
-				Relations: map[string]*schema.Relation{},
+				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"serviceAccount": {
 				Name:      "serviceAccount",
-				Relations: map[string]*schema.Relation{},
+				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"resource": {
 				Name: "resource",
-				Relations: map[string]*schema.Relation{
+				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
 						Name: "viewer",
 						TargetTypes: []schema.SubjectRef{
@@ -858,8 +858,8 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	g := graph.New(s)
 
 	const (
-		resource1 uint32 = 100
-		id1       uint32 = 1 // Same ID for both user and serviceAccount
+		resource1 = 100
+		id1       = 1 // Same ID for both user and serviceAccount
 	)
 
 	// Add serviceAccount:1 as a viewer (direct subject)

@@ -1,7 +1,11 @@
 // Package store defines the persistence interface for the authorization graph.
 package store
 
-import "context"
+import (
+	"context"
+
+	"github.com/alechenninger/falcon/schema"
+)
 
 // Tuple represents a single authorization tuple.
 //
@@ -11,12 +15,12 @@ import "context"
 // For userset subjects: object_type:object_id#relation@subject_type:subject_id#subject_relation
 // Example: document:100#viewer@group:1#member (all members of group 1 are viewers)
 type Tuple struct {
-	ObjectType      string
-	ObjectID        uint32
-	Relation        string
-	SubjectType     string
-	SubjectID       uint32
-	SubjectRelation string // Optional: empty for direct subjects, set for userset subjects
+	ObjectType      schema.TypeName
+	ObjectID        schema.ID
+	Relation        schema.RelationName
+	SubjectType     schema.TypeName
+	SubjectID       schema.ID
+	SubjectRelation schema.RelationName // Optional: empty for direct subjects, set for userset subjects
 }
 
 // Store defines the persistence interface for authorization tuples.

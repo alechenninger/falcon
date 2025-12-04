@@ -14,7 +14,7 @@ import (
 //   - Arrow traversal to other objects (tuple to userset)
 //
 // Returns true if the subject has the relation, false otherwise.
-func (g *Graph) Check(subjectType string, subjectID uint32, objectType string, objectID uint32, relation string) (bool, error) {
+func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, error) {
 	// Validate inputs
 	ot, ok := g.schema.Types[objectType]
 	if !ok {
@@ -33,13 +33,13 @@ func (g *Graph) Check(subjectType string, subjectID uint32, objectType string, o
 
 // visitKey tracks visited nodes to prevent infinite recursion in cyclic graphs.
 type visitKey struct {
-	objectType string
-	objectID   uint32
-	relation   string
+	objectType schema.TypeName
+	objectID   schema.ID
+	relation   schema.RelationName
 }
 
 // checkRelation evaluates a relation definition against the graph.
-func (g *Graph) checkRelation(subjectType string, subjectID uint32, objectType string, objectID uint32, rel *schema.Relation, visited map[visitKey]bool) (bool, error) {
+func (g *Graph) checkRelation(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, rel *schema.Relation, visited map[visitKey]bool) (bool, error) {
 	key := visitKey{objectType, objectID, rel.Name}
 	if visited[key] {
 		// Already visiting this node - cycle detected, return false to avoid infinite loop
@@ -68,7 +68,7 @@ func (g *Graph) checkRelation(subjectType string, subjectID uint32, objectType s
 }
 
 // checkUserset evaluates a single userset definition.
-func (g *Graph) checkUserset(subjectType string, subjectID uint32, objectType string, objectID uint32, relationName string, us schema.Userset, visited map[visitKey]bool) (bool, error) {
+func (g *Graph) checkUserset(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relationName schema.RelationName, us schema.Userset, visited map[visitKey]bool) (bool, error) {
 	switch {
 	case us.This:
 		// Direct tuple membership for the current relation (including userset subjects)
@@ -97,7 +97,7 @@ func (g *Graph) checkUserset(subjectType string, subjectID uint32, objectType st
 // For direct: checks if subject_type:subject_id is directly in the relation
 // For userset: finds tuples like object#relation@other_type:other_id#other_relation
 // and recursively checks if subject is in that userset.
-func (g *Graph) checkDirectAndUserset(subjectType string, subjectID uint32, objectType string, objectID uint32, relation string, visited map[visitKey]bool) (bool, error) {
+func (g *Graph) checkDirectAndUserset(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, visited map[visitKey]bool) (bool, error) {
 	// Check direct membership first
 	if g.checkDirect(subjectType, subjectID, objectType, objectID, relation) {
 		return true, nil
@@ -136,18 +136,18 @@ func (g *Graph) checkDirectAndUserset(subjectType string, subjectID uint32, obje
 }
 
 // checkDirect checks if the subject has a direct tuple for the relation.
-func (g *Graph) checkDirect(subjectType string, subjectID uint32, objectType string, objectID uint32, relation string) bool {
+func (g *Graph) checkDirect(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) bool {
 	bm := g.GetDirectSubjects(objectType, objectID, relation, subjectType)
 	if bm == nil {
 		return false
 	}
-	return bm.Contains(subjectID)
+	return bm.Contains(uint32(subjectID))
 }
 
 // checkArrow evaluates a tuple-to-userset (arrow) operation.
 // It follows the tupleset relation to find target objects, then checks the
 // computed userset relation on each target.
-func (g *Graph) checkArrow(subjectType string, subjectID uint32, objectType string, objectID uint32, arrow *schema.TupleToUserset, visited map[visitKey]bool) (bool, error) {
+func (g *Graph) checkArrow(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, arrow *schema.TupleToUserset, visited map[visitKey]bool) (bool, error) {
 	// Get the target type from the schema
 	ot := g.schema.Types[objectType]
 	tuplesetRel, ok := ot.Relations[arrow.TuplesetRelation]
@@ -169,8 +169,8 @@ func (g *Graph) checkArrow(subjectType string, subjectID uint32, objectType stri
 			continue
 		}
 
-		targets := g.GetDirectObjects(objectType, objectID, arrow.TuplesetRelation, ref.Type)
-		if len(targets) == 0 {
+		bm := g.GetDirectSubjects(objectType, objectID, arrow.TuplesetRelation, ref.Type)
+		if bm == nil || bm.IsEmpty() {
 			continue
 		}
 
@@ -185,7 +185,9 @@ func (g *Graph) checkArrow(subjectType string, subjectID uint32, objectType stri
 		}
 
 		// Check the relation on each target object
-		for _, targetID := range targets {
+		it := bm.Iterator()
+		for it.HasNext() {
+			targetID := schema.ID(it.Next())
 			ok, err := g.checkRelation(subjectType, subjectID, ref.Type, targetID, targetRel, visited)
 			if err != nil {
 				return false, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/alechenninger/falcon/schema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -66,7 +67,7 @@ func (s *PostgresStore) WriteTuple(ctx context.Context, t Tuple) error {
 		INSERT INTO tuples (object_type, object_id, relation, subject_type, subject_id, subject_relation)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING
-	`, t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation)
+	`, string(t.ObjectType), uint32(t.ObjectID), string(t.Relation), string(t.SubjectType), uint32(t.SubjectID), string(t.SubjectRelation))
 	if err != nil {
 		return fmt.Errorf("failed to write tuple: %w", err)
 	}
@@ -79,7 +80,7 @@ func (s *PostgresStore) DeleteTuple(ctx context.Context, t Tuple) error {
 		DELETE FROM tuples
 		WHERE object_type = $1 AND object_id = $2 AND relation = $3 
 		  AND subject_type = $4 AND subject_id = $5 AND subject_relation = $6
-	`, t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation)
+	`, string(t.ObjectType), uint32(t.ObjectID), string(t.Relation), string(t.SubjectType), uint32(t.SubjectID), string(t.SubjectRelation))
 	if err != nil {
 		return fmt.Errorf("failed to delete tuple: %w", err)
 	}
@@ -98,9 +99,26 @@ func (s *PostgresStore) LoadAll(ctx context.Context) ([]Tuple, error) {
 	defer rows.Close()
 
 	tuples, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Tuple, error) {
-		var t Tuple
-		err := row.Scan(&t.ObjectType, &t.ObjectID, &t.Relation, &t.SubjectType, &t.SubjectID, &t.SubjectRelation)
-		return t, err
+		var (
+			objectType      string
+			objectID        uint32
+			relation        string
+			subjectType     string
+			subjectID       uint32
+			subjectRelation string
+		)
+		err := row.Scan(&objectType, &objectID, &relation, &subjectType, &subjectID, &subjectRelation)
+		if err != nil {
+			return Tuple{}, err
+		}
+		return Tuple{
+			ObjectType:      schema.TypeName(objectType),
+			ObjectID:        schema.ID(objectID),
+			Relation:        schema.RelationName(relation),
+			SubjectType:     schema.TypeName(subjectType),
+			SubjectID:       schema.ID(subjectID),
+			SubjectRelation: schema.RelationName(subjectRelation),
+		}, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan tuples: %w", err)

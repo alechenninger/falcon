@@ -15,11 +15,11 @@ import (
 // tupleKey uniquely identifies a set of subjects for a given object, relation,
 // subject type, and subject relation.
 type tupleKey struct {
-	ObjectType      string
-	ObjectID        uint32
-	Relation        string
-	SubjectType     string
-	SubjectRelation string // Empty for direct subjects
+	ObjectType      schema.TypeName
+	ObjectID        schema.ID
+	Relation        schema.RelationName
+	SubjectType     schema.TypeName
+	SubjectRelation schema.RelationName // Empty for direct subjects
 }
 
 // Graph stores the authorization tuples using roaring bitmaps. Each tuple
@@ -76,7 +76,7 @@ func (g *Graph) Schema() *schema.Schema {
 //	AddTuple(ctx, "document", 100, "viewer", "group", 1, "member")
 //
 // If a Store is configured, the tuple is persisted before being added to memory.
-func (g *Graph) AddTuple(ctx context.Context, objectType string, objectID uint32, relation string, subjectType string, subjectID uint32, subjectRelation string) error {
+func (g *Graph) AddTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
 	if err := g.validateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (g *Graph) AddTuple(ctx context.Context, objectType string, objectID uint32
 		bm = roaring.New()
 		g.tuples[key] = bm
 	}
-	bm.Add(subjectID)
+	bm.Add(uint32(subjectID))
 	return nil
 }
 
@@ -119,7 +119,7 @@ func (g *Graph) AddTuple(ctx context.Context, objectType string, objectID uint32
 //
 // If a Store is configured, the tuple is deleted from the store before being
 // removed from memory.
-func (g *Graph) RemoveTuple(ctx context.Context, objectType string, objectID uint32, relation string, subjectType string, subjectID uint32, subjectRelation string) error {
+func (g *Graph) RemoveTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
 	if err := g.validateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (g *Graph) RemoveTuple(ctx context.Context, objectType string, objectID uin
 	}
 
 	if bm, ok := g.tuples[key]; ok {
-		bm.Remove(subjectID)
+		bm.Remove(uint32(subjectID))
 	}
 	return nil
 }
@@ -186,7 +186,7 @@ func (g *Graph) Hydrate(ctx context.Context) error {
 			bm = roaring.New()
 			g.tuples[key] = bm
 		}
-		bm.Add(t.SubjectID)
+		bm.Add(uint32(t.SubjectID))
 	}
 
 	return nil
@@ -197,7 +197,7 @@ func (g *Graph) Hydrate(ctx context.Context) error {
 // Returns nil if no tuples exist.
 //
 // The returned bitmap should not be modified by the caller.
-func (g *Graph) GetDirectSubjects(objectType string, objectID uint32, relation string, subjectType string) *roaring.Bitmap {
+func (g *Graph) GetDirectSubjects(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName) *roaring.Bitmap {
 	return g.GetSubjects(objectType, objectID, relation, subjectType, "")
 }
 
@@ -205,7 +205,7 @@ func (g *Graph) GetDirectSubjects(objectType string, objectID uint32, relation s
 // Returns nil if no tuples exist.
 //
 // The returned bitmap should not be modified by the caller.
-func (g *Graph) GetSubjects(objectType string, objectID uint32, relation string, subjectType string, subjectRelation string) *roaring.Bitmap {
+func (g *Graph) GetSubjects(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) *roaring.Bitmap {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
@@ -219,22 +219,11 @@ func (g *Graph) GetSubjects(objectType string, objectID uint32, relation string,
 	return g.tuples[key]
 }
 
-// GetDirectObjects returns all object IDs of the given subject type that have a direct
-// tuple (subjectRelation="") for the given relation. This is useful for arrow traversals
-// where we need to find all objects referenced by a relation (e.g., all parent folders).
-func (g *Graph) GetDirectObjects(objectType string, objectID uint32, relation string, subjectType string) []uint32 {
-	bm := g.GetSubjects(objectType, objectID, relation, subjectType, "")
-	if bm == nil || bm.IsEmpty() {
-		return nil
-	}
-	return bm.ToArray()
-}
-
 // UsersetSubject represents a userset subject tuple for a given object/relation.
 type UsersetSubject struct {
-	SubjectType     string
-	SubjectRelation string
-	SubjectIDs      []uint32
+	SubjectType     schema.TypeName
+	SubjectRelation schema.RelationName
+	SubjectIDs      []schema.ID
 }
 
 // GetUsersetSubjects returns all userset subject tuples for the given object
@@ -243,7 +232,7 @@ type UsersetSubject struct {
 // lookups instead of iterating over all tuples.
 //
 // Complexity: O(number of TargetTypes) instead of O(total tuples).
-func (g *Graph) GetUsersetSubjects(objectType string, objectID uint32, relation string) []UsersetSubject {
+func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) []UsersetSubject {
 	// Get the relation definition to find allowed target types
 	ot, ok := g.schema.Types[objectType]
 	if !ok {
@@ -275,10 +264,15 @@ func (g *Graph) GetUsersetSubjects(objectType string, objectID uint32, relation 
 		}
 
 		if bm, ok := g.tuples[key]; ok && !bm.IsEmpty() {
+			ids := bm.ToArray()
+			subjectIDs := make([]schema.ID, len(ids))
+			for i, id := range ids {
+				subjectIDs[i] = schema.ID(id)
+			}
 			results = append(results, UsersetSubject{
 				SubjectType:     ref.Type,
 				SubjectRelation: ref.Relation,
-				SubjectIDs:      bm.ToArray(),
+				SubjectIDs:      subjectIDs,
 			})
 		}
 	}
@@ -288,7 +282,7 @@ func (g *Graph) GetUsersetSubjects(objectType string, objectID uint32, relation 
 
 // validateTuple checks that the object type, relation, and subject reference
 // are valid according to the schema.
-func (g *Graph) validateTuple(objectType, relation, subjectType, subjectRelation string) error {
+func (g *Graph) validateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
 	ot, ok := g.schema.Types[objectType]
 	if !ok {
 		return fmt.Errorf("unknown object type: %s", objectType)
