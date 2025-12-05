@@ -458,9 +458,9 @@ func BenchmarkRoaringClone(b *testing.B) {
 // Sparse bitmaps have values spread across the 32-bit range, reducing run-length compression.
 func BenchmarkRoaringCloneSparse(b *testing.B) {
 	for _, size := range benchSizes {
-		rng := rand.New(rand.NewSource(42))
+		rng := rand.New(rand.NewSource(int64(size)))
 		bitmap := roaring.NewBitmap()
-		for i := 0; i < size; i++ {
+		for range size {
 			// Add random values spread across the uint32 range
 			bitmap.Add(rng.Uint32())
 		}
