@@ -97,7 +97,7 @@ func testSchema() *schema.Schema {
 
 func TestCheck_DirectMembership(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	// Add user 1 as a direct viewer of document 100
 	const (
@@ -106,7 +106,7 @@ func TestCheck_DirectMembership(t *testing.T) {
 		doc100 = 100
 	)
 
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -131,7 +131,7 @@ func TestCheck_DirectMembership(t *testing.T) {
 
 func TestCheck_ComputedRelation(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	// Add user 1 as an editor of document 100
 	const (
@@ -140,7 +140,7 @@ func TestCheck_ComputedRelation(t *testing.T) {
 		doc100 = 100
 	)
 
-	if err := g.AddTuple(ctx, "document", doc100, "editor", "user", user1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "editor", "user", user1, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -174,7 +174,7 @@ func TestCheck_ComputedRelation(t *testing.T) {
 
 func TestCheck_ArrowTraversal(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	// Setup: folder 10 is parent of document 100
 	// User 1 is a viewer of folder 10
@@ -186,12 +186,12 @@ func TestCheck_ArrowTraversal(t *testing.T) {
 	)
 
 	// Document 100's parent is folder 10
-	if err := g.AddTuple(ctx, "document", doc100, "parent", "folder", folder10, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "parent", "folder", folder10, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// User 1 is a direct viewer of folder 10
-	if err := g.AddTuple(ctx, "folder", folder10, "viewer", "user", user1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "folder", folder10, "viewer", "user", user1, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -216,7 +216,7 @@ func TestCheck_ArrowTraversal(t *testing.T) {
 
 func TestCheck_NestedArrowTraversal(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	// Setup: folder 20 is parent of folder 10, folder 10 is parent of document 100
 	// User 1 is a viewer of folder 20
@@ -228,17 +228,17 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 	)
 
 	// Document 100's parent is folder 10
-	if err := g.AddTuple(ctx, "document", doc100, "parent", "folder", folder10, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "parent", "folder", folder10, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Folder 10's parent is folder 20
-	if err := g.AddTuple(ctx, "folder", folder10, "parent", "folder", folder20, ""); err != nil {
+	if err := g.WriteTuple(ctx, "folder", folder10, "parent", "folder", folder20, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// User 1 is a direct viewer of folder 20 (the grandparent)
-	if err := g.AddTuple(ctx, "folder", folder20, "viewer", "user", user1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "folder", folder20, "viewer", "user", user1, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -263,7 +263,7 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 
 func TestCheck_UnknownObjectType(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	_, err := g.Check("user", 1, "unknown_type", 100, "viewer")
 	if err == nil {
@@ -273,7 +273,7 @@ func TestCheck_UnknownObjectType(t *testing.T) {
 
 func TestCheck_UnknownRelation(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	_, err := g.Check("user", 1, "document", 100, "unknown_relation")
 	if err == nil {
@@ -283,9 +283,9 @@ func TestCheck_UnknownRelation(t *testing.T) {
 
 func TestAddTuple_UnknownObjectType(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
-	err := g.AddTuple(ctx, "unknown_type", 100, "viewer", "user", 1, "")
+	err := g.WriteTuple(ctx, "unknown_type", 100, "viewer", "user", 1, "")
 	if err == nil {
 		t.Error("expected error for unknown object type")
 	}
@@ -293,9 +293,9 @@ func TestAddTuple_UnknownObjectType(t *testing.T) {
 
 func TestAddTuple_UnknownRelation(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
-	err := g.AddTuple(ctx, "document", 100, "unknown_relation", "user", 1, "")
+	err := g.WriteTuple(ctx, "document", 100, "unknown_relation", "user", 1, "")
 	if err == nil {
 		t.Error("expected error for unknown relation")
 	}
@@ -303,7 +303,7 @@ func TestAddTuple_UnknownRelation(t *testing.T) {
 
 func TestRemoveTuple(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		user1  = 1
@@ -311,7 +311,7 @@ func TestRemoveTuple(t *testing.T) {
 	)
 
 	// Add then remove
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -325,7 +325,7 @@ func TestRemoveTuple(t *testing.T) {
 	}
 
 	// Remove the tuple
-	if err := g.RemoveTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
+	if err := g.DeleteTuple(ctx, "document", doc100, "viewer", "user", user1, ""); err != nil {
 		t.Fatalf("RemoveTuple failed: %v", err)
 	}
 
@@ -341,7 +341,7 @@ func TestRemoveTuple(t *testing.T) {
 
 func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		alice   = 1
@@ -354,17 +354,17 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 	)
 
 	// Alice can view doc1
-	if err := g.AddTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Bob can edit doc2 (and therefore view it)
-	if err := g.AddTuple(ctx, "document", doc2, "editor", "user", bob, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc2, "editor", "user", bob, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Charlie can view doc3
-	if err := g.AddTuple(ctx, "document", doc3, "viewer", "user", charlie, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc3, "viewer", "user", charlie, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -405,7 +405,7 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 func TestCheck_DirectRelationOnly(t *testing.T) {
 	// Test a relation with no usersets (direct-only)
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		user1   = 1
@@ -413,7 +413,7 @@ func TestCheck_DirectRelationOnly(t *testing.T) {
 	)
 
 	// Add user1 as member of group10
-	if err := g.AddTuple(ctx, "group", group10, "member", "user", user1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group10, "member", "user", user1, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -431,7 +431,7 @@ func TestCheck_DirectRelationOnly(t *testing.T) {
 // different subject references (type + relation) are correctly distinguished.
 func TestCheck_SubjectTypeDistinction(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		doc100 = 100
@@ -440,7 +440,7 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 	)
 
 	// Add group:1#member as viewers of doc100 (userset subject)
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("AddTuple (group#member) failed: %v", err)
 	}
 
@@ -455,7 +455,7 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 	}
 
 	// Now add alice as a member of group 1
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple (alice in group) failed: %v", err)
 	}
 
@@ -473,7 +473,7 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 // (direct) and group:1#member (userset) as viewers, and they are tracked separately.
 func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		doc100 = 100
@@ -481,15 +481,15 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	)
 
 	// Alice (user:1) is a member of group:1
-	if err := g.AddTuple(ctx, "group", id1, "member", "user", id1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", id1, "member", "user", id1, ""); err != nil {
 		t.Fatalf("AddTuple (user in group) failed: %v", err)
 	}
 
 	// Add both user:1 (direct) and group:1#member (userset) as viewers
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "user", id1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", id1, ""); err != nil {
 		t.Fatalf("AddTuple (user direct) failed: %v", err)
 	}
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", id1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", id1, "member"); err != nil {
 		t.Fatalf("AddTuple (group#member) failed: %v", err)
 	}
 
@@ -503,7 +503,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	}
 
 	// Remove the direct user:1 tuple - user should still be viewer via group
-	if err := g.RemoveTuple(ctx, "document", doc100, "viewer", "user", id1, ""); err != nil {
+	if err := g.DeleteTuple(ctx, "document", doc100, "viewer", "user", id1, ""); err != nil {
 		t.Fatalf("RemoveTuple (user direct) failed: %v", err)
 	}
 
@@ -517,7 +517,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	}
 
 	// Now remove the group userset tuple
-	if err := g.RemoveTuple(ctx, "document", doc100, "viewer", "group", id1, "member"); err != nil {
+	if err := g.DeleteTuple(ctx, "document", doc100, "viewer", "group", id1, "member"); err != nil {
 		t.Fatalf("RemoveTuple (group#member) failed: %v", err)
 	}
 
@@ -535,7 +535,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 // which means "all members of group 1 are viewers of document 100".
 func TestCheck_UsersetSubject(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		alice   = 1
@@ -546,16 +546,16 @@ func TestCheck_UsersetSubject(t *testing.T) {
 	)
 
 	// Alice and Bob are members of group 1
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple (alice member) failed: %v", err)
 	}
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", bob, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", bob, ""); err != nil {
 		t.Fatalf("AddTuple (bob member) failed: %v", err)
 	}
 
 	// Members of group 1 are viewers of document 100
 	// This is a userset subject: document:100#viewer@group:1#member
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("AddTuple (userset) failed: %v", err)
 	}
 
@@ -590,7 +590,7 @@ func TestCheck_UsersetSubject(t *testing.T) {
 // TestCheck_UsersetSubject_MultipleGroups tests multiple userset subjects.
 func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		alice   = 1
@@ -602,20 +602,20 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	)
 
 	// Alice is a member of group 1 only
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Bob is a member of group 2 only
-	if err := g.AddTuple(ctx, "group", group2, "member", "user", bob, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group2, "member", "user", bob, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Members of BOTH groups are viewers of document 100
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", group2, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group2, "member"); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -650,7 +650,7 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 // TestCheck_UsersetAndDirectCombined tests combining direct and userset subjects.
 func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		alice   = 1
@@ -661,17 +661,17 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	)
 
 	// Alice is a member of group 1
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Members of group 1 are viewers (userset subject)
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Bob is a direct viewer
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "user", bob, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", bob, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -706,7 +706,7 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 // TestRemoveTuple_UsersetSubject tests removing userset subject tuples.
 func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		alice  = 1
@@ -715,12 +715,12 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	)
 
 	// Alice is a member of group 1
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
 	// Members of group 1 are viewers
-	if err := g.AddTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("AddTuple failed: %v", err)
 	}
 
@@ -734,7 +734,7 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	}
 
 	// Remove the userset tuple
-	if err := g.RemoveTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+	if err := g.DeleteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("RemoveTuple failed: %v", err)
 	}
 
@@ -760,7 +760,7 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 // Result: alice can view document:100 via parent→viewer arrow + userset subject
 func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	s := testSchema()
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		alice    = 1
@@ -771,17 +771,17 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	)
 
 	// Alice is a member of group 1
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
 		t.Fatalf("AddTuple (alice in group) failed: %v", err)
 	}
 
 	// Members of group 1 are viewers of folder 10 (userset subject on folder)
-	if err := g.AddTuple(ctx, "folder", folder10, "viewer", "group", group1, "member"); err != nil {
+	if err := g.WriteTuple(ctx, "folder", folder10, "viewer", "group", group1, "member"); err != nil {
 		t.Fatalf("AddTuple (group viewers of folder) failed: %v", err)
 	}
 
 	// Document 200's parent is folder 10
-	if err := g.AddTuple(ctx, "document", doc200, "parent", "folder", folder10, ""); err != nil {
+	if err := g.WriteTuple(ctx, "document", doc200, "parent", "folder", folder10, ""); err != nil {
 		t.Fatalf("AddTuple (doc parent) failed: %v", err)
 	}
 
@@ -807,7 +807,7 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	}
 
 	// Now add bob to the group
-	if err := g.AddTuple(ctx, "group", group1, "member", "user", bob, ""); err != nil {
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", bob, ""); err != nil {
 		t.Fatalf("AddTuple (bob in group) failed: %v", err)
 	}
 
@@ -855,7 +855,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 		},
 	}
 
-	g := graph.New(s)
+	g := graph.NewTestGraph(s)
 
 	const (
 		resource1 = 100
@@ -863,7 +863,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	)
 
 	// Add serviceAccount:1 as a viewer (direct subject)
-	if err := g.AddTuple(ctx, "resource", resource1, "viewer", "serviceAccount", id1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "resource", resource1, "viewer", "serviceAccount", id1, ""); err != nil {
 		t.Fatalf("AddTuple (serviceAccount) failed: %v", err)
 	}
 
@@ -886,7 +886,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	}
 
 	// Now add user:1 as well
-	if err := g.AddTuple(ctx, "resource", resource1, "viewer", "user", id1, ""); err != nil {
+	if err := g.WriteTuple(ctx, "resource", resource1, "viewer", "user", id1, ""); err != nil {
 		t.Fatalf("AddTuple (user) failed: %v", err)
 	}
 
@@ -908,7 +908,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	}
 
 	// Remove serviceAccount:1 - user:1 should still be a viewer
-	if err := g.RemoveTuple(ctx, "resource", resource1, "viewer", "serviceAccount", id1, ""); err != nil {
+	if err := g.DeleteTuple(ctx, "resource", resource1, "viewer", "serviceAccount", id1, ""); err != nil {
 		t.Fatalf("RemoveTuple (serviceAccount) failed: %v", err)
 	}
 

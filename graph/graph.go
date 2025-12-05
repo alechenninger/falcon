@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/schema"
@@ -22,28 +23,33 @@ type tupleKey struct {
 	SubjectRelation schema.RelationName // Empty for direct subjects
 }
 
-// Graph stores the authorization tuples using roaring bitmaps. Each tuple
-// (object_type, object_id, relation, subject_type, subject_relation) maps to
-// a bitmap of subject IDs.
+// Graph stores the authorization tuples using roaring bitmaps with MVCC support.
+// Each tuple (object_type, object_id, relation, subject_type, subject_relation)
+// maps to a versioned set of subject IDs.
 //
 // Currently all subjects are stored as uint32 IDs. External ID mapping will
 // be added in a later level.
 //
-// If a Store is provided, writes are persisted before being applied to memory.
+// State is updated exclusively via the ChangeStream - writes go to the Store
+// and are applied to memory only when received from the stream.
 type Graph struct {
 	schema *schema.Schema
-	store  store.Store // optional; nil = in-memory only
+	store  store.Store // optional; nil = in-memory only (for testing without persistence)
 
 	mu     sync.RWMutex
-	tuples map[tupleKey]*roaring.Bitmap
+	tuples map[tupleKey]*versionedSet
+
+	// replicatedLSN is the latest LSN we've seen from the change stream.
+	// This represents the point in the log that we know our in-memory state
+	// is up to date with.
+	replicatedLSN atomic.Uint64
 }
 
-// New creates a new Graph with the given schema. The graph is in-memory only;
-// use WithStore to add persistence.
+// New creates a new Graph with the given schema.
 func New(s *schema.Schema) *Graph {
 	return &Graph{
 		schema: s,
-		tuples: make(map[tupleKey]*roaring.Bitmap),
+		tuples: make(map[tupleKey]*versionedSet),
 	}
 }
 
@@ -65,79 +71,50 @@ func (g *Graph) Schema() *schema.Schema {
 	return g.schema
 }
 
-// AddTuple adds a tuple to the graph.
-//
-// For direct subjects (e.g., document:100#viewer@user:1):
-//
-//	AddTuple(ctx, "document", 100, "viewer", "user", 1, "")
-//
-// For userset subjects (e.g., document:100#viewer@group:1#member):
-//
-//	AddTuple(ctx, "document", 100, "viewer", "group", 1, "member")
-//
-// If a Store is configured, the tuple is persisted before being added to memory.
-func (g *Graph) AddTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
-	if err := g.validateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
-		return err
-	}
-
-	// Persist first if we have a store
-	if g.store != nil {
-		if err := g.store.WriteTuple(ctx, store.Tuple{
-			ObjectType:      objectType,
-			ObjectID:        objectID,
-			Relation:        relation,
-			SubjectType:     subjectType,
-			SubjectID:       subjectID,
-			SubjectRelation: subjectRelation,
-		}); err != nil {
-			return fmt.Errorf("failed to persist tuple: %w", err)
-		}
-	}
-
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
-	key := tupleKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
-
-	bm, ok := g.tuples[key]
-	if !ok {
-		bm = roaring.New()
-		g.tuples[key] = bm
-	}
-	bm.Add(uint32(subjectID))
-	return nil
+// ReplicatedLSN returns the latest LSN that has been applied to the in-memory state.
+func (g *Graph) ReplicatedLSN() LSN {
+	return g.replicatedLSN.Load()
 }
 
-// RemoveTuple removes a tuple from the graph.
-//
-// If a Store is configured, the tuple is deleted from the store before being
-// removed from memory.
-func (g *Graph) RemoveTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
-	if err := g.validateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
-		return err
-	}
+// Subscribe starts consuming changes from the given ChangeStream.
+// This should be called after initial hydration to receive ongoing updates.
+// The function blocks until the context is canceled or an error occurs.
+func (g *Graph) Subscribe(ctx context.Context, stream store.ChangeStream) error {
+	afterLSN := g.replicatedLSN.Load()
+	changes, errCh := stream.Subscribe(ctx, afterLSN)
 
-	// Delete from store first if we have one
-	if g.store != nil {
-		if err := g.store.DeleteTuple(ctx, store.Tuple{
-			ObjectType:      objectType,
-			ObjectID:        objectID,
-			Relation:        relation,
-			SubjectType:     subjectType,
-			SubjectID:       subjectID,
-			SubjectRelation: subjectRelation,
-		}); err != nil {
-			return fmt.Errorf("failed to delete tuple from store: %w", err)
+	for {
+		select {
+		case change, ok := <-changes:
+			if !ok {
+				return nil // Channel closed
+			}
+			g.ApplyChange(change)
+		case err := <-errCh:
+			if err != nil {
+				return fmt.Errorf("change stream error: %w", err)
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
+}
 
+// ApplyChange applies a single change from the ChangeStream to the in-memory state.
+// This is called internally by Subscribe, but is also exposed for testing.
+func (g *Graph) ApplyChange(change store.Change) {
+	t := change.Tuple
+	switch change.Op {
+	case store.OpInsert:
+		g.applyAdd(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.LSN)
+	case store.OpDelete:
+		g.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.LSN)
+	}
+	g.replicatedLSN.Store(change.LSN)
+}
+
+// applyAdd adds a subject to the versioned set for the given tuple key.
+func (g *Graph) applyAdd(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, lsn LSN) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -149,14 +126,34 @@ func (g *Graph) RemoveTuple(ctx context.Context, objectType schema.TypeName, obj
 		SubjectRelation: subjectRelation,
 	}
 
-	if bm, ok := g.tuples[key]; ok {
-		bm.Remove(uint32(subjectID))
+	vs, ok := g.tuples[key]
+	if !ok {
+		vs = newVersionedSet(lsn)
+		g.tuples[key] = vs
 	}
-	return nil
+	vs.Add(subjectID, lsn)
+}
+
+// applyRemove removes a subject from the versioned set for the given tuple key.
+func (g *Graph) applyRemove(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, lsn LSN) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	key := tupleKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
+	}
+
+	if vs, ok := g.tuples[key]; ok {
+		vs.Remove(subjectID, lsn)
+	}
 }
 
 // Hydrate loads all tuples from the Store into memory. This should be called
-// on startup before serving requests.
+// on startup before subscribing to the ChangeStream.
 //
 // Returns an error if no Store is configured.
 func (g *Graph) Hydrate(ctx context.Context) error {
@@ -181,12 +178,12 @@ func (g *Graph) Hydrate(ctx context.Context) error {
 			SubjectRelation: t.SubjectRelation,
 		}
 
-		bm, ok := g.tuples[key]
+		vs, ok := g.tuples[key]
 		if !ok {
-			bm = roaring.New()
-			g.tuples[key] = bm
+			vs = newVersionedSet(0)
+			g.tuples[key] = vs
 		}
-		bm.Add(uint32(t.SubjectID))
+		vs.Add(t.SubjectID, 0)
 	}
 
 	return nil
@@ -216,7 +213,10 @@ func (g *Graph) GetSubjects(objectType schema.TypeName, objectID schema.ID, rela
 		SubjectType:     subjectType,
 		SubjectRelation: subjectRelation,
 	}
-	return g.tuples[key]
+	if vs, ok := g.tuples[key]; ok {
+		return vs.Head()
+	}
+	return nil
 }
 
 // UsersetSubject represents a userset subject tuple for a given object/relation.
@@ -263,11 +263,11 @@ func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.I
 			SubjectRelation: ref.Relation,
 		}
 
-		if bm, ok := g.tuples[key]; ok && !bm.IsEmpty() {
+		if vs, ok := g.tuples[key]; ok && !vs.IsEmpty() {
 			results = append(results, UsersetSubject{
 				SubjectType:     ref.Type,
 				SubjectRelation: ref.Relation,
-				SubjectIDs:      bm,
+				SubjectIDs:      vs.Head(),
 			})
 		}
 	}
@@ -275,9 +275,9 @@ func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.I
 	return results
 }
 
-// validateTuple checks that the object type, relation, and subject reference
+// ValidateTuple checks that the object type, relation, and subject reference
 // are valid according to the schema.
-func (g *Graph) validateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
+func (g *Graph) ValidateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
 	ot, ok := g.schema.Types[objectType]
 	if !ok {
 		return fmt.Errorf("unknown object type: %s", objectType)
@@ -298,4 +298,15 @@ func (g *Graph) validateTuple(objectType schema.TypeName, relation schema.Relati
 		return fmt.Errorf("subject type %s is not allowed for %s#%s", subjectType, objectType, relation)
 	}
 	return fmt.Errorf("subject %s#%s is not allowed for %s#%s", subjectType, subjectRelation, objectType, relation)
+}
+
+// TruncateHistory removes undo entries older than the given LSN from all
+// versioned sets. This is used for garbage collection.
+func (g *Graph) TruncateHistory(minLSN LSN) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	for _, vs := range g.tuples {
+		vs.Truncate(minLSN)
+	}
 }
