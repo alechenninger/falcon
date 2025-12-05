@@ -1,6 +1,6 @@
 module github.com/alechenninger/falcon/setbench
 
-go 1.21
+go 1.24
 
 require github.com/RoaringBitmap/roaring v1.9.4
 

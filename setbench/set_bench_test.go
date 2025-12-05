@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"runtime"
 	"testing"
+
+	"github.com/RoaringBitmap/roaring"
 )
 
 // Benchmark parameters
@@ -426,6 +428,46 @@ func BenchmarkMultiSetMemory(b *testing.B) {
 				if total == 0 {
 					b.Fatal("unexpected")
 				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// Clone Benchmarks
+// ============================================================================
+
+// BenchmarkRoaringClone measures the cost of cloning roaring bitmaps of different sizes.
+func BenchmarkRoaringClone(b *testing.B) {
+	for _, size := range benchSizes {
+		// Build a bitmap with 'size' elements
+		bitmap := roaring.NewBitmap()
+		for i := uint32(0); i < uint32(size); i++ {
+			bitmap.Add(i)
+		}
+
+		b.Run(fmt.Sprintf("n=%d", size), func(b *testing.B) {
+			for b.Loop() {
+				_ = bitmap.Clone()
+			}
+		})
+	}
+}
+
+// BenchmarkRoaringCloneSparse measures clone cost for sparse bitmaps (worst case compression).
+// Sparse bitmaps have values spread across the 32-bit range, reducing run-length compression.
+func BenchmarkRoaringCloneSparse(b *testing.B) {
+	for _, size := range benchSizes {
+		rng := rand.New(rand.NewSource(42))
+		bitmap := roaring.NewBitmap()
+		for i := 0; i < size; i++ {
+			// Add random values spread across the uint32 range
+			bitmap.Add(rng.Uint32())
+		}
+
+		b.Run(fmt.Sprintf("n=%d", size), func(b *testing.B) {
+			for b.Loop() {
+				_ = bitmap.Clone()
 			}
 		})
 	}
