@@ -33,8 +33,9 @@ type tupleKey struct {
 // State is updated exclusively via the ChangeStream - writes go to the Store
 // and are applied to memory only when received from the stream.
 type Graph struct {
-	schema *schema.Schema
-	store  store.Store // optional; nil = in-memory only (for testing without persistence)
+	schema   *schema.Schema
+	store    store.Store   // optional; nil = in-memory only (for testing without persistence)
+	observer GraphObserver // optional; defaults to NoOpGraphObserver
 
 	mu     sync.RWMutex
 	tuples map[tupleKey]*versionedSet
@@ -48,8 +49,9 @@ type Graph struct {
 // New creates a new Graph with the given schema.
 func New(s *schema.Schema) *Graph {
 	return &Graph{
-		schema: s,
-		tuples: make(map[tupleKey]*versionedSet),
+		schema:   s,
+		observer: NoOpGraphObserver{},
+		tuples:   make(map[tupleKey]*versionedSet),
 	}
 }
 
@@ -60,9 +62,24 @@ func (g *Graph) WithStore(s store.Store) *Graph {
 		return g
 	}
 	return &Graph{
-		schema: g.schema,
-		store:  s,
-		tuples: g.tuples,
+		schema:   g.schema,
+		store:    s,
+		observer: g.observer,
+		tuples:   g.tuples,
+	}
+}
+
+// WithObserver returns a copy of the Graph configured to use the given observer.
+// The observer is called at key points during graph operations for instrumentation.
+func (g *Graph) WithObserver(obs GraphObserver) *Graph {
+	if obs == nil {
+		obs = NoOpGraphObserver{}
+	}
+	return &Graph{
+		schema:   g.schema,
+		store:    g.store,
+		observer: obs,
+		tuples:   g.tuples,
 	}
 }
 
@@ -83,13 +100,16 @@ func (g *Graph) Subscribe(ctx context.Context, stream store.ChangeStream) error 
 	afterLSN := g.replicatedLSN.Load()
 	changes, errCh := stream.Subscribe(ctx, afterLSN)
 
+	// Signal that we're ready to receive changes
+	g.observer.SubscribeReady(ctx)
+
 	for {
 		select {
 		case change, ok := <-changes:
 			if !ok {
 				return nil // Channel closed
 			}
-			g.ApplyChange(change)
+			g.applyChange(ctx, change)
 		case err := <-errCh:
 			if err != nil {
 				return fmt.Errorf("change stream error: %w", err)
@@ -100,9 +120,12 @@ func (g *Graph) Subscribe(ctx context.Context, stream store.ChangeStream) error 
 	}
 }
 
-// ApplyChange applies a single change from the ChangeStream to the in-memory state.
-// This is called internally by Subscribe, but is also exposed for testing.
-func (g *Graph) ApplyChange(change store.Change) {
+// applyChange applies a single change from the ChangeStream to the in-memory state.
+// This is called internally by Subscribe.
+func (g *Graph) applyChange(ctx context.Context, change store.Change) {
+	_, probe := g.observer.ApplyChangeStarted(ctx, change)
+	defer probe.End()
+
 	t := change.Tuple
 	switch change.Op {
 	case store.OpInsert:
@@ -111,6 +134,7 @@ func (g *Graph) ApplyChange(change store.Change) {
 		g.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.LSN)
 	}
 	g.replicatedLSN.Store(change.LSN)
+	probe.Applied(change.LSN)
 }
 
 // applyAdd adds a subject to the versioned set for the given tuple key.

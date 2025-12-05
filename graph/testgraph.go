@@ -2,24 +2,21 @@ package graph
 
 import (
 	"context"
-	"sync"
 
 	"github.com/alechenninger/falcon/schema"
 	"github.com/alechenninger/falcon/store"
 )
 
 // TestGraph wraps a Graph with a MemoryStore for testing.
-// It uses the same subscription pattern as production but provides
-// synchronous writes by waiting for replication.
+// It uses the observer pattern for synchronization - writes to the store
+// are applied via the Graph's subscription, and the SignalingObserver
+// allows waiting for changes to be applied.
 type TestGraph struct {
 	*Graph
-	store  *store.MemoryStore
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	mu      sync.Mutex
-	cond    *sync.Cond
-	lastLSN store.LSN
+	store    *store.MemoryStore
+	observer *SignalingObserver
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 // NewTestGraph creates a Graph subscribed to a MemoryStore.
@@ -27,55 +24,27 @@ type TestGraph struct {
 func NewTestGraph(s *schema.Schema) *TestGraph {
 	ctx, cancel := context.WithCancel(context.Background())
 	ms := store.NewMemoryStore()
+	observer := NewSignalingObserver()
 
-	// Subscribe BEFORE starting the goroutine to avoid race
-	changes, errCh := ms.Subscribe(ctx, 0)
+	g := New(s).WithObserver(observer)
 
 	tg := &TestGraph{
-		Graph:  New(s),
-		store:  ms,
-		ctx:    ctx,
-		cancel: cancel,
+		Graph:    g,
+		store:    ms,
+		observer: observer,
+		ctx:      ctx,
+		cancel:   cancel,
 	}
-	tg.cond = sync.NewCond(&tg.mu)
 
-	// Start subscription goroutine
-	go tg.runSubscription(changes, errCh)
+	// Start subscription in a goroutine using the standard Graph.Subscribe
+	go func() {
+		_ = g.Subscribe(ctx, ms)
+	}()
+
+	// Wait for the subscription to be ready before returning
+	observer.WaitReady()
 
 	return tg
-}
-
-func (tg *TestGraph) runSubscription(changes <-chan store.Change, errCh <-chan error) {
-	for {
-		select {
-		case change, ok := <-changes:
-			if !ok {
-				return
-			}
-			tg.Graph.ApplyChange(change)
-
-			// Update lastLSN and signal waiters
-			tg.mu.Lock()
-			tg.lastLSN = change.LSN
-			tg.cond.Broadcast()
-			tg.mu.Unlock()
-
-		case <-errCh:
-			return
-		case <-tg.ctx.Done():
-			return
-		}
-	}
-}
-
-// waitForLSN blocks until the graph has applied at least the given LSN.
-func (tg *TestGraph) waitForLSN(lsn store.LSN) {
-	tg.mu.Lock()
-	defer tg.mu.Unlock()
-
-	for tg.lastLSN < lsn {
-		tg.cond.Wait()
-	}
 }
 
 // WriteTuple validates and writes a tuple, waiting for it to be replicated.
@@ -95,9 +64,9 @@ func (tg *TestGraph) WriteTuple(ctx context.Context, objectType schema.TypeName,
 		return err
 	}
 
-	// Wait for this write to be applied
+	// Wait for this write to be applied via the observer
 	lsn, _ := tg.store.CurrentLSN(ctx)
-	tg.waitForLSN(lsn)
+	tg.observer.WaitForLSN(lsn)
 	return nil
 }
 
@@ -118,9 +87,9 @@ func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName
 		return err
 	}
 
-	// Wait for this delete to be applied
+	// Wait for this delete to be applied via the observer
 	lsn, _ := tg.store.CurrentLSN(ctx)
-	tg.waitForLSN(lsn)
+	tg.observer.WaitForLSN(lsn)
 	return nil
 }
 
