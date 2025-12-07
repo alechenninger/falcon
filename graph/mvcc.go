@@ -11,24 +11,27 @@ import (
 )
 
 // undoEntry records a change that can be undone to reconstruct historical state.
-// Timestamps are stored as chain deltas to save memory (4 bytes vs 8 bytes per entry):
-//   - undos[0].timeDelta = headTime - undos[0].time
-//   - undos[n].timeDelta = undos[n-1].time - undos[n].time (for n > 0)
-//
-// To compute an entry's timestamp, iterate from the front accumulating deltas.
+// In the history slice, timeDelta stores the time gap to the next (newer) entry.
 type undoEntry struct {
-	timeDelta store.StoreDelta // Delta from previous entry's time (or headTime for first entry)
+	timeDelta store.StoreDelta // Delta to next entry's time (0 for headUndo, computed for history)
 	added     []schema.ID      // IDs added at this time (undo = remove)
 	removed   []schema.ID      // IDs removed at this time (undo = add back)
 }
 
 // versionedSet stores a bitmap with MVCC support via undo chains.
 // HEAD is always the current state; historical reads walk the undo chain.
+//
+// Structure:
+//   - headUndo: the most recent change (at headTime), or nil if no history
+//   - history: older changes, oldest first, each with delta to the next newer entry
+//
+// To traverse from newest to oldest: process headUndo first, then history in reverse.
 type versionedSet struct {
 	mu       sync.RWMutex
 	headTime store.StoreTime // Timestamp of the current head state
 	head     *roaring.Bitmap // Always current state
-	undos    []undoEntry     // Newest first (reverse chronological order)
+	headUndo *undoEntry      // Most recent change (at headTime), nil if no history
+	history  []undoEntry     // Older entries, oldest first
 }
 
 // newVersionedSet creates a new versioned set starting at the given time.
@@ -36,7 +39,8 @@ func newVersionedSet(t store.StoreTime) *versionedSet {
 	return &versionedSet{
 		headTime: t,
 		head:     roaring.New(),
-		undos:    nil,
+		headUndo: nil,
+		history:  nil,
 	}
 }
 
@@ -53,10 +57,7 @@ func (v *versionedSet) Add(id schema.ID, t store.StoreTime) {
 	v.head.Add(uint32(id))
 
 	// Record undo: this was an add, so undo = remove
-	v.prependUndo(t, undoEntry{
-		timeDelta: 0, // Will be set by prependUndo
-		added:     []schema.ID{id},
-	})
+	v.recordUndo(t, []schema.ID{id}, nil)
 }
 
 // Remove removes an ID from the set at the given time.
@@ -72,36 +73,22 @@ func (v *versionedSet) Remove(id schema.ID, t store.StoreTime) {
 	v.head.Remove(uint32(id))
 
 	// Record undo: this was a remove, so undo = add back
-	v.prependUndo(t, undoEntry{
-		timeDelta: 0, // Will be set by prependUndo
-		removed:   []schema.ID{id},
-	})
+	v.recordUndo(t, nil, []schema.ID{id})
 }
 
-// prependUndo adds a new undo entry at the front and maintains the chain delta invariant.
+// recordUndo records a new undo entry and maintains the delta chain.
+// added contains IDs that were added (undo = remove them).
+// removed contains IDs that were removed (undo = add them back).
 // Must be called with v.mu held.
-func (v *versionedSet) prependUndo(t store.StoreTime, entry undoEntry) {
-	oldHeadTime := v.headTime
-
-	// The new entry's delta is 0 (it's at headTime after we update it)
-	entry.timeDelta = 0
-
-	// Prepend the new entry
-	v.undos = append([]undoEntry{entry}, v.undos...)
-
-	// Update the second entry's delta (was first, now second)
-	// Its time stays the same, but its delta is now relative to the new first entry
-	if len(v.undos) > 1 {
-		// oldFirstTime = oldHeadTime - oldFirst.timeDelta
-		// newDelta = newFirstTime - oldFirstTime = t - (oldHeadTime - oldDelta)
-		oldDelta := v.undos[1].timeDelta
-		// Compute: t - oldHeadTime + oldDelta
-		// This is equivalent to: t - (oldHeadTime - oldDelta)
-		// The Less method panics if the result exceeds uint32
-		newDelta := t.Difference(oldHeadTime.Less(oldDelta))
-		v.undos[1].timeDelta = newDelta
+func (v *versionedSet) recordUndo(t store.StoreTime, added, removed []schema.ID) {
+	if v.headUndo != nil {
+		// Move current headUndo to history with its delta to the new head
+		v.headUndo.timeDelta = t.Difference(v.headTime)
+		v.history = append(v.history, *v.headUndo)
 	}
 
+	// New headUndo (timeDelta not used - it's always at headTime)
+	v.headUndo = &undoEntry{added: added, removed: removed}
 	v.headTime = t
 }
 
@@ -120,22 +107,39 @@ func (v *versionedSet) ContainsAt(id schema.ID, t store.StoreTime) bool {
 
 	result := v.head.Contains(uint32(id))
 
-	// Walk undo chain, undoing changes newer than target time
-	// Compute times incrementally using chain deltas
-	currentTime := v.headTime
-	for _, undo := range v.undos {
-		currentTime = currentTime.Less(undo.timeDelta)
-		if currentTime <= t {
-			break // Reached target time, stop undoing
+	// Early exit: if target time >= headTime, use current state
+	if t >= v.headTime {
+		return result
+	}
+
+	// Need to undo changes newer than target time
+	// First check headUndo (at headTime)
+	if v.headUndo != nil {
+		// headTime > t, so we need to undo headUndo
+		if slices.Contains(v.headUndo.added, id) {
+			result = false
 		}
-		// Undo this change
-		if slices.Contains(undo.added, id) {
-			result = false // Was added after target, undo it
+		if slices.Contains(v.headUndo.removed, id) {
+			result = true
 		}
-		if slices.Contains(undo.removed, id) {
-			result = true // Was removed after target, undo it
+
+		// Walk history in reverse (newest to oldest)
+		currentTime := v.headTime
+		for i := len(v.history) - 1; i >= 0; i-- {
+			undo := &v.history[i]
+			currentTime = currentTime.Less(undo.timeDelta)
+			if currentTime <= t {
+				break // This change is at or before target, don't undo it
+			}
+			if slices.Contains(undo.added, id) {
+				result = false
+			}
+			if slices.Contains(undo.removed, id) {
+				result = true
+			}
 		}
 	}
+
 	return result
 }
 
@@ -167,18 +171,22 @@ func (v *versionedSet) Truncate(minTime store.StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	// Find the first entry that's < minTime (oldest we need to keep)
-	// Compute times incrementally using chain deltas
-	cutoff := len(v.undos)
+	if v.headUndo == nil {
+		return // No history to truncate
+	}
+
+	// Walk history from newest to oldest to find cutoff point
+	// We keep entries where time >= minTime
 	currentTime := v.headTime
-	for i, undo := range v.undos {
-		currentTime = currentTime.Less(undo.timeDelta)
+	cutoff := 0 // Index of first entry to keep (oldest first)
+	for i := len(v.history) - 1; i >= 0; i-- {
+		currentTime = currentTime.Less(v.history[i].timeDelta)
 		if currentTime < minTime {
-			cutoff = i
+			cutoff = i + 1 // Discard this and older entries
 			break
 		}
 	}
-	v.undos = v.undos[:cutoff]
+	v.history = v.history[cutoff:]
 }
 
 // SnapshotAt returns a clone of the bitmap as it was at the given time.
@@ -190,22 +198,38 @@ func (v *versionedSet) SnapshotAt(t store.StoreTime) *roaring.Bitmap {
 
 	result := v.head.Clone()
 
-	// Walk undo chain, applying inverses for changes newer than target time
-	// Compute times incrementally using chain deltas
-	currentTime := v.headTime
-	for _, undo := range v.undos {
-		currentTime = currentTime.Less(undo.timeDelta)
-		if currentTime <= t {
-			break
-		}
-		// Undo this change
-		for _, id := range undo.added {
+	// Early exit: if target time >= headTime, use current state
+	if t >= v.headTime {
+		return result
+	}
+
+	// Need to undo changes newer than target time
+	if v.headUndo != nil {
+		// Undo headUndo (at headTime, which is > t)
+		for _, id := range v.headUndo.added {
 			result.Remove(uint32(id))
 		}
-		for _, id := range undo.removed {
+		for _, id := range v.headUndo.removed {
 			result.Add(uint32(id))
 		}
+
+		// Walk history in reverse (newest to oldest)
+		currentTime := v.headTime
+		for i := len(v.history) - 1; i >= 0; i-- {
+			undo := &v.history[i]
+			currentTime = currentTime.Less(undo.timeDelta)
+			if currentTime <= t {
+				break // This change is at or before target, don't undo it
+			}
+			for _, id := range undo.added {
+				result.Remove(uint32(id))
+			}
+			for _, id := range undo.removed {
+				result.Add(uint32(id))
+			}
+		}
 	}
+
 	return result
 }
 
@@ -214,14 +238,18 @@ func (v *versionedSet) OldestTime() store.StoreTime {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	if len(v.undos) == 0 {
+	if v.headUndo == nil {
 		return v.headTime
+	}
+
+	if len(v.history) == 0 {
+		return v.headTime // Only headUndo exists, it's at headTime
 	}
 
 	// Compute the oldest time by walking the chain
 	currentTime := v.headTime
-	for _, undo := range v.undos {
-		currentTime = currentTime.Less(undo.timeDelta)
+	for i := len(v.history) - 1; i >= 0; i-- {
+		currentTime = currentTime.Less(v.history[i].timeDelta)
 	}
 	return currentTime
 }
@@ -241,25 +269,20 @@ func (v *versionedSet) StateTimeWithin(maxTime store.StoreTime) store.StoreTime 
 		return v.headTime
 	}
 
-	// Walk undo chain to find the latest state <= maxTime
-	// Each undo entry represents a change at that time.
-	// The state "before" that change existed at the previous entry's time
-	// (or the oldest time if it's the last entry).
-	// Compute times incrementally using chain deltas
+	// headTime > maxTime, so we need to look at history
+	if v.headUndo == nil {
+		return 0 // No history available
+	}
+
+	// Walk history in reverse to find the latest state <= maxTime
 	currentTime := v.headTime
-	for i, undo := range v.undos {
-		currentTime = currentTime.Less(undo.timeDelta)
+	for i := len(v.history) - 1; i >= 0; i-- {
+		currentTime = currentTime.Less(v.history[i].timeDelta)
 		if currentTime <= maxTime {
 			return currentTime
 		}
-		// If we've walked past maxTime, the usable state is the one
-		// just before this change (if there is one)
-		if i == len(v.undos)-1 {
-			// This is the oldest change we have - we can't go further back
-			// The state before this change is unknown/unavailable
-			return 0
-		}
 	}
 
+	// Walked entire history without finding a usable state
 	return 0
 }
