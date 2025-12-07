@@ -31,6 +31,49 @@ func (c *LocalGraphClient) CheckRelation(
 	return c.graph.CheckAtWithVisited(ctx, subjectType, subjectID, objectType, objectID, relation, &window, visited)
 }
 
+// BatchCheckRelation checks if subject has relation on ANY of the given objects.
+// It iterates through all objects in the ObjectSets, short-circuiting on first true.
+func (c *LocalGraphClient) BatchCheckRelation(
+	ctx context.Context,
+	check RelationCheck,
+	window SnapshotWindow,
+	visited []VisitedKey,
+) (bool, SnapshotWindow, error) {
+	currentWindow := window
+
+	for _, objSet := range check.Objects {
+		// Iterate over each object ID in the bitmap
+		iter := objSet.IDs.Iterator()
+		for iter.HasNext() {
+			objectID := schema.ID(iter.Next())
+
+			allowed, newWindow, err := c.graph.CheckAtWithVisited(
+				ctx,
+				check.SubjectType,
+				check.SubjectID,
+				objSet.Type,
+				objectID,
+				check.Relation,
+				&currentWindow,
+				visited,
+			)
+			if err != nil {
+				return false, currentWindow, err
+			}
+
+			// Always narrow the window based on state examined
+			currentWindow = newWindow
+
+			// Short-circuit on first true
+			if allowed {
+				return true, currentWindow, nil
+			}
+		}
+	}
+
+	return false, currentWindow, nil
+}
+
 // Graph returns the underlying Graph.
 func (c *LocalGraphClient) Graph() *Graph {
 	return c.graph

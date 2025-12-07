@@ -32,10 +32,11 @@ type tupleKey struct {
 // State is updated exclusively via the ChangeStream - writes go to the Store
 // and are applied to memory only when received from the stream.
 type Graph struct {
-	schema   *schema.Schema
-	store    store.Store   // optional; nil = in-memory only (for testing without persistence)
-	observer GraphObserver // optional; defaults to NoOpGraphObserver
-	router   Router        // optional; for distributed check dispatch
+	schema     *schema.Schema
+	store      store.Store   // optional; nil = in-memory only (for testing without persistence)
+	observer   GraphObserver // optional; defaults to NoOpGraphObserver
+	router     Router        // optional; for distributed check dispatch (single-object routing)
+	dispatcher *Dispatcher   // optional; for batch dispatch (scatter-gather)
 
 	mu     sync.RWMutex
 	tuples map[tupleKey]*versionedSet
@@ -68,6 +69,7 @@ func (g *Graph) WithStore(s store.Store) *Graph {
 		store:          s,
 		observer:       g.observer,
 		router:         g.router,
+		dispatcher:     g.dispatcher,
 		tuples:         g.tuples,
 		replicatedTime: g.replicatedTime,
 	}
@@ -84,6 +86,7 @@ func (g *Graph) WithObserver(obs GraphObserver) *Graph {
 		store:          g.store,
 		observer:       obs,
 		router:         g.router,
+		dispatcher:     g.dispatcher,
 		tuples:         g.tuples,
 		replicatedTime: g.replicatedTime,
 	}
@@ -100,6 +103,24 @@ func (g *Graph) WithRouter(r Router) *Graph {
 		store:          g.store,
 		observer:       g.observer,
 		router:         r,
+		dispatcher:     g.dispatcher,
+		tuples:         g.tuples,
+		replicatedTime: g.replicatedTime,
+	}
+}
+
+// WithDispatcher returns a copy of the Graph configured to use the given dispatcher
+// for batch check dispatch. The dispatcher handles scatter-gather for checking
+// relations across multiple objects in parallel.
+//
+// If dispatcher is nil, batch checks fall back to serial local evaluation.
+func (g *Graph) WithDispatcher(d *Dispatcher) *Graph {
+	return &Graph{
+		schema:         g.schema,
+		store:          g.store,
+		observer:       g.observer,
+		router:         g.router,
+		dispatcher:     d,
 		tuples:         g.tuples,
 		replicatedTime: g.replicatedTime,
 	}

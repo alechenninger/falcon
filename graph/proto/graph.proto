@@ -5,12 +5,17 @@ package falcon.graph;
 option go_package = "github.com/alechenninger/falcon/graph/proto;graphpb";
 
 // GraphService provides cross-node graph query operations.
-// Only CheckRelation is needed because all tuples for an object are on the same shard.
 service GraphService {
   // CheckRelation checks if a subject has a relation on an object within a snapshot window.
   // This is called when traversing arrows or userset subjects that point to objects
   // on different shards.
   rpc CheckRelation(CheckRelationRequest) returns (CheckRelationResponse);
+
+  // BatchCheckRelation checks if a subject has a relation on any of the given objects.
+  // This is used for scatter-gather: the caller groups objects by destination node,
+  // then calls this RPC once per node with all relevant objects.
+  // Returns true if the subject has the relation on ANY of the objects (short-circuits).
+  rpc BatchCheckRelation(BatchCheckRelationRequest) returns (BatchCheckRelationResponse);
 }
 
 // SnapshotWindow represents the time range for consistent snapshot reads.
@@ -51,6 +56,34 @@ message CheckRelationResponse {
   bool allowed = 1;
   // window is the narrowed snapshot window after the check.
   // Subsequent queries should use this to maintain consistency.
+  SnapshotWindow window = 2;
+}
+
+// ObjectSet represents a set of objects of the same type.
+// The IDs are stored as a serialized roaring bitmap for compression.
+message ObjectSet {
+  string object_type = 1;
+  // Serialized roaring bitmap of object IDs.
+  bytes object_ids = 2;
+}
+
+// BatchCheckRelationRequest checks if a subject has a relation on any of multiple objects.
+// Objects are grouped by type in ObjectSets with compressed bitmap IDs.
+message BatchCheckRelationRequest {
+  string subject_type = 1;
+  uint32 subject_id = 2;
+  // Objects to check, grouped by type. Each ObjectSet contains a bitmap of IDs.
+  repeated ObjectSet objects = 3;
+  string relation = 4;
+  SnapshotWindow window = 5;
+  repeated VisitedNode visited = 6;
+}
+
+// BatchCheckRelationResponse is the result of a batch relation check.
+message BatchCheckRelationResponse {
+  // allowed is true if the subject has the relation on ANY of the objects.
+  bool allowed = 1;
+  // window is the narrowed snapshot window after the check.
   SnapshotWindow window = 2;
 }
 

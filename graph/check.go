@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/schema"
 	"github.com/alechenninger/falcon/store"
 )
@@ -196,7 +197,12 @@ func (g *Graph) checkDirectAndUserset(ctx context.Context, subjectType schema.Ty
 		return true, window, nil
 	}
 
-	// Check userset subjects
+	// If dispatcher is available, use batch dispatch for userset checks
+	if g.dispatcher != nil {
+		return g.checkUsersetWithDispatcher(ctx, subjectType, subjectID, objectType, objectID, relation, targetTypes, visited, window)
+	}
+
+	// Fallback: serial check of userset subjects
 	// e.g., document:100#viewer@group:1#member means "members of group 1 are viewers"
 	// So we need to check if subjectType:subjectID is in group:1#member
 	var foundErr error
@@ -216,6 +222,76 @@ func (g *Graph) checkDirectAndUserset(ctx context.Context, subjectType schema.Ty
 		return false, window, foundErr
 	}
 	return found, window, nil
+}
+
+// checkUsersetWithDispatcher uses the dispatcher for batch userset checks.
+// It collects all userset subjects as bitmaps and dispatches them in parallel.
+func (g *Graph) checkUsersetWithDispatcher(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
+	// Collect userset subject bitmaps
+	bitmaps, window := g.collectUsersetSubjectBitmaps(objectType, objectID, relation, targetTypes, window)
+	if len(bitmaps) == 0 {
+		return false, window, nil
+	}
+
+	// Build ObjectSets for dispatch
+	// Each userset reference (type#relation) becomes a separate check
+	// because we need to check relation "usSubjectRelation" on objects of type "usSubjectType"
+	var objectSets []ObjectSet
+	for ref, bitmap := range bitmaps {
+		objectSets = append(objectSets, ObjectSet{
+			Type: ref.Type,
+			IDs:  bitmap,
+		})
+	}
+
+	// All userset subjects share the same relation to check (the userset relation)
+	// But different types may have different relations... wait, no.
+	// The relation to check IS the subject relation (e.g., "member" for group:X#member)
+	//
+	// Actually, we need to think about this more carefully:
+	// - We have userset subjects like group:1#member, group:2#member
+	// - We need to check: is subjectType:subjectID in group:1#member?
+	// - This means checking the "member" relation on group:1, group:2, etc.
+	//
+	// So for each (type, relation) pair, we dispatch a check with that relation.
+	// But DispatchCheck takes a single relation... so we may need multiple dispatches.
+
+	// Group by relation and dispatch separately
+	byRelation := make(map[schema.RelationName][]ObjectSet)
+	for ref, bitmap := range bitmaps {
+		byRelation[ref.Relation] = append(byRelation[ref.Relation], ObjectSet{
+			Type: ref.Type,
+			IDs:  bitmap,
+		})
+	}
+
+	// Convert visited map to slice for dispatch
+	visitedSlice := make([]VisitedKey, 0, len(visited))
+	for k := range visited {
+		visitedSlice = append(visitedSlice, k)
+	}
+
+	// Check each relation group
+	for rel, objects := range byRelation {
+		check := RelationCheck{
+			SubjectType: subjectType,
+			SubjectID:   subjectID,
+			Objects:     objects,
+			Relation:    rel,
+		}
+
+		allowed, newWindow, err := g.dispatcher.DispatchCheck(ctx, check, window, visitedSlice)
+		if err != nil {
+			return false, window, err
+		}
+		window = newWindow
+
+		if allowed {
+			return true, window, nil
+		}
+	}
+
+	return false, window, nil
 }
 
 // checkDirect checks if the subject has a direct tuple for the relation.
@@ -241,6 +317,17 @@ func (g *Graph) checkArrow(ctx context.Context, subjectType schema.TypeName, sub
 		return false, window, fmt.Errorf("relation %s has no Direct userset with target types", arrow.TuplesetRelation)
 	}
 
+	// If dispatcher is available, use batch dispatch
+	if g.dispatcher != nil {
+		return g.checkArrowWithDispatcher(ctx, subjectType, subjectID, objectType, objectID, arrow, targetTypes, visited, window)
+	}
+
+	// Fallback: serial check of arrow targets
+	return g.checkArrowSerial(ctx, subjectType, subjectID, objectType, objectID, arrow, targetTypes, visited, window)
+}
+
+// checkArrowSerial checks arrow targets one at a time (fallback when no dispatcher).
+func (g *Graph) checkArrowSerial(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, arrow *schema.TupleToUserset, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
 	// For each target type, get the targets and check the relation
 	// Note: tupleset relations (like "parent") typically have direct subjects
 	// (Relation=""), pointing to objects rather than usersets
@@ -281,6 +368,62 @@ func (g *Graph) checkArrow(ctx context.Context, subjectType schema.TypeName, sub
 	}
 
 	return false, window, nil
+}
+
+// checkArrowWithDispatcher uses the dispatcher for batch arrow checks.
+// It collects all target objects as bitmaps and dispatches them in parallel.
+func (g *Graph) checkArrowWithDispatcher(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, arrow *schema.TupleToUserset, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
+	// Collect target object bitmaps for all valid target types
+	var objectSets []ObjectSet
+
+	for _, ref := range targetTypes {
+		// Skip userset references for tupleset relations - they should be direct
+		if ref.Relation != "" {
+			continue
+		}
+
+		// Verify the target type has the computed relation in the schema
+		targetOT, ok := g.schema.Types[ref.Type]
+		if !ok {
+			continue
+		}
+		if _, ok := targetOT.Relations[arrow.ComputedUsersetRelation]; !ok {
+			continue
+		}
+
+		// Get the bitmap of target objects
+		bitmap, stateTime, newWindow := g.getSubjectBitmapWithin(objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window)
+		if bitmap == nil || bitmap.IsEmpty() {
+			continue
+		}
+		window = newWindow
+		_ = stateTime // Already incorporated into window
+
+		objectSets = append(objectSets, ObjectSet{
+			Type: ref.Type,
+			IDs:  bitmap,
+		})
+	}
+
+	if len(objectSets) == 0 {
+		return false, window, nil
+	}
+
+	// Convert visited map to slice for dispatch
+	visitedSlice := make([]VisitedKey, 0, len(visited))
+	for k := range visited {
+		visitedSlice = append(visitedSlice, k)
+	}
+
+	// Dispatch batch check for the computed userset relation
+	check := RelationCheck{
+		SubjectType: subjectType,
+		SubjectID:   subjectID,
+		Objects:     objectSets,
+		Relation:    arrow.ComputedUsersetRelation,
+	}
+
+	return g.dispatcher.DispatchCheck(ctx, check, window, visitedSlice)
 }
 
 // containsSubjectWithin checks if a subject is in the set within the given snapshot window.
@@ -393,4 +536,73 @@ func (g *Graph) forEachUsersetSubjectWithin(objectType schema.TypeName, objectID
 	}
 
 	return false, window
+}
+
+// getSubjectBitmapWithin gets the subject bitmap for the given tuple key within the snapshot window.
+// Returns the bitmap (possibly cloned), the state time, and the narrowed window.
+// Returns nil bitmap if no tuples exist.
+func (g *Graph) getSubjectBitmapWithin(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName, window SnapshotWindow) (*roaring.Bitmap, store.StoreTime, SnapshotWindow) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	key := tupleKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
+	}
+	vs, ok := g.tuples[key]
+	if !ok {
+		return nil, 0, window
+	}
+
+	snapshot, stateTime := vs.SnapshotWithin(window.Max())
+	if stateTime == 0 || snapshot == nil || snapshot.IsEmpty() {
+		return nil, 0, window
+	}
+
+	return snapshot, stateTime, window.NarrowMin(stateTime)
+}
+
+// collectUsersetSubjectBitmaps collects bitmaps of userset subjects grouped by (type, relation).
+// Each entry in the returned map represents objects that need to be checked.
+// The window is narrowed as tuples are examined.
+//
+// Key format: "type#relation" for userset references.
+func (g *Graph) collectUsersetSubjectBitmaps(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, window SnapshotWindow) (map[schema.SubjectRef]*roaring.Bitmap, SnapshotWindow) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	result := make(map[schema.SubjectRef]*roaring.Bitmap)
+
+	for _, ref := range targetTypes {
+		// Skip direct subjects (no relation) - those are handled separately
+		if ref.Relation == "" {
+			continue
+		}
+
+		key := tupleKey{
+			ObjectType:      objectType,
+			ObjectID:        objectID,
+			Relation:        relation,
+			SubjectType:     ref.Type,
+			SubjectRelation: ref.Relation,
+		}
+
+		vs, ok := g.tuples[key]
+		if !ok {
+			continue
+		}
+
+		snapshot, stateTime := vs.SnapshotWithin(window.Max())
+		if stateTime == 0 || snapshot == nil || snapshot.IsEmpty() {
+			continue
+		}
+		window = window.NarrowMin(stateTime)
+
+		result[ref] = snapshot
+	}
+
+	return result, window
 }

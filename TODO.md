@@ -2,9 +2,10 @@
 
 ## Core
 
-- [ ] Routing abstraction (base). Two-layer routing: one before ID is known, one after.
+- [~] Routing abstraction (base). Two-layer routing: one before ID is known, one after.
 - [ ] Shard assignment (for sharding hydration). Can start with static assignments maybe?
-- [ ] Graph dispatch by shard. (should be straight forward with routing layer)
+- [~] Graph dispatch by shard. (should be straight forward with routing layer)
+- [ ] Intersection operator – complicates dispatch
 - [ ] Read repair (waiting for replication when needed)
 - [ ] Abort on unsatisfiable snapshot window
 - [ ] Write acknowledgements (pre shard movement & rebalancing).
@@ -12,7 +13,7 @@
 - [ ] Lease protocol for shard assignment.
 - [ ] Schema updates, tied to storetime.
 - [ ] GC old undo entries
-- [ ] Routing should not be calculated per tuple in a subjectset b/c their might be a high cardinality of tuples. We would want to scatter-gather: group all the subjects by route and dispatch concurrently (or up to some concurrency threshold).
+- [~] Routing should not be calculated per tuple in a subjectset b/c their might be a high cardinality of tuples. We would want to scatter-gather: group all the subjects by route and dispatch concurrently (or up to some concurrency threshold).
 
 ## Advanced
 
