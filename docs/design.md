@@ -98,6 +98,10 @@ Maybe's:
 - [I think we only need this if we try to synchronously update RAM as in above bullet] Fencing of writes on shard roots: Ensures writes never populate the wrong shard memory, and shards never miss their writes (even after shard moves) without 2PC
   - Q: Do we still need to fence on every root of every tuple?
 
+Caching optimizations?
+
+- We can cache bitmaps for a relation at a **range** of LSNs, and discard then when we truncate those snapshots. This provides a form of hotspot caching. We don't need to perform the userset lookup again for an LSN range!
+
 Semantics-by-techniques:
 
 - Critical scaling & availability requirements:
