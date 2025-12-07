@@ -55,14 +55,9 @@ func (g *Graph) checkRelation(subjectType schema.TypeName, subjectID schema.ID, 
 	visited[key] = true
 	defer func() { visited[key] = false }()
 
-	// If no usersets defined, check direct and userset membership
-	if len(rel.Usersets) == 0 {
-		return g.checkDirectAndUserset(subjectType, subjectID, objectType, objectID, rel.Name, visited, lsn)
-	}
-
 	// Evaluate each userset in the union
 	for _, us := range rel.Usersets {
-		ok, err := g.checkUserset(subjectType, subjectID, objectType, objectID, rel.Name, us, visited, lsn)
+		ok, err := g.checkUserset(subjectType, subjectID, objectType, objectID, rel, us, visited, lsn)
 		if err != nil {
 			return false, err
 		}
@@ -75,20 +70,20 @@ func (g *Graph) checkRelation(subjectType schema.TypeName, subjectID schema.ID, 
 }
 
 // checkUserset evaluates a single userset definition.
-func (g *Graph) checkUserset(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relationName schema.RelationName, us schema.Userset, visited map[visitKey]bool, lsn *LSN) (bool, error) {
+func (g *Graph) checkUserset(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, rel *schema.Relation, us schema.Userset, visited map[visitKey]bool, lsn *LSN) (bool, error) {
 	switch {
-	case us.This:
+	case len(us.This) > 0:
 		// Direct tuple membership for the current relation (including userset subjects)
-		return g.checkDirectAndUserset(subjectType, subjectID, objectType, objectID, relationName, visited, lsn)
+		return g.checkDirectAndUserset(subjectType, subjectID, objectType, objectID, rel.Name, us.This, visited, lsn)
 
 	case us.ComputedRelation != "":
 		// Reference to another relation on the same object
 		ot := g.schema.Types[objectType]
-		rel, ok := ot.Relations[us.ComputedRelation]
+		computedRel, ok := ot.Relations[us.ComputedRelation]
 		if !ok {
 			return false, fmt.Errorf("unknown computed relation %s on type %s", us.ComputedRelation, objectType)
 		}
-		return g.checkRelation(subjectType, subjectID, objectType, objectID, rel, visited, lsn)
+		return g.checkRelation(subjectType, subjectID, objectType, objectID, computedRel, visited, lsn)
 
 	case us.TupleToUserset != nil:
 		// Arrow traversal: follow relation to find targets, then check relation on targets
@@ -104,7 +99,9 @@ func (g *Graph) checkUserset(subjectType schema.TypeName, subjectID schema.ID, o
 // For direct: checks if subject_type:subject_id is directly in the relation
 // For userset: finds tuples like object#relation@other_type:other_id#other_relation
 // and recursively checks if subject is in that userset.
-func (g *Graph) checkDirectAndUserset(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, visited map[visitKey]bool, lsn *LSN) (bool, error) {
+//
+// targetTypes specifies the allowed subject types from the Direct userset.
+func (g *Graph) checkDirectAndUserset(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, visited map[visitKey]bool, lsn *LSN) (bool, error) {
 	// Check direct membership first
 	if g.checkDirect(subjectType, subjectID, objectType, objectID, relation, lsn) {
 		return true, nil
@@ -114,7 +111,7 @@ func (g *Graph) checkDirectAndUserset(subjectType schema.TypeName, subjectID sch
 	// e.g., document:100#viewer@group:1#member means "members of group 1 are viewers"
 	// So we need to check if subjectType:subjectID is in group:1#member
 	var foundErr error
-	found := g.forEachUsersetSubjectAt(objectType, objectID, relation, lsn, func(usSubjectType schema.TypeName, usSubjectRelation schema.RelationName, usSubjectID schema.ID) bool {
+	found := g.forEachUsersetSubjectAt(objectType, objectID, relation, targetTypes, lsn, func(usSubjectType schema.TypeName, usSubjectRelation schema.RelationName, usSubjectID schema.ID) bool {
 		usOT, ok := g.schema.Types[usSubjectType]
 		if !ok {
 			return false // continue
@@ -156,15 +153,16 @@ func (g *Graph) checkArrow(subjectType schema.TypeName, subjectID schema.ID, obj
 		return false, fmt.Errorf("unknown tupleset relation %s on type %s", arrow.TuplesetRelation, objectType)
 	}
 
-	// Determine the target types from the relation's TargetTypes
-	if len(tuplesetRel.TargetTypes) == 0 {
-		return false, fmt.Errorf("relation %s has no target types defined", arrow.TuplesetRelation)
+	// Determine the target types from the tupleset relation's Direct userset
+	targetTypes := tuplesetRel.DirectTargetTypes()
+	if targetTypes == nil {
+		return false, fmt.Errorf("relation %s has no Direct userset with target types", arrow.TuplesetRelation)
 	}
 
 	// For each target type, get the targets and check the relation
 	// Note: tupleset relations (like "parent") typically have direct subjects
 	// (Relation=""), pointing to objects rather than usersets
-	for _, ref := range tuplesetRel.TargetTypes {
+	for _, ref := range targetTypes {
 		// Skip userset references for tupleset relations - they should be direct
 		if ref.Relation != "" {
 			continue
@@ -269,22 +267,14 @@ func (g *Graph) forEachSubjectAt(objectType schema.TypeName, objectID schema.ID,
 // For each (subjectType, subjectRelation, subjectID) tuple, fn is called.
 // If fn returns true, iteration stops and forEachUsersetSubjectAt returns true.
 // If lsn is nil, uses HEAD.
-func (g *Graph) forEachUsersetSubjectAt(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, lsn *LSN, fn func(schema.TypeName, schema.RelationName, schema.ID) bool) bool {
-	// Get the relation definition to find allowed target types
-	ot, ok := g.schema.Types[objectType]
-	if !ok {
-		return false
-	}
-	rel, ok := ot.Relations[relation]
-	if !ok {
-		return false
-	}
-
+//
+// targetTypes specifies the allowed subject types from the Direct userset.
+func (g *Graph) forEachUsersetSubjectAt(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, lsn *LSN, fn func(schema.TypeName, schema.RelationName, schema.ID) bool) bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	// For each allowed subject reference (type + relation), do a direct lookup
-	for _, ref := range rel.TargetTypes {
+	for _, ref := range targetTypes {
 		// Skip direct subjects (no relation) - those are handled separately
 		if ref.Relation == "" {
 			continue

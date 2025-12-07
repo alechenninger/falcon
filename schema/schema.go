@@ -32,31 +32,20 @@ type ObjectType struct {
 // satisfied by direct membership, by membership in another relation (union),
 // or by traversing to another object and checking a relation there (arrow).
 //
-// If Usersets is empty, this is a "direct-only" relation where subjects are
-// stored directly in the tuple bitmap.
-//
-// If Usersets is non-empty, the relation is computed as the union of all
-// usersets. Each userset can reference direct membership, another relation
-// on this object, or an arrow traversal to another object.
+// Usersets defines how this relation is computed. The relation is the union
+// of all usersets. Each userset can reference direct membership (with allowed
+// subject types), another relation on this object, or an arrow traversal to
+// another object.
 type Relation struct {
 	// Name is the relation identifier (e.g., "viewer", "editor", "parent").
 	Name RelationName
-	// TargetTypes specifies what subjects can be assigned to this relation.
-	// Each entry defines a subject type and optionally a subject relation.
-	//
-	// Examples:
-	//   - Ref("user") allows direct user subjects: @user:1
-	//   - Ref("group", "member") allows userset subjects: @group:1#member
-	//   - Ref("folder") allows direct folder subjects for parent relations
-	TargetTypes []SubjectRef
-	// Usersets defines how this relation is computed. If empty, only direct
-	// tuple membership is checked. If non-empty, the relation is the union
+	// Usersets defines how this relation is computed. The relation is the union
 	// of all usersets.
 	Usersets []Userset
 }
 
 // SubjectRef specifies an allowed subject type and optional relation for a
-// relation's TargetTypes.
+// direct userset's TargetTypes.
 type SubjectRef struct {
 	// Type is the subject's object type (e.g., "user", "group", "folder").
 	Type TypeName
@@ -81,9 +70,14 @@ func RefWithRelation(subjectType TypeName, relation RelationName) SubjectRef {
 // either direct membership, a reference to another relation on the same object,
 // or an arrow traversal.
 type Userset struct {
-	// This indicates we should check direct tuple membership for this relation.
-	// When true, other fields should be empty.
-	This bool
+	// This specifies direct tuple membership with allowed subject types.
+	// If non-empty, tuples can be written with these subject types.
+	//
+	// Examples:
+	//   - Ref("user") allows direct user subjects: @user:1
+	//   - RefWithRelation("group", "member") allows userset subjects: @group:1#member
+	//   - Ref("folder") allows direct folder subjects for parent relations
+	This []SubjectRef
 
 	// ComputedRelation references another relation on the same object.
 	// For example, "editor" userset on a "viewer" relation means editors are
@@ -108,9 +102,14 @@ type TupleToUserset struct {
 	ComputedUsersetRelation RelationName
 }
 
-// Direct creates a Userset that checks direct tuple membership.
-func Direct() Userset {
-	return Userset{This: true}
+// Direct creates a Userset that checks direct tuple membership with the
+// specified allowed subject types.
+//
+// Example:
+//
+//	Direct(Ref("user"), RefWithRelation("group", "member"))
+func Direct(types ...SubjectRef) Userset {
+	return Userset{This: types}
 }
 
 // Computed creates a Userset that references another relation on the same object.
@@ -127,4 +126,15 @@ func Arrow(throughRelation, checkRelation RelationName) Userset {
 			ComputedUsersetRelation: checkRelation,
 		},
 	}
+}
+
+// DirectTargetTypes returns the target types from the Direct userset if one
+// exists, or nil if the relation has no direct membership.
+func (r *Relation) DirectTargetTypes() []SubjectRef {
+	for _, us := range r.Usersets {
+		if len(us.This) > 0 {
+			return us.This
+		}
+	}
+	return nil
 }

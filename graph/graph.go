@@ -251,9 +251,9 @@ type UsersetSubject struct {
 }
 
 // GetUsersetSubjects returns all userset subject tuples for the given object
-// and relation. This uses the schema's TargetTypes to determine exactly which
-// (subjectType, subjectRelation) combinations are allowed, doing direct map
-// lookups instead of iterating over all tuples.
+// and relation. This uses the Direct userset's TargetTypes to determine exactly
+// which (subjectType, subjectRelation) combinations are allowed, doing direct
+// map lookups instead of iterating over all tuples.
 //
 // Complexity: O(number of TargetTypes) instead of O(total tuples).
 func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) []UsersetSubject {
@@ -267,13 +267,18 @@ func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.I
 		return nil
 	}
 
+	targetTypes := rel.DirectTargetTypes()
+	if targetTypes == nil {
+		return nil
+	}
+
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	var results []UsersetSubject
 
 	// For each allowed subject reference (type + relation), do a direct lookup
-	for _, ref := range rel.TargetTypes {
+	for _, ref := range targetTypes {
 		// Skip direct subjects (no relation) - those are handled separately
 		if ref.Relation == "" {
 			continue
@@ -300,7 +305,8 @@ func (g *Graph) GetUsersetSubjects(objectType schema.TypeName, objectID schema.I
 }
 
 // ValidateTuple checks that the object type, relation, and subject reference
-// are valid according to the schema.
+// are valid according to the schema. Only relations with a Direct userset
+// can have tuples written to them.
 func (g *Graph) ValidateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
 	ot, ok := g.schema.Types[objectType]
 	if !ok {
@@ -311,8 +317,13 @@ func (g *Graph) ValidateTuple(objectType schema.TypeName, relation schema.Relati
 		return fmt.Errorf("unknown relation %s on type %s", relation, objectType)
 	}
 
-	// Check that the subject type + relation is in TargetTypes
-	for _, ref := range rel.TargetTypes {
+	// Check that the subject type + relation is in the Direct userset's TargetTypes
+	targetTypes := rel.DirectTargetTypes()
+	if targetTypes == nil {
+		return fmt.Errorf("relation %s#%s does not allow direct tuples", objectType, relation)
+	}
+
+	for _, ref := range targetTypes {
 		if ref.Type == subjectType && ref.Relation == subjectRelation {
 			return nil
 		}

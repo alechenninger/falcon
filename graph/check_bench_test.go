@@ -115,8 +115,8 @@ func benchSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
 						Name: "member",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("user")),
 						},
 					},
 				},
@@ -126,29 +126,27 @@ func benchSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
 						Name: "parent",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("folder"),
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
 						Name: "viewer",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),
-							schema.RefWithRelation("group", "member"),
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),
+							schema.Direct(
+								schema.Ref("user"),
+								schema.RefWithRelation("group", "member"),
+							),
 							schema.Arrow("parent", "viewer"),
 						},
 					},
 					"editor": {
 						Name: "editor",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),
-							schema.RefWithRelation("group", "member"),
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),
+							schema.Direct(
+								schema.Ref("user"),
+								schema.RefWithRelation("group", "member"),
+							),
 							schema.Arrow("parent", "editor"),
 						},
 					},
@@ -159,30 +157,28 @@ func benchSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
 						Name: "parent",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("folder"),
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
 						Name: "viewer",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),
-							schema.RefWithRelation("group", "member"),
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),
+							schema.Direct(
+								schema.Ref("user"),
+								schema.RefWithRelation("group", "member"),
+							),
 							schema.Computed("editor"),
 							schema.Arrow("parent", "viewer"),
 						},
 					},
 					"editor": {
 						Name: "editor",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),
-							schema.RefWithRelation("group", "member"),
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),
+							schema.Direct(
+								schema.Ref("user"),
+								schema.RefWithRelation("group", "member"),
+							),
 							schema.Arrow("parent", "editor"),
 						},
 					},

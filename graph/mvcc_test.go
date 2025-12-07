@@ -20,11 +20,8 @@ func mvccTestSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
 						Name: "viewer",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),
+							schema.Direct(schema.Ref("user")),
 						},
 					},
 				},

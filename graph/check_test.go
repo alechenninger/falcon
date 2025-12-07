@@ -29,8 +29,8 @@ func testSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
 						Name: "member",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"), // @user:1
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("user")), // @user:1
 						},
 					},
 				},
@@ -40,18 +40,17 @@ func testSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
 						Name: "parent",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("folder"), // @folder:1
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("folder")), // @folder:1
 						},
 					},
 					"viewer": {
 						Name: "viewer",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),                        // @user:1
-							schema.RefWithRelation("group", "member"), // @group:1#member
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),                  // direct viewers
+							schema.Direct(
+								schema.Ref("user"),                        // @user:1
+								schema.RefWithRelation("group", "member"), // @group:1#member
+							),
 							schema.Arrow("parent", "viewer"), // viewers of parent folder
 						},
 					},
@@ -62,29 +61,27 @@ func testSchema() *schema.Schema {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
 						Name: "parent",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("folder"), // @folder:1
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("folder")), // @folder:1
 						},
 					},
 					"editor": {
 						Name: "editor",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),                        // @user:1
-							schema.RefWithRelation("group", "member"), // @group:1#member
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),                  // direct editors
+							schema.Direct(
+								schema.Ref("user"),                        // @user:1
+								schema.RefWithRelation("group", "member"), // @group:1#member
+							),
 							schema.Arrow("parent", "editor"), // editors of parent folder
 						},
 					},
 					"viewer": {
 						Name: "viewer",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),                        // @user:1
-							schema.RefWithRelation("group", "member"), // @group:1#member
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),                  // direct viewers
+							schema.Direct(
+								schema.Ref("user"),                        // @user:1
+								schema.RefWithRelation("group", "member"), // @group:1#member
+							),
 							schema.Computed("editor"),        // editors can view
 							schema.Arrow("parent", "viewer"), // viewers of parent folder
 						},
@@ -842,12 +839,11 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
 						Name: "viewer",
-						TargetTypes: []schema.SubjectRef{
-							schema.Ref("user"),           // @user:1
-							schema.Ref("serviceAccount"), // @serviceAccount:1
-						},
 						Usersets: []schema.Userset{
-							schema.Direct(),
+							schema.Direct(
+								schema.Ref("user"),           // @user:1
+								schema.Ref("serviceAccount"), // @serviceAccount:1
+							),
 						},
 					},
 				},
