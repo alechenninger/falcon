@@ -182,3 +182,38 @@ func (v *versionedSet) OldestLSN() LSN {
 	}
 	return v.undos[len(v.undos)-1].lsn
 }
+
+// StateLSNWithin returns the LSN of the latest state that is <= maxLSN.
+// This is the state we would use when reading within the given snapshot window.
+//
+// If headLSN <= maxLSN, returns headLSN (we can use current state).
+// Otherwise, walks the undo chain to find the latest usable state.
+// Returns 0 if no state is available within the window.
+func (v *versionedSet) StateLSNWithin(maxLSN LSN) LSN {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	// If head is within bounds, use it
+	if v.headLSN <= maxLSN {
+		return v.headLSN
+	}
+
+	// Walk undo chain to find the latest state <= maxLSN
+	// Each undo entry represents a change at that LSN.
+	// The state "before" that change existed at the previous entry's LSN
+	// (or the oldest LSN if it's the last entry).
+	for i, undo := range v.undos {
+		if undo.lsn <= maxLSN {
+			return undo.lsn
+		}
+		// If we've walked past maxLSN, the usable state is the one
+		// just before this change (if there is one)
+		if i == len(v.undos)-1 {
+			// This is the oldest change we have - we can't go further back
+			// The state before this change is unknown/unavailable
+			return 0
+		}
+	}
+
+	return 0
+}

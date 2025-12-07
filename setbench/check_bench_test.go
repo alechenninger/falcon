@@ -1,4 +1,4 @@
-package graph
+package setbench_test
 
 import (
 	"fmt"
