@@ -74,7 +74,7 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 
 	// At timeAfterAlice: only alice should be viewer (bob was added later)
 	windowAfterAlice := graph.NewSnapshotWindow(0, timeAfterAlice)
-	ok, _, err = tg.CheckAt("user", alice, "document", doc1, "viewer", &windowAfterAlice)
+	ok, _, err = tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &windowAfterAlice)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 		t.Error("expected alice to be viewer at timeAfterAlice")
 	}
 
-	ok, _, err = tg.CheckAt("user", bob, "document", doc1, "viewer", &windowAfterAlice)
+	ok, _, err = tg.CheckAt(ctx, "user", bob, "document", doc1, "viewer", &windowAfterAlice)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestMVCC_VersionedSet_RemoveAt(t *testing.T) {
 
 	// At timeAfterAdd: alice should be viewer
 	windowAfterAdd := graph.NewSnapshotWindow(0, timeAfterAdd)
-	ok, _, err = tg.CheckAt("user", alice, "document", doc1, "viewer", &windowAfterAdd)
+	ok, _, err = tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &windowAfterAdd)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestMVCC_VersionedSet_RemoveAt(t *testing.T) {
 
 	// At timeAfterRemove: alice should NOT be viewer
 	windowAfterRemove := graph.NewSnapshotWindow(0, timeAfterRemove)
-	ok, _, err = tg.CheckAt("user", alice, "document", doc1, "viewer", &windowAfterRemove)
+	ok, _, err = tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &windowAfterRemove)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 
 	// When querying with a max constraint, the min should be within that range
 	windowBeforeBob := graph.NewSnapshotWindow(0, timeAfterAlice)
-	ok, resultWindow, err := tg.CheckAt("user", alice, "document", doc1, "viewer", &windowBeforeBob)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &windowBeforeBob)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 		t.Errorf("expected window.Min <= window.Max, got %d > %d", resultWindow.Min(), resultWindow.Max())
 	}
 	// Check that bob is NOT a viewer at this snapshot (added after max)
-	ok, _, err = tg.CheckAt("user", bob, "document", doc1, "viewer", &windowBeforeBob)
+	ok, _, err = tg.CheckAt(ctx, "user", bob, "document", doc1, "viewer", &windowBeforeBob)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 
 	// With max=timeAfterBob, both should be visible
 	windowAfterBob := graph.NewSnapshotWindow(0, timeAfterBob)
-	ok, _, err = tg.CheckAt("user", bob, "document", doc1, "viewer", &windowAfterBob)
+	ok, _, err = tg.CheckAt(ctx, "user", bob, "document", doc1, "viewer", &windowAfterBob)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestMVCC_TruncateHistory(t *testing.T) {
 
 	// Before truncation: query at timeBeforeDelete should show alice as viewer
 	windowBeforeDelete := graph.NewSnapshotWindow(0, timeBeforeDelete)
-	ok, _, err := tg.CheckAt("user", alice, "document", doc1, "viewer", &windowBeforeDelete)
+	ok, _, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &windowBeforeDelete)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}

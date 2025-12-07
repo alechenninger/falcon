@@ -35,22 +35,25 @@ type Graph struct {
 	schema   *schema.Schema
 	store    store.Store   // optional; nil = in-memory only (for testing without persistence)
 	observer GraphObserver // optional; defaults to NoOpGraphObserver
+	router   Router        // optional; for distributed check dispatch
 
 	mu     sync.RWMutex
 	tuples map[tupleKey]*versionedSet
 
 	// replicatedTime is the latest time we've seen from the change stream.
 	// This represents the point in the log that we know our in-memory state
-	// is up to date with.
-	replicatedTime store.AtomicStoreTime
+	// is up to date with. This is a pointer so that graphs derived via
+	// With* methods share the same atomic value.
+	replicatedTime *store.AtomicStoreTime
 }
 
 // New creates a new Graph with the given schema.
 func New(s *schema.Schema) *Graph {
 	return &Graph{
-		schema:   s,
-		observer: NoOpGraphObserver{},
-		tuples:   make(map[tupleKey]*versionedSet),
+		schema:         s,
+		observer:       NoOpGraphObserver{},
+		tuples:         make(map[tupleKey]*versionedSet),
+		replicatedTime: &store.AtomicStoreTime{},
 	}
 }
 
@@ -61,10 +64,12 @@ func (g *Graph) WithStore(s store.Store) *Graph {
 		return g
 	}
 	return &Graph{
-		schema:   g.schema,
-		store:    s,
-		observer: g.observer,
-		tuples:   g.tuples,
+		schema:         g.schema,
+		store:          s,
+		observer:       g.observer,
+		router:         g.router,
+		tuples:         g.tuples,
+		replicatedTime: g.replicatedTime,
 	}
 }
 
@@ -75,10 +80,28 @@ func (g *Graph) WithObserver(obs GraphObserver) *Graph {
 		obs = NoOpGraphObserver{}
 	}
 	return &Graph{
-		schema:   g.schema,
-		store:    g.store,
-		observer: obs,
-		tuples:   g.tuples,
+		schema:         g.schema,
+		store:          g.store,
+		observer:       obs,
+		router:         g.router,
+		tuples:         g.tuples,
+		replicatedTime: g.replicatedTime,
+	}
+}
+
+// WithRouter returns a copy of the Graph configured to use the given router
+// for dispatching cross-object checks. This is used in distributed deployments
+// where different objects may live on different shards.
+//
+// If router is nil, all checks are performed locally (single-node mode).
+func (g *Graph) WithRouter(r Router) *Graph {
+	return &Graph{
+		schema:         g.schema,
+		store:          g.store,
+		observer:       g.observer,
+		router:         r,
+		tuples:         g.tuples,
+		replicatedTime: g.replicatedTime,
 	}
 }
 

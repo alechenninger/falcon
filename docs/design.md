@@ -102,6 +102,10 @@ Caching optimizations?
 
 - We can cache bitmaps for a relation at a **range** of LSNs, and discard then when we truncate those snapshots. This provides a form of hotspot caching. We don't need to perform the userset lookup again for an LSN range!
 
+Crazy ideas?
+
+- Can we support "tuple transformation" (e.g. for schema changes) by applying transformations at hydration time? it would be permanent overhead unless those transformations will written back out to disk
+
 Semantics-by-techniques:
 
 - Critical scaling & availability requirements:

@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package falcon.graph;
+
+option go_package = "github.com/alechenninger/falcon/graph/proto;graphpb";
+
+// GraphService provides cross-node graph query operations.
+// Only CheckRelation is needed because all tuples for an object are on the same shard.
+service GraphService {
+  // CheckRelation checks if a subject has a relation on an object within a snapshot window.
+  // This is called when traversing arrows or userset subjects that point to objects
+  // on different shards.
+  rpc CheckRelation(CheckRelationRequest) returns (CheckRelationResponse);
+}
+
+// SnapshotWindow represents the time range for consistent snapshot reads.
+// As queries traverse the graph, the window narrows to ensure consistency.
+message SnapshotWindow {
+  // min is the minimum store time we've committed to (state we've already used).
+  uint64 min = 1;
+  // max is the maximum store time we can use (replicated time ceiling).
+  uint64 max = 2;
+}
+
+// VisitedNode represents an (object_type, object_id, relation) triple that
+// has already been visited in the current query traversal.
+// Used for cycle detection across distributed nodes.
+message VisitedNode {
+  string object_type = 1;
+  uint32 object_id = 2;
+  string relation = 3;
+}
+
+// CheckRelationRequest is the request to check if a subject has a relation on an object.
+message CheckRelationRequest {
+  string subject_type = 1;
+  uint32 subject_id = 2;
+  string object_type = 3;
+  uint32 object_id = 4;
+  string relation = 5;
+  // window constrains the snapshot for consistent reads across shards.
+  SnapshotWindow window = 6;
+  // visited contains the nodes already visited in this query traversal.
+  // Used for cycle detection across distributed nodes.
+  repeated VisitedNode visited = 7;
+}
+
+// CheckRelationResponse is the result of a relation check.
+message CheckRelationResponse {
+  // allowed is true if the subject has the relation on the object.
+  bool allowed = 1;
+  // window is the narrowed snapshot window after the check.
+  // Subsequent queries should use this to maintain consistency.
+  SnapshotWindow window = 2;
+}
+
