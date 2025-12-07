@@ -18,12 +18,9 @@ import (
 // to understand the consistency of the result.
 func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, LSN, error) {
 	// Start with max = replicated LSN, min = 0 (unknown)
-	window := SnapshotWindow{
-		Min: 0,
-		Max: g.replicatedLSN.Load(),
-	}
+	window := NewSnapshotWindow(0, g.replicatedLSN.Load())
 	ok, resultWindow, err := g.CheckAt(subjectType, subjectID, objectType, objectID, relation, &window)
-	return ok, resultWindow.Max, err
+	return ok, resultWindow.Max(), err
 }
 
 // CheckAt is like Check but allows specifying an initial snapshot window.
@@ -35,10 +32,8 @@ func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectTy
 func (g *Graph) CheckAt(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window *SnapshotWindow) (bool, SnapshotWindow, error) {
 	// Initialize window if not provided
 	if window == nil {
-		window = &SnapshotWindow{
-			Min: 0,
-			Max: g.replicatedLSN.Load(),
-		}
+		w := NewSnapshotWindow(0, g.replicatedLSN.Load())
+		window = &w
 	}
 
 	// Validate inputs
@@ -245,7 +240,7 @@ func (g *Graph) containsSubjectWithin(objectType schema.TypeName, objectID schem
 	}
 
 	// Pick the latest usable state within the window
-	stateLSN := vs.StateLSNWithin(window.Max)
+	stateLSN := vs.StateLSNWithin(window.Max())
 	if stateLSN == 0 {
 		// No state available within window
 		return false, window
@@ -282,7 +277,7 @@ func (g *Graph) forEachSubjectWithin(objectType schema.TypeName, objectID schema
 	}
 
 	// Pick the latest usable state within the window
-	stateLSN := vs.StateLSNWithin(window.Max)
+	stateLSN := vs.StateLSNWithin(window.Max())
 	if stateLSN == 0 {
 		return false, window
 	}
@@ -343,7 +338,7 @@ func (g *Graph) forEachUsersetSubjectWithin(objectType schema.TypeName, objectID
 		}
 
 		// Pick the latest usable state within the window
-		stateLSN := vs.StateLSNWithin(window.Max)
+		stateLSN := vs.StateLSNWithin(window.Max())
 		if stateLSN == 0 {
 			continue
 		}
