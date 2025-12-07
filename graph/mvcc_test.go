@@ -47,8 +47,8 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
 
-	// Capture LSN after alice is added
-	lsnAfterAlice := tg.ReplicatedLSN()
+	// Capture time after alice is added
+	timeAfterAlice := tg.ReplicatedTime()
 
 	// Add bob as viewer
 	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", bob, ""); err != nil {
@@ -72,14 +72,14 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 		t.Error("expected bob to be viewer at HEAD")
 	}
 
-	// At lsnAfterAlice: only alice should be viewer (bob was added later)
-	windowAfterAlice := graph.NewSnapshotWindow(0, lsnAfterAlice)
+	// At timeAfterAlice: only alice should be viewer (bob was added later)
+	windowAfterAlice := graph.NewSnapshotWindow(0, timeAfterAlice)
 	ok, _, err = tg.CheckAt("user", alice, "document", doc1, "viewer", &windowAfterAlice)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if !ok {
-		t.Error("expected alice to be viewer at lsnAfterAlice")
+		t.Error("expected alice to be viewer at timeAfterAlice")
 	}
 
 	ok, _, err = tg.CheckAt("user", bob, "document", doc1, "viewer", &windowAfterAlice)
@@ -87,7 +87,7 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if ok {
-		t.Error("expected bob to NOT be viewer at lsnAfterAlice")
+		t.Error("expected bob to NOT be viewer at timeAfterAlice")
 	}
 }
 
@@ -107,16 +107,16 @@ func TestMVCC_VersionedSet_RemoveAt(t *testing.T) {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
 
-	// Capture LSN after alice is added
-	lsnAfterAdd := tg.ReplicatedLSN()
+	// Capture time after alice is added
+	timeAfterAdd := tg.ReplicatedTime()
 
 	// Remove alice
 	if err := tg.DeleteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
 		t.Fatalf("DeleteTuple failed: %v", err)
 	}
 
-	// Capture LSN after removal
-	lsnAfterRemove := tg.ReplicatedLSN()
+	// Capture time after removal
+	timeAfterRemove := tg.ReplicatedTime()
 
 	// At HEAD: alice should NOT be viewer
 	ok, _, err := tg.Check("user", alice, "document", doc1, "viewer")
@@ -127,51 +127,51 @@ func TestMVCC_VersionedSet_RemoveAt(t *testing.T) {
 		t.Error("expected alice to NOT be viewer at HEAD")
 	}
 
-	// At lsnAfterAdd: alice should be viewer
-	windowAfterAdd := graph.NewSnapshotWindow(0, lsnAfterAdd)
+	// At timeAfterAdd: alice should be viewer
+	windowAfterAdd := graph.NewSnapshotWindow(0, timeAfterAdd)
 	ok, _, err = tg.CheckAt("user", alice, "document", doc1, "viewer", &windowAfterAdd)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if !ok {
-		t.Error("expected alice to be viewer at lsnAfterAdd")
+		t.Error("expected alice to be viewer at timeAfterAdd")
 	}
 
-	// At lsnAfterRemove: alice should NOT be viewer
-	windowAfterRemove := graph.NewSnapshotWindow(0, lsnAfterRemove)
+	// At timeAfterRemove: alice should NOT be viewer
+	windowAfterRemove := graph.NewSnapshotWindow(0, timeAfterRemove)
 	ok, _, err = tg.CheckAt("user", alice, "document", doc1, "viewer", &windowAfterRemove)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if ok {
-		t.Error("expected alice to NOT be viewer at lsnAfterRemove")
+		t.Error("expected alice to NOT be viewer at timeAfterRemove")
 	}
 }
 
-func TestMVCC_ReplicatedLSN(t *testing.T) {
+func TestMVCC_ReplicatedTime(t *testing.T) {
 	s := mvccTestSchema()
 	tg := graph.NewTestGraph(s)
 	defer tg.Close()
 	ctx := context.Background()
 
-	// After first write, replicated LSN should be non-zero
+	// After first write, replicated time should be non-zero
 	if err := tg.WriteTuple(ctx, "document", 1, "viewer", "user", 1, ""); err != nil {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
 
-	lsn1 := tg.ReplicatedLSN()
-	if lsn1 == 0 {
-		t.Error("expected replicated LSN to be non-zero after first write")
+	time1 := tg.ReplicatedTime()
+	if time1 == 0 {
+		t.Error("expected replicated time to be non-zero after first write")
 	}
 
-	// After second write, replicated LSN should have advanced
+	// After second write, replicated time should have advanced
 	if err := tg.WriteTuple(ctx, "document", 2, "viewer", "user", 1, ""); err != nil {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
 
-	lsn2 := tg.ReplicatedLSN()
-	if lsn2 <= lsn1 {
-		t.Errorf("expected replicated LSN to advance: got %d, was %d", lsn2, lsn1)
+	time2 := tg.ReplicatedTime()
+	if time2 <= time1 {
+		t.Errorf("expected replicated time to advance: got %d, was %d", time2, time1)
 	}
 }
 
@@ -217,28 +217,28 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
-	lsnAfterAlice := tg.ReplicatedLSN()
+	timeAfterAlice := tg.ReplicatedTime()
 
 	// Add bob as viewer
 	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", bob, ""); err != nil {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
-	lsnAfterBob := tg.ReplicatedLSN()
+	timeAfterBob := tg.ReplicatedTime()
 
-	// Check returns the LSN used for the query
-	// When checking at HEAD, the returned min LSN should be at least as high as
-	// the state LSN we used
-	_, usedLSN, err := tg.Check("user", alice, "document", doc1, "viewer")
+	// Check returns the time used for the query
+	// When checking at HEAD, the returned min time should be at least as high as
+	// the state time we used
+	_, usedTime, err := tg.Check("user", alice, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
-	// The used LSN should be the head LSN of the tuple we examined
-	if usedLSN < lsnAfterAlice {
-		t.Errorf("expected usedLSN >= %d (lsnAfterAlice), got %d", lsnAfterAlice, usedLSN)
+	// The used time should be the head time of the tuple we examined
+	if usedTime < timeAfterAlice {
+		t.Errorf("expected usedTime >= %d (timeAfterAlice), got %d", timeAfterAlice, usedTime)
 	}
 
 	// When querying with a max constraint, the min should be within that range
-	windowBeforeBob := graph.NewSnapshotWindow(0, lsnAfterAlice)
+	windowBeforeBob := graph.NewSnapshotWindow(0, timeAfterAlice)
 	ok, resultWindow, err := tg.CheckAt("user", alice, "document", doc1, "viewer", &windowBeforeBob)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
@@ -246,7 +246,7 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 	if !ok {
 		t.Error("expected alice to be viewer")
 	}
-	// The min should have been raised to the state LSN we used
+	// The min should have been raised to the state time we used
 	if resultWindow.Min() == 0 {
 		t.Error("expected window.Min to be raised from 0")
 	}
@@ -260,17 +260,17 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if ok {
-		t.Error("expected bob to NOT be viewer with max=lsnAfterAlice")
+		t.Error("expected bob to NOT be viewer with max=timeAfterAlice")
 	}
 
-	// With max=lsnAfterBob, both should be visible
-	windowAfterBob := graph.NewSnapshotWindow(0, lsnAfterBob)
+	// With max=timeAfterBob, both should be visible
+	windowAfterBob := graph.NewSnapshotWindow(0, timeAfterBob)
 	ok, _, err = tg.CheckAt("user", bob, "document", doc1, "viewer", &windowAfterBob)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if !ok {
-		t.Error("expected bob to be viewer with max=lsnAfterBob")
+		t.Error("expected bob to be viewer with max=timeAfterBob")
 	}
 }
 
@@ -295,25 +295,25 @@ func TestMVCC_TruncateHistory(t *testing.T) {
 	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", bob, ""); err != nil {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
-	lsnBeforeDelete := tg.ReplicatedLSN()
+	timeBeforeDelete := tg.ReplicatedTime()
 
 	// Remove alice
 	if err := tg.DeleteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
 		t.Fatalf("DeleteTuple failed: %v", err)
 	}
 
-	// Before truncation: query at lsnBeforeDelete should show alice as viewer
-	windowBeforeDelete := graph.NewSnapshotWindow(0, lsnBeforeDelete)
+	// Before truncation: query at timeBeforeDelete should show alice as viewer
+	windowBeforeDelete := graph.NewSnapshotWindow(0, timeBeforeDelete)
 	ok, _, err := tg.CheckAt("user", alice, "document", doc1, "viewer", &windowBeforeDelete)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
 	}
 	if !ok {
-		t.Error("expected alice to be viewer at lsnBeforeDelete before truncation")
+		t.Error("expected alice to be viewer at timeBeforeDelete before truncation")
 	}
 
 	// Truncate history
-	tg.TruncateHistory(lsnBeforeDelete)
+	tg.TruncateHistory(timeBeforeDelete)
 
 	// After truncation: HEAD should still work correctly
 	ok, _, err = tg.Check("user", alice, "document", doc1, "viewer")

@@ -23,8 +23,8 @@ type GraphObserver interface {
 // ApplyChangeProbe tracks a single applyChange invocation.
 // Implementations should embed NoOpApplyChangeProbe for forward compatibility.
 type ApplyChangeProbe interface {
-	// Applied is called when the change has been successfully applied at the given LSN.
-	Applied(lsn store.LSN)
+	// Applied is called when the change has been successfully applied at the given time.
+	Applied(t store.StoreTime)
 
 	// End signals the method is complete (for timing). Called via defer.
 	End()
@@ -47,7 +47,7 @@ func (NoOpGraphObserver) ApplyChangeStarted(ctx context.Context, _ store.Change)
 type NoOpApplyChangeProbe struct{}
 
 // Applied does nothing.
-func (NoOpApplyChangeProbe) Applied(store.LSN) {}
+func (NoOpApplyChangeProbe) Applied(store.StoreTime) {}
 
 // End does nothing.
 func (NoOpApplyChangeProbe) End() {}
@@ -57,10 +57,10 @@ func (NoOpApplyChangeProbe) End() {}
 type SignalingObserver struct {
 	NoOpGraphObserver // Embed for forward compatibility
 
-	mu      sync.Mutex
-	cond    *sync.Cond
-	lastLSN store.LSN
-	ready   chan struct{}
+	mu       sync.Mutex
+	cond     *sync.Cond
+	lastTime store.StoreTime
+	ready    chan struct{}
 }
 
 // NewSignalingObserver creates a new SignalingObserver.
@@ -90,21 +90,21 @@ func (o *SignalingObserver) ApplyChangeStarted(ctx context.Context, _ store.Chan
 	}
 }
 
-// WaitForLSN blocks until a change with at least the given LSN has been applied.
-func (o *SignalingObserver) WaitForLSN(lsn store.LSN) {
+// WaitForTime blocks until a change with at least the given time has been applied.
+func (o *SignalingObserver) WaitForTime(t store.StoreTime) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	for o.lastLSN < lsn {
+	for o.lastTime < t {
 		o.cond.Wait()
 	}
 }
 
-// LastLSN returns the LSN of the most recently applied change.
-func (o *SignalingObserver) LastLSN() store.LSN {
+// LastTime returns the time of the most recently applied change.
+func (o *SignalingObserver) LastTime() store.StoreTime {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return o.lastLSN
+	return o.lastTime
 }
 
 // signalingProbe signals the observer when the change is applied.
@@ -113,10 +113,10 @@ type signalingProbe struct {
 	observer             *SignalingObserver
 }
 
-// Applied signals that the change has been applied at the given LSN.
-func (p *signalingProbe) Applied(lsn store.LSN) {
+// Applied signals that the change has been applied at the given time.
+func (p *signalingProbe) Applied(t store.StoreTime) {
 	p.observer.mu.Lock()
-	p.observer.lastLSN = lsn
+	p.observer.lastTime = t
 	p.observer.cond.Broadcast()
 	p.observer.mu.Unlock()
 }

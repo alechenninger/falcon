@@ -8,11 +8,11 @@ import (
 )
 
 // MemoryStore implements Store and ChangeStream for testing.
-// Writes immediately emit changes to subscribers with sequential LSNs.
+// Writes immediately emit changes to subscribers with sequential times.
 type MemoryStore struct {
 	mu          sync.RWMutex
 	tuples      map[tupleKey]struct{}
-	nextLSN     LSN
+	nextTime    StoreTime
 	subscribers []chan Change
 }
 
@@ -40,8 +40,8 @@ func toKey(t Tuple) tupleKey {
 // NewMemoryStore creates a new in-memory store.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		tuples:  make(map[tupleKey]struct{}),
-		nextLSN: 1, // Start at 1 so 0 means "from beginning"
+		tuples:   make(map[tupleKey]struct{}),
+		nextTime: 1, // Start at 1 so 0 means "from beginning"
 	}
 }
 
@@ -56,11 +56,11 @@ func (s *MemoryStore) WriteTuple(ctx context.Context, t Tuple) error {
 		return nil
 	}
 
-	lsn := s.nextLSN
-	s.nextLSN++
+	time := s.nextTime
+	s.nextTime++
 	s.tuples[key] = struct{}{}
 
-	change := Change{LSN: lsn, Op: OpInsert, Tuple: t}
+	change := Change{Time: time, Op: OpInsert, Tuple: t}
 	for _, ch := range s.subscribers {
 		select {
 		case ch <- change:
@@ -83,11 +83,11 @@ func (s *MemoryStore) DeleteTuple(ctx context.Context, t Tuple) error {
 		return nil
 	}
 
-	lsn := s.nextLSN
-	s.nextLSN++
+	time := s.nextTime
+	s.nextTime++
 	delete(s.tuples, key)
 
-	change := Change{LSN: lsn, Op: OpDelete, Tuple: t}
+	change := Change{Time: time, Op: OpDelete, Tuple: t}
 	for _, ch := range s.subscribers {
 		select {
 		case ch <- change:
@@ -127,9 +127,9 @@ func (s *MemoryStore) Close() error {
 	return nil
 }
 
-// Subscribe returns a channel that receives changes after the given LSN.
+// Subscribe returns a channel that receives changes after the given time.
 // The channel is closed when Close() is called or the context is canceled.
-func (s *MemoryStore) Subscribe(ctx context.Context, afterLSN LSN) (<-chan Change, <-chan error) {
+func (s *MemoryStore) Subscribe(ctx context.Context, after StoreTime) (<-chan Change, <-chan error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -156,14 +156,14 @@ func (s *MemoryStore) Subscribe(ctx context.Context, afterLSN LSN) (<-chan Chang
 	return ch, errCh
 }
 
-// CurrentLSN returns the latest LSN (the next LSN minus 1).
-func (s *MemoryStore) CurrentLSN(ctx context.Context) (LSN, error) {
+// CurrentTime returns the latest time (the next time minus 1).
+func (s *MemoryStore) CurrentTime(ctx context.Context) (StoreTime, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.nextLSN == 1 {
+	if s.nextTime == 1 {
 		return 0, nil
 	}
-	return s.nextLSN - 1, nil
+	return s.nextTime - 1, nil
 }
 
 // Compile-time interface checks

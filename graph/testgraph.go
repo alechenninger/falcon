@@ -65,8 +65,8 @@ func (tg *TestGraph) WriteTuple(ctx context.Context, objectType schema.TypeName,
 	}
 
 	// Wait for this write to be applied via the observer
-	lsn, _ := tg.store.CurrentLSN(ctx)
-	tg.observer.WaitForLSN(lsn)
+	t, _ := tg.store.CurrentTime(ctx)
+	tg.observer.WaitForTime(t)
 	return nil
 }
 
@@ -88,8 +88,8 @@ func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName
 	}
 
 	// Wait for this delete to be applied via the observer
-	lsn, _ := tg.store.CurrentLSN(ctx)
-	tg.observer.WaitForLSN(lsn)
+	t, _ := tg.store.CurrentTime(ctx)
+	tg.observer.WaitForTime(t)
 	return nil
 }
 

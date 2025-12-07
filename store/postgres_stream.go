@@ -35,7 +35,7 @@ func NewPostgresStream(connString, slotName, publication string) *PostgresStream
 
 // Subscribe implements ChangeStream.Subscribe.
 // It connects to the replication stream and emits changes.
-func (s *PostgresStream) Subscribe(ctx context.Context, afterLSN LSN) (<-chan Change, <-chan error) {
+func (s *PostgresStream) Subscribe(ctx context.Context, after StoreTime) (<-chan Change, <-chan error) {
 	changes := make(chan Change, 100)
 	errCh := make(chan error, 1)
 
@@ -43,7 +43,7 @@ func (s *PostgresStream) Subscribe(ctx context.Context, afterLSN LSN) (<-chan Ch
 		defer close(changes)
 		defer close(errCh)
 
-		if err := s.stream(ctx, afterLSN, changes); err != nil {
+		if err := s.stream(ctx, after, changes); err != nil {
 			errCh <- err
 		}
 	}()
@@ -51,8 +51,8 @@ func (s *PostgresStream) Subscribe(ctx context.Context, afterLSN LSN) (<-chan Ch
 	return changes, errCh
 }
 
-// CurrentLSN returns the current WAL flush position.
-func (s *PostgresStream) CurrentLSN(ctx context.Context) (LSN, error) {
+// CurrentTime returns the current WAL flush position.
+func (s *PostgresStream) CurrentTime(ctx context.Context) (StoreTime, error) {
 	conn, err := pgconn.Connect(ctx, s.connString)
 	if err != nil {
 		return 0, fmt.Errorf("failed to connect: %w", err)
@@ -64,7 +64,7 @@ func (s *PostgresStream) CurrentLSN(ctx context.Context) (LSN, error) {
 		return 0, fmt.Errorf("failed to identify system: %w", err)
 	}
 
-	return uint64(sysident.XLogPos), nil
+	return StoreTime(sysident.XLogPos), nil
 }
 
 // EnsureReplicationSetup creates the publication and replication slot if they don't exist.
@@ -101,7 +101,7 @@ func (s *PostgresStream) EnsureReplicationSlot(ctx context.Context, conn *pgconn
 	return nil
 }
 
-func (s *PostgresStream) stream(ctx context.Context, afterLSN LSN, changes chan<- Change) error {
+func (s *PostgresStream) stream(ctx context.Context, after StoreTime, changes chan<- Change) error {
 	// Connect with replication mode
 	connString := s.connString
 	if !strings.Contains(connString, "replication=") {
@@ -124,7 +124,7 @@ func (s *PostgresStream) stream(ctx context.Context, afterLSN LSN, changes chan<
 	}
 
 	// Start replication
-	startLSN := pglogrepl.LSN(afterLSN)
+	startLSN := pglogrepl.LSN(after)
 	err = pglogrepl.StartReplication(ctx, conn, s.slotName, startLSN,
 		pglogrepl.StartReplicationOptions{
 			PluginArgs: []string{
@@ -234,7 +234,7 @@ func (s *PostgresStream) processMessage(msg pglogrepl.Message, relations map[uin
 			return nil
 		}
 		return &Change{
-			LSN:   lsn,
+			Time:  StoreTime(lsn),
 			Op:    OpInsert,
 			Tuple: *tuple,
 		}
@@ -250,7 +250,7 @@ func (s *PostgresStream) processMessage(msg pglogrepl.Message, relations map[uin
 		}
 		// Treat updates as inserts
 		return &Change{
-			LSN:   lsn,
+			Time:  StoreTime(lsn),
 			Op:    OpInsert,
 			Tuple: *tuple,
 		}
@@ -265,7 +265,7 @@ func (s *PostgresStream) processMessage(msg pglogrepl.Message, relations map[uin
 			return nil
 		}
 		return &Change{
-			LSN:   lsn,
+			Time:  StoreTime(lsn),
 			Op:    OpDelete,
 			Tuple: *tuple,
 		}
@@ -326,18 +326,18 @@ func pgQuoteIdent(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-// ParseLSN parses a PostgreSQL LSN string (e.g., "0/16B3748") into a uint64.
-func ParseLSN(s string) (LSN, error) {
+// ParseLSN parses a PostgreSQL LSN string (e.g., "0/16B3748") into a StoreTime.
+func ParseLSN(s string) (StoreTime, error) {
 	lsn, err := pglogrepl.ParseLSN(s)
 	if err != nil {
 		return 0, err
 	}
-	return uint64(lsn), nil
+	return StoreTime(lsn), nil
 }
 
-// FormatLSN formats a uint64 LSN to PostgreSQL format (e.g., "0/16B3748").
-func FormatLSN(lsn LSN) string {
-	return pglogrepl.LSN(lsn).String()
+// FormatLSN formats a StoreTime as a PostgreSQL LSN string (e.g., "0/16B3748").
+func FormatLSN(t StoreTime) string {
+	return pglogrepl.LSN(t).String()
 }
 
 // Compile-time interface check

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/store"
 )
 
 // Check determines if the given subject has the specified relation on the
@@ -13,12 +14,12 @@ import (
 //   - Union with other relations (computed usersets)
 //   - Arrow traversal to other objects (tuple to userset)
 //
-// Returns (allowed, usedLSN, error) where usedLSN is the effective LSN of the
+// Returns (allowed, usedTime, error) where usedTime is the effective time of the
 // snapshot that was used to answer the query. This can be used by callers
 // to understand the consistency of the result.
-func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, LSN, error) {
-	// Start with max = replicated LSN, min = 0 (unknown)
-	window := NewSnapshotWindow(0, g.replicatedLSN.Load())
+func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
+	// Start with max = replicated time, min = 0 (unknown)
+	window := NewSnapshotWindow(0, g.replicatedTime.Load())
 	ok, resultWindow, err := g.CheckAt(subjectType, subjectID, objectType, objectID, relation, &window)
 	return ok, resultWindow.Max(), err
 }
@@ -27,12 +28,12 @@ func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectTy
 // This is used for distributed queries where the window may already be
 // constrained by other shards.
 //
-// If window is nil, uses a fresh window starting at the current replicated LSN.
+// If window is nil, uses a fresh window starting at the current replicated time.
 // Returns the narrowed window that was actually used for the query.
 func (g *Graph) CheckAt(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window *SnapshotWindow) (bool, SnapshotWindow, error) {
 	// Initialize window if not provided
 	if window == nil {
-		w := NewSnapshotWindow(0, g.replicatedLSN.Load())
+		w := NewSnapshotWindow(0, g.replicatedTime.Load())
 		window = &w
 	}
 
@@ -240,20 +241,20 @@ func (g *Graph) containsSubjectWithin(objectType schema.TypeName, objectID schem
 	}
 
 	// Pick the latest usable state within the window
-	stateLSN := vs.StateLSNWithin(window.Max())
-	if stateLSN == 0 {
+	stateTime := vs.StateTimeWithin(window.Max())
+	if stateTime == 0 {
 		// No state available within window
 		return false, window
 	}
 
-	// Narrow the window: our min is now at least this state's LSN
-	window = window.NarrowMin(stateLSN)
+	// Narrow the window: our min is now at least this state's time
+	window = window.NarrowMin(stateTime)
 
 	// Check membership at this state
-	if stateLSN == vs.HeadLSN() {
+	if stateTime == vs.HeadTime() {
 		return vs.Contains(subjectID), window
 	}
-	return vs.ContainsAt(subjectID, stateLSN), window
+	return vs.ContainsAt(subjectID, stateTime), window
 }
 
 // forEachSubjectWithin iterates over subject IDs within the given snapshot window.
@@ -277,23 +278,23 @@ func (g *Graph) forEachSubjectWithin(objectType schema.TypeName, objectID schema
 	}
 
 	// Pick the latest usable state within the window
-	stateLSN := vs.StateLSNWithin(window.Max())
-	if stateLSN == 0 {
+	stateTime := vs.StateTimeWithin(window.Max())
+	if stateTime == 0 {
 		return false, window
 	}
 
 	// Narrow the window
-	window = window.NarrowMin(stateLSN)
+	window = window.NarrowMin(stateTime)
 
 	// Get the appropriate bitmap
 	var it interface {
 		HasNext() bool
 		Next() uint32
 	}
-	if stateLSN == vs.HeadLSN() {
+	if stateTime == vs.HeadTime() {
 		it = vs.Head().Iterator()
 	} else {
-		snapshot := vs.SnapshotAt(stateLSN)
+		snapshot := vs.SnapshotAt(stateTime)
 		it = snapshot.Iterator()
 	}
 
@@ -338,26 +339,26 @@ func (g *Graph) forEachUsersetSubjectWithin(objectType schema.TypeName, objectID
 		}
 
 		// Pick the latest usable state within the window
-		stateLSN := vs.StateLSNWithin(window.Max())
-		if stateLSN == 0 {
+		stateTime := vs.StateTimeWithin(window.Max())
+		if stateTime == 0 {
 			continue
 		}
 
 		// Narrow the window
-		window = window.NarrowMin(stateLSN)
+		window = window.NarrowMin(stateTime)
 
 		// Get the appropriate bitmap
 		var it interface {
 			HasNext() bool
 			Next() uint32
 		}
-		if stateLSN == vs.HeadLSN() {
+		if stateTime == vs.HeadTime() {
 			if vs.IsEmpty() {
 				continue
 			}
 			it = vs.Head().Iterator()
 		} else {
-			snapshot := vs.SnapshotAt(stateLSN)
+			snapshot := vs.SnapshotAt(stateTime)
 			if snapshot.IsEmpty() {
 				continue
 			}

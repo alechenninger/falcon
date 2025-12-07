@@ -1,6 +1,8 @@
 package graph
 
-// SnapshotWindow represents the LSN range for a consistent snapshot read.
+import "github.com/alechenninger/falcon/store"
+
+// SnapshotWindow represents the time range for a consistent snapshot read.
 // As we traverse the graph, we narrow the window by raising Min when we
 // pick states from tuples, ensuring all reads are from a consistent snapshot.
 //
@@ -9,61 +11,59 @@ package graph
 type SnapshotWindow struct {
 	// minDelta is Max - Min. This compresses the Min value into 4 bytes.
 	// Min() returns Max - minDelta.
-	minDelta uint32
+	minDelta store.StoreDelta
 
-	// max is the maximum LSN we can use. This starts as the replicated LSN
+	// max is the maximum time we can use. This starts as the replicated time
 	// (what we know we're up to) and may decrease when a shard has a lower
-	// replicated LSN (in distributed queries).
-	max LSN
+	// replicated time (in distributed queries).
+	max store.StoreTime
 }
 
-// NewSnapshotWindow creates a new SnapshotWindow with the given min and max LSNs.
+// NewSnapshotWindow creates a new SnapshotWindow with the given min and max times.
 // Panics if min > max or if the delta exceeds uint32 range.
-func NewSnapshotWindow(min, max LSN) SnapshotWindow {
+func NewSnapshotWindow(min, max store.StoreTime) SnapshotWindow {
 	if min > max {
 		panic("SnapshotWindow: min > max")
 	}
-	delta := max - min
-	if delta > LSN(^uint32(0)) {
-		panic("SnapshotWindow: delta overflow (window spans more than 4 billion LSNs)")
-	}
-	return SnapshotWindow{minDelta: uint32(delta), max: max}
+	// Difference panics if delta exceeds uint32
+	delta := max.Difference(min)
+	return SnapshotWindow{minDelta: delta, max: max}
 }
 
-// Min returns the minimum LSN we've committed to. This is the highest state LSN
+// Min returns the minimum time we've committed to. This is the highest state time
 // we've used so far, meaning other tuple reads must be at least this fresh.
-func (w SnapshotWindow) Min() LSN {
-	return w.max - LSN(w.minDelta)
+func (w SnapshotWindow) Min() store.StoreTime {
+	return w.max.Less(w.minDelta)
 }
 
-// Max returns the maximum LSN we can use.
-func (w SnapshotWindow) Max() LSN {
+// Max returns the maximum time we can use.
+func (w SnapshotWindow) Max() store.StoreTime {
 	return w.max
 }
 
-// NarrowMin returns a new window with Min raised to at least minLSN.
+// NarrowMin returns a new window with Min raised to at least minTime.
 // The window can only get narrower - Min only increases.
-func (w SnapshotWindow) NarrowMin(minLSN LSN) SnapshotWindow {
+func (w SnapshotWindow) NarrowMin(minTime store.StoreTime) SnapshotWindow {
 	currentMin := w.Min()
-	if minLSN > currentMin {
-		return NewSnapshotWindow(minLSN, w.max)
+	if minTime > currentMin {
+		return NewSnapshotWindow(minTime, w.max)
 	}
 	return w
 }
 
-// NarrowMax returns a new window with Max lowered to at most maxLSN.
-// Used when a shard's replicated LSN is lower than our current max.
-func (w SnapshotWindow) NarrowMax(maxLSN LSN) SnapshotWindow {
-	if maxLSN < w.max {
-		return NewSnapshotWindow(w.Min(), maxLSN)
+// NarrowMax returns a new window with Max lowered to at most maxTime.
+// Used when a shard's replicated time is lower than our current max.
+func (w SnapshotWindow) NarrowMax(maxTime store.StoreTime) SnapshotWindow {
+	if maxTime < w.max {
+		return NewSnapshotWindow(w.Min(), maxTime)
 	}
 	return w
 }
 
-// CanUse returns true if the given stateLSN is usable within this window.
+// CanUse returns true if the given stateTime is usable within this window.
 // A state is usable if it's <= Max (not newer than our ceiling).
-func (w SnapshotWindow) CanUse(stateLSN LSN) bool {
-	return stateLSN <= w.max
+func (w SnapshotWindow) CanUse(stateTime store.StoreTime) bool {
+	return stateTime <= w.max
 }
 
 // IsValid returns true if the window is valid (Min <= Max).

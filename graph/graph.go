@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/schema"
@@ -40,10 +39,10 @@ type Graph struct {
 	mu     sync.RWMutex
 	tuples map[tupleKey]*versionedSet
 
-	// replicatedLSN is the latest LSN we've seen from the change stream.
+	// replicatedTime is the latest time we've seen from the change stream.
 	// This represents the point in the log that we know our in-memory state
 	// is up to date with.
-	replicatedLSN atomic.Uint64
+	replicatedTime store.AtomicStoreTime
 }
 
 // New creates a new Graph with the given schema.
@@ -88,17 +87,17 @@ func (g *Graph) Schema() *schema.Schema {
 	return g.schema
 }
 
-// ReplicatedLSN returns the latest LSN that has been applied to the in-memory state.
-func (g *Graph) ReplicatedLSN() LSN {
-	return g.replicatedLSN.Load()
+// ReplicatedTime returns the latest time that has been applied to the in-memory state.
+func (g *Graph) ReplicatedTime() store.StoreTime {
+	return g.replicatedTime.Load()
 }
 
 // Subscribe starts consuming changes from the given ChangeStream.
 // This should be called after initial hydration to receive ongoing updates.
 // The function blocks until the context is canceled or an error occurs.
 func (g *Graph) Subscribe(ctx context.Context, stream store.ChangeStream) error {
-	afterLSN := g.replicatedLSN.Load()
-	changes, errCh := stream.Subscribe(ctx, afterLSN)
+	afterTime := g.replicatedTime.Load()
+	changes, errCh := stream.Subscribe(ctx, afterTime)
 
 	// Signal that we're ready to receive changes
 	g.observer.SubscribeReady(ctx)
@@ -129,16 +128,16 @@ func (g *Graph) applyChange(ctx context.Context, change store.Change) {
 	t := change.Tuple
 	switch change.Op {
 	case store.OpInsert:
-		g.applyAdd(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.LSN)
+		g.applyAdd(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
 	case store.OpDelete:
-		g.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.LSN)
+		g.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
 	}
-	g.replicatedLSN.Store(change.LSN)
-	probe.Applied(change.LSN)
+	g.replicatedTime.Store(change.Time)
+	probe.Applied(change.Time)
 }
 
 // applyAdd adds a subject to the versioned set for the given tuple key.
-func (g *Graph) applyAdd(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, lsn LSN) {
+func (g *Graph) applyAdd(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, t store.StoreTime) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -152,14 +151,14 @@ func (g *Graph) applyAdd(objectType schema.TypeName, objectID schema.ID, relatio
 
 	vs, ok := g.tuples[key]
 	if !ok {
-		vs = newVersionedSet(lsn)
+		vs = newVersionedSet(t)
 		g.tuples[key] = vs
 	}
-	vs.Add(subjectID, lsn)
+	vs.Add(subjectID, t)
 }
 
 // applyRemove removes a subject from the versioned set for the given tuple key.
-func (g *Graph) applyRemove(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, lsn LSN) {
+func (g *Graph) applyRemove(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, t store.StoreTime) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -172,7 +171,7 @@ func (g *Graph) applyRemove(objectType schema.TypeName, objectID schema.ID, rela
 	}
 
 	if vs, ok := g.tuples[key]; ok {
-		vs.Remove(subjectID, lsn)
+		vs.Remove(subjectID, t)
 	}
 }
 
@@ -335,13 +334,13 @@ func (g *Graph) ValidateTuple(objectType schema.TypeName, relation schema.Relati
 	return fmt.Errorf("subject %s#%s is not allowed for %s#%s", subjectType, subjectRelation, objectType, relation)
 }
 
-// TruncateHistory removes undo entries older than the given LSN from all
+// TruncateHistory removes undo entries older than the given time from all
 // versioned sets. This is used for garbage collection.
-func (g *Graph) TruncateHistory(minLSN LSN) {
+func (g *Graph) TruncateHistory(minTime store.StoreTime) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	for _, vs := range g.tuples {
-		vs.Truncate(minLSN)
+		vs.Truncate(minTime)
 	}
 }

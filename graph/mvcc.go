@@ -7,44 +7,42 @@ import (
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/store"
 )
 
-// LSN represents a Log Sequence Number from the WAL.
-type LSN = uint64
-
 // undoEntry records a change that can be undone to reconstruct historical state.
-// LSNs are stored as chain deltas to save memory (4 bytes vs 8 bytes per entry):
-//   - undos[0].lsnDelta = headLSN - undos[0].lsn
-//   - undos[n].lsnDelta = undos[n-1].lsn - undos[n].lsn (for n > 0)
+// Timestamps are stored as chain deltas to save memory (4 bytes vs 8 bytes per entry):
+//   - undos[0].timeDelta = headTime - undos[0].time
+//   - undos[n].timeDelta = undos[n-1].time - undos[n].time (for n > 0)
 //
-// To compute an entry's LSN, iterate from the front accumulating deltas.
+// To compute an entry's timestamp, iterate from the front accumulating deltas.
 type undoEntry struct {
-	lsnDelta uint32      // Delta from previous entry's LSN (or headLSN for first entry)
-	added    []schema.ID // IDs added at this LSN (undo = remove)
-	removed  []schema.ID // IDs removed at this LSN (undo = add back)
+	timeDelta store.StoreDelta // Delta from previous entry's time (or headTime for first entry)
+	added     []schema.ID      // IDs added at this time (undo = remove)
+	removed   []schema.ID      // IDs removed at this time (undo = add back)
 }
 
 // versionedSet stores a bitmap with MVCC support via undo chains.
 // HEAD is always the current state; historical reads walk the undo chain.
 type versionedSet struct {
-	mu      sync.RWMutex
-	headLSN LSN             // LSN of the current head state
-	head    *roaring.Bitmap // Always current state
-	undos   []undoEntry     // Newest first (reverse chronological order)
+	mu       sync.RWMutex
+	headTime store.StoreTime // Timestamp of the current head state
+	head     *roaring.Bitmap // Always current state
+	undos    []undoEntry     // Newest first (reverse chronological order)
 }
 
-// newVersionedSet creates a new versioned set starting at the given LSN.
-func newVersionedSet(lsn LSN) *versionedSet {
+// newVersionedSet creates a new versioned set starting at the given time.
+func newVersionedSet(t store.StoreTime) *versionedSet {
 	return &versionedSet{
-		headLSN: lsn,
-		head:    roaring.New(),
-		undos:   nil,
+		headTime: t,
+		head:     roaring.New(),
+		undos:    nil,
 	}
 }
 
-// Add adds an ID to the set at the given LSN.
+// Add adds an ID to the set at the given time.
 // If the ID already exists, this is a no-op.
-func (v *versionedSet) Add(id schema.ID, lsn LSN) {
+func (v *versionedSet) Add(id schema.ID, t store.StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -55,15 +53,15 @@ func (v *versionedSet) Add(id schema.ID, lsn LSN) {
 	v.head.Add(uint32(id))
 
 	// Record undo: this was an add, so undo = remove
-	v.prependUndo(lsn, undoEntry{
-		lsnDelta: 0, // Will be set by prependUndo
-		added:    []schema.ID{id},
+	v.prependUndo(t, undoEntry{
+		timeDelta: 0, // Will be set by prependUndo
+		added:     []schema.ID{id},
 	})
 }
 
-// Remove removes an ID from the set at the given LSN.
+// Remove removes an ID from the set at the given time.
 // If the ID doesn't exist, this is a no-op.
-func (v *versionedSet) Remove(id schema.ID, lsn LSN) {
+func (v *versionedSet) Remove(id schema.ID, t store.StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -74,37 +72,37 @@ func (v *versionedSet) Remove(id schema.ID, lsn LSN) {
 	v.head.Remove(uint32(id))
 
 	// Record undo: this was a remove, so undo = add back
-	v.prependUndo(lsn, undoEntry{
-		lsnDelta: 0, // Will be set by prependUndo
-		removed:  []schema.ID{id},
+	v.prependUndo(t, undoEntry{
+		timeDelta: 0, // Will be set by prependUndo
+		removed:   []schema.ID{id},
 	})
 }
 
 // prependUndo adds a new undo entry at the front and maintains the chain delta invariant.
 // Must be called with v.mu held.
-func (v *versionedSet) prependUndo(lsn LSN, entry undoEntry) {
-	oldHeadLSN := v.headLSN
+func (v *versionedSet) prependUndo(t store.StoreTime, entry undoEntry) {
+	oldHeadTime := v.headTime
 
-	// The new entry's delta is 0 (it's at headLSN after we update it)
-	entry.lsnDelta = 0
+	// The new entry's delta is 0 (it's at headTime after we update it)
+	entry.timeDelta = 0
 
 	// Prepend the new entry
 	v.undos = append([]undoEntry{entry}, v.undos...)
 
 	// Update the second entry's delta (was first, now second)
-	// Its LSN stays the same, but its delta is now relative to the new first entry
+	// Its time stays the same, but its delta is now relative to the new first entry
 	if len(v.undos) > 1 {
-		// oldFirstLSN = oldHeadLSN - oldFirst.lsnDelta
-		// newDelta = newFirstLSN - oldFirstLSN = lsn - (oldHeadLSN - oldDelta)
-		oldDelta := v.undos[1].lsnDelta
-		newDelta := lsn - oldHeadLSN + LSN(oldDelta)
-		if newDelta > LSN(^uint32(0)) {
-			panic("LSN delta overflow: undo chain spans more than 4 billion LSNs")
-		}
-		v.undos[1].lsnDelta = uint32(newDelta)
+		// oldFirstTime = oldHeadTime - oldFirst.timeDelta
+		// newDelta = newFirstTime - oldFirstTime = t - (oldHeadTime - oldDelta)
+		oldDelta := v.undos[1].timeDelta
+		// Compute: t - oldHeadTime + oldDelta
+		// This is equivalent to: t - (oldHeadTime - oldDelta)
+		// The Less method panics if the result exceeds uint32
+		newDelta := t.Difference(oldHeadTime.Less(oldDelta))
+		v.undos[1].timeDelta = newDelta
 	}
 
-	v.headLSN = lsn
+	v.headTime = t
 }
 
 // Contains checks if the ID is in the current (HEAD) state.
@@ -114,21 +112,21 @@ func (v *versionedSet) Contains(id schema.ID) bool {
 	return v.head.Contains(uint32(id))
 }
 
-// ContainsAt checks if the ID was in the set at the given historical LSN.
+// ContainsAt checks if the ID was in the set at the given historical time.
 // This walks the undo chain to reconstruct the historical state without cloning.
-func (v *versionedSet) ContainsAt(id schema.ID, lsn LSN) bool {
+func (v *versionedSet) ContainsAt(id schema.ID, t store.StoreTime) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
 	result := v.head.Contains(uint32(id))
 
-	// Walk undo chain, undoing changes newer than target LSN
-	// Compute LSNs incrementally using chain deltas
-	currentLSN := v.headLSN
+	// Walk undo chain, undoing changes newer than target time
+	// Compute times incrementally using chain deltas
+	currentTime := v.headTime
 	for _, undo := range v.undos {
-		currentLSN -= LSN(undo.lsnDelta)
-		if currentLSN <= lsn {
-			break // Reached target LSN, stop undoing
+		currentTime = currentTime.Less(undo.timeDelta)
+		if currentTime <= t {
+			break // Reached target time, stop undoing
 		}
 		// Undo this change
 		if slices.Contains(undo.added, id) {
@@ -148,11 +146,11 @@ func (v *versionedSet) Head() *roaring.Bitmap {
 	return v.head
 }
 
-// HeadLSN returns the LSN of the current HEAD state.
-func (v *versionedSet) HeadLSN() LSN {
+// HeadTime returns the timestamp of the current HEAD state.
+func (v *versionedSet) HeadTime() store.StoreTime {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
-	return v.headLSN
+	return v.headTime
 }
 
 // IsEmpty returns true if the HEAD bitmap is empty.
@@ -162,20 +160,20 @@ func (v *versionedSet) IsEmpty() bool {
 	return v.head.IsEmpty()
 }
 
-// Truncate removes undo entries older than the given LSN.
+// Truncate removes undo entries older than the given time.
 // This is used for garbage collection - entries older than the oldest
 // active query can be discarded.
-func (v *versionedSet) Truncate(minLSN LSN) {
+func (v *versionedSet) Truncate(minTime store.StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	// Find the first entry that's < minLSN (oldest we need to keep)
-	// Compute LSNs incrementally using chain deltas
+	// Find the first entry that's < minTime (oldest we need to keep)
+	// Compute times incrementally using chain deltas
 	cutoff := len(v.undos)
-	currentLSN := v.headLSN
+	currentTime := v.headTime
 	for i, undo := range v.undos {
-		currentLSN -= LSN(undo.lsnDelta)
-		if currentLSN < minLSN {
+		currentTime = currentTime.Less(undo.timeDelta)
+		if currentTime < minTime {
 			cutoff = i
 			break
 		}
@@ -183,21 +181,21 @@ func (v *versionedSet) Truncate(minLSN LSN) {
 	v.undos = v.undos[:cutoff]
 }
 
-// SnapshotAt returns a clone of the bitmap as it was at the given LSN.
+// SnapshotAt returns a clone of the bitmap as it was at the given time.
 // This is expensive and should only be used when a full bitmap is needed
-// (e.g., for GetSubjects at a historical LSN).
-func (v *versionedSet) SnapshotAt(lsn LSN) *roaring.Bitmap {
+// (e.g., for GetSubjects at a historical time).
+func (v *versionedSet) SnapshotAt(t store.StoreTime) *roaring.Bitmap {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
 	result := v.head.Clone()
 
-	// Walk undo chain, applying inverses for changes newer than target LSN
-	// Compute LSNs incrementally using chain deltas
-	currentLSN := v.headLSN
+	// Walk undo chain, applying inverses for changes newer than target time
+	// Compute times incrementally using chain deltas
+	currentTime := v.headTime
 	for _, undo := range v.undos {
-		currentLSN -= LSN(undo.lsnDelta)
-		if currentLSN <= lsn {
+		currentTime = currentTime.Less(undo.timeDelta)
+		if currentTime <= t {
 			break
 		}
 		// Undo this change
@@ -211,50 +209,50 @@ func (v *versionedSet) SnapshotAt(lsn LSN) *roaring.Bitmap {
 	return result
 }
 
-// OldestLSN returns the oldest LSN in the undo chain, or headLSN if empty.
-func (v *versionedSet) OldestLSN() LSN {
+// OldestTime returns the oldest time in the undo chain, or headTime if empty.
+func (v *versionedSet) OldestTime() store.StoreTime {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
 	if len(v.undos) == 0 {
-		return v.headLSN
+		return v.headTime
 	}
 
-	// Compute the oldest LSN by walking the chain
-	currentLSN := v.headLSN
+	// Compute the oldest time by walking the chain
+	currentTime := v.headTime
 	for _, undo := range v.undos {
-		currentLSN -= LSN(undo.lsnDelta)
+		currentTime = currentTime.Less(undo.timeDelta)
 	}
-	return currentLSN
+	return currentTime
 }
 
-// StateLSNWithin returns the LSN of the latest state that is <= maxLSN.
+// StateTimeWithin returns the time of the latest state that is <= maxTime.
 // This is the state we would use when reading within the given snapshot window.
 //
-// If headLSN <= maxLSN, returns headLSN (we can use current state).
+// If headTime <= maxTime, returns headTime (we can use current state).
 // Otherwise, walks the undo chain to find the latest usable state.
 // Returns 0 if no state is available within the window.
-func (v *versionedSet) StateLSNWithin(maxLSN LSN) LSN {
+func (v *versionedSet) StateTimeWithin(maxTime store.StoreTime) store.StoreTime {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
 	// If head is within bounds, use it
-	if v.headLSN <= maxLSN {
-		return v.headLSN
+	if v.headTime <= maxTime {
+		return v.headTime
 	}
 
-	// Walk undo chain to find the latest state <= maxLSN
-	// Each undo entry represents a change at that LSN.
-	// The state "before" that change existed at the previous entry's LSN
-	// (or the oldest LSN if it's the last entry).
-	// Compute LSNs incrementally using chain deltas
-	currentLSN := v.headLSN
+	// Walk undo chain to find the latest state <= maxTime
+	// Each undo entry represents a change at that time.
+	// The state "before" that change existed at the previous entry's time
+	// (or the oldest time if it's the last entry).
+	// Compute times incrementally using chain deltas
+	currentTime := v.headTime
 	for i, undo := range v.undos {
-		currentLSN -= LSN(undo.lsnDelta)
-		if currentLSN <= maxLSN {
-			return currentLSN
+		currentTime = currentTime.Less(undo.timeDelta)
+		if currentTime <= maxTime {
+			return currentTime
 		}
-		// If we've walked past maxLSN, the usable state is the one
+		// If we've walked past maxTime, the usable state is the one
 		// just before this change (if there is one)
 		if i == len(v.undos)-1 {
 			// This is the oldest change we have - we can't go further back

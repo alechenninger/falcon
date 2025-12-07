@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/store"
 )
 
 // ScaleConfig defines parameters for building a large-scale authorization graph.
@@ -85,21 +86,21 @@ func (c ScaleConfig) Describe() string {
 // This bypasses the store/observer machinery to enable fast bulk loading.
 type BenchGraph struct {
 	*Graph
-	lsn LSN // Simple incrementing counter for populating
+	time store.StoreTime // Simple incrementing counter for populating
 }
 
 // NewBenchGraph creates a graph for benchmarking with direct population.
 func NewBenchGraph(s *schema.Schema) *BenchGraph {
 	return &BenchGraph{
 		Graph: New(s),
-		lsn:   1,
+		time:  1,
 	}
 }
 
 // AddDirect adds a tuple directly to the graph's in-memory state.
 func (bg *BenchGraph) AddDirect(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) {
-	bg.applyAdd(objectType, objectID, relation, subjectType, subjectID, subjectRelation, bg.lsn)
-	bg.lsn++
+	bg.applyAdd(objectType, objectID, relation, subjectType, subjectID, subjectRelation, bg.time)
+	bg.time++
 }
 
 // benchSchema creates a schema for scale testing with deep hierarchies and groups.
@@ -327,7 +328,7 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 	result.NumDocs = int(nextDocID - 1)
 
 	// Calculate total tuples
-	result.TotalTuples = int64(g.lsn - 1)
+	result.TotalTuples = int64(g.time - 1)
 
 	// Generate query fixtures
 

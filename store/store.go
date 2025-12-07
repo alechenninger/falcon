@@ -3,12 +3,52 @@ package store
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/alechenninger/falcon/schema"
 )
 
-// LSN represents a Log Sequence Number from the WAL.
-type LSN = uint64
+// StoreTime represents a timestamp encoded as uint64.
+// Stores must encode their native format in an order-preserving way.
+// Supported: Postgres LSN, Oracle SCN, MariaDB GTID, SQL Server Change Tracking.
+//
+// Use native operators (<, >, ==) for comparisons. Use [StoreTime.Difference] and
+// [StoreTime.Less] for type-safe conversions between StoreTime and StoreDelta.
+type StoreTime uint64
+
+// Difference returns the delta (t - other) as a [StoreDelta].
+// Panics if the delta exceeds uint32 max value.
+func (t StoreTime) Difference(other StoreTime) StoreDelta {
+	delta := uint64(t - other)
+	if delta > uint64(^uint32(0)) {
+		panic("StoreTime.Difference: delta overflow (exceeds uint32)")
+	}
+	return StoreDelta(delta)
+}
+
+// Less returns t - d as a new StoreTime.
+func (t StoreTime) Less(d StoreDelta) StoreTime {
+	return t - StoreTime(d)
+}
+
+// StoreDelta represents the distance between two [StoreTime] values.
+// Use native + operator for adding deltas.
+type StoreDelta uint32
+
+// AtomicStoreTime provides atomic operations on [StoreTime].
+type AtomicStoreTime struct {
+	v atomic.Uint64
+}
+
+// Load atomically loads and returns the stored StoreTime.
+func (a *AtomicStoreTime) Load() StoreTime {
+	return StoreTime(a.v.Load())
+}
+
+// Store atomically stores t.
+func (a *AtomicStoreTime) Store(t StoreTime) {
+	a.v.Store(uint64(t))
+}
 
 // Tuple represents a single authorization tuple.
 //
@@ -36,9 +76,9 @@ const (
 	OpDelete
 )
 
-// Change represents a tuple change with its LSN.
+// Change represents a tuple change with its timestamp.
 type Change struct {
-	LSN   LSN
+	Time  StoreTime
 	Op    ChangeOp
 	Tuple Tuple
 }
@@ -46,8 +86,8 @@ type Change struct {
 // Store defines the persistence interface for authorization tuples.
 // Implementations handle durable storage of tuples (e.g., Postgres).
 //
-// Note: Writes do not return LSNs. The LSN is only available via the
-// ChangeStream, which delivers changes in WAL order with their LSNs.
+// Note: Writes do not return timestamps. The timestamp is only available via
+// the ChangeStream, which delivers changes in WAL order with their timestamps.
 type Store interface {
 	// WriteTuple persists a tuple to the store. If the tuple already exists,
 	// this is a no-op.
@@ -68,11 +108,11 @@ type Store interface {
 // ChangeStream emits ordered tuple changes from the store.
 // Implementations tail the WAL (Postgres) or emit changes directly (in-memory).
 type ChangeStream interface {
-	// Subscribe returns a channel of changes starting after the given LSN.
+	// Subscribe returns a channel of changes starting after the given time.
 	// Pass 0 to get all changes from the beginning.
 	// The channel is closed when the context is canceled or an error occurs.
-	Subscribe(ctx context.Context, afterLSN LSN) (<-chan Change, <-chan error)
+	Subscribe(ctx context.Context, after StoreTime) (<-chan Change, <-chan error)
 
-	// CurrentLSN returns the current LSN of the store (latest committed change).
-	CurrentLSN(ctx context.Context) (LSN, error)
+	// CurrentTime returns the current time of the store (latest committed change).
+	CurrentTime(ctx context.Context) (StoreTime, error)
 }
