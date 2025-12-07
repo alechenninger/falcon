@@ -99,50 +99,6 @@ func (v *versionedSet) Contains(id schema.ID) bool {
 	return v.head.Contains(uint32(id))
 }
 
-// ContainsAt checks if the ID was in the set at the given historical time.
-// This walks the undo chain to reconstruct the historical state without cloning.
-func (v *versionedSet) ContainsAt(id schema.ID, t store.StoreTime) bool {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-
-	result := v.head.Contains(uint32(id))
-
-	// Early exit: if target time >= headTime, use current state
-	if t >= v.headTime {
-		return result
-	}
-
-	// Need to undo changes newer than target time
-	// First check headUndo (at headTime)
-	if v.headUndo != nil {
-		// headTime > t, so we need to undo headUndo
-		if slices.Contains(v.headUndo.added, id) {
-			result = false
-		}
-		if slices.Contains(v.headUndo.removed, id) {
-			result = true
-		}
-
-		// Walk history in reverse (newest to oldest)
-		currentTime := v.headTime
-		for i := len(v.history) - 1; i >= 0; i-- {
-			undo := &v.history[i]
-			currentTime = currentTime.Less(undo.timeDelta)
-			if currentTime <= t {
-				break // This change is at or before target, don't undo it
-			}
-			if slices.Contains(undo.added, id) {
-				result = false
-			}
-			if slices.Contains(undo.removed, id) {
-				result = true
-			}
-		}
-	}
-
-	return result
-}
-
 // Head returns the current HEAD bitmap. The caller must not modify it.
 func (v *versionedSet) Head() *roaring.Bitmap {
 	v.mu.RLock()
@@ -189,50 +145,6 @@ func (v *versionedSet) Truncate(minTime store.StoreTime) {
 	v.history = v.history[cutoff:]
 }
 
-// SnapshotAt returns a clone of the bitmap as it was at the given time.
-// This is expensive and should only be used when a full bitmap is needed
-// (e.g., for GetSubjects at a historical time).
-func (v *versionedSet) SnapshotAt(t store.StoreTime) *roaring.Bitmap {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-
-	result := v.head.Clone()
-
-	// Early exit: if target time >= headTime, use current state
-	if t >= v.headTime {
-		return result
-	}
-
-	// Need to undo changes newer than target time
-	if v.headUndo != nil {
-		// Undo headUndo (at headTime, which is > t)
-		for _, id := range v.headUndo.added {
-			result.Remove(uint32(id))
-		}
-		for _, id := range v.headUndo.removed {
-			result.Add(uint32(id))
-		}
-
-		// Walk history in reverse (newest to oldest)
-		currentTime := v.headTime
-		for i := len(v.history) - 1; i >= 0; i-- {
-			undo := &v.history[i]
-			currentTime = currentTime.Less(undo.timeDelta)
-			if currentTime <= t {
-				break // This change is at or before target, don't undo it
-			}
-			for _, id := range undo.added {
-				result.Remove(uint32(id))
-			}
-			for _, id := range undo.removed {
-				result.Add(uint32(id))
-			}
-		}
-	}
-
-	return result
-}
-
 // OldestTime returns the oldest time in the undo chain, or headTime if empty.
 func (v *versionedSet) OldestTime() store.StoreTime {
 	v.mu.RLock()
@@ -254,35 +166,100 @@ func (v *versionedSet) OldestTime() store.StoreTime {
 	return currentTime
 }
 
-// StateTimeWithin returns the time of the latest state that is <= maxTime.
-// This is the state we would use when reading within the given snapshot window.
-//
-// If headTime <= maxTime, returns headTime (we can use current state).
-// Otherwise, walks the undo chain to find the latest usable state.
-// Returns 0 if no state is available within the window.
-func (v *versionedSet) StateTimeWithin(maxTime store.StoreTime) store.StoreTime {
+// ContainsWithin checks if the ID is in the set at the latest state <= maxTime.
+// Returns (found, stateTime) where stateTime is the time of the state used,
+// or (false, 0) if no state is available within the time bound.
+func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bool, store.StoreTime) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
 	// If head is within bounds, use it
 	if v.headTime <= maxTime {
-		return v.headTime
+		return v.head.Contains(uint32(id)), v.headTime
 	}
 
-	// headTime > maxTime, so we need to look at history
+	// headTime > maxTime, need to find an older state
 	if v.headUndo == nil {
-		return 0 // No history available
+		return false, 0 // No history available
 	}
 
-	// Walk history in reverse to find the latest state <= maxTime
+	// Start with head state and undo changes
+	result := v.head.Contains(uint32(id))
+
+	// Undo headUndo first
+	if slices.Contains(v.headUndo.added, id) {
+		result = false
+	}
+	if slices.Contains(v.headUndo.removed, id) {
+		result = true
+	}
+
+	// Walk history in reverse to find state <= maxTime
 	currentTime := v.headTime
 	for i := len(v.history) - 1; i >= 0; i-- {
-		currentTime = currentTime.Less(v.history[i].timeDelta)
+		undo := &v.history[i]
+		currentTime = currentTime.Less(undo.timeDelta)
 		if currentTime <= maxTime {
-			return currentTime
+			return result, currentTime
+		}
+		// Continue undoing
+		if slices.Contains(undo.added, id) {
+			result = false
+		}
+		if slices.Contains(undo.removed, id) {
+			result = true
 		}
 	}
 
 	// Walked entire history without finding a usable state
-	return 0
+	return false, 0
+}
+
+// SnapshotWithin returns a clone of the bitmap at the latest state <= maxTime.
+// Returns (snapshot, stateTime) where stateTime is the time of the state used,
+// or (nil, 0) if no state is available within the time bound.
+func (v *versionedSet) SnapshotWithin(maxTime store.StoreTime) (*roaring.Bitmap, store.StoreTime) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	// If head is within bounds, use it
+	if v.headTime <= maxTime {
+		return v.head.Clone(), v.headTime
+	}
+
+	// headTime > maxTime, need to find an older state
+	if v.headUndo == nil {
+		return nil, 0 // No history available
+	}
+
+	// Start with head state and undo changes
+	result := v.head.Clone()
+
+	// Undo headUndo first
+	for _, id := range v.headUndo.added {
+		result.Remove(uint32(id))
+	}
+	for _, id := range v.headUndo.removed {
+		result.Add(uint32(id))
+	}
+
+	// Walk history in reverse to find state <= maxTime
+	currentTime := v.headTime
+	for i := len(v.history) - 1; i >= 0; i-- {
+		undo := &v.history[i]
+		currentTime = currentTime.Less(undo.timeDelta)
+		if currentTime <= maxTime {
+			return result, currentTime
+		}
+		// Continue undoing
+		for _, id := range undo.added {
+			result.Remove(uint32(id))
+		}
+		for _, id := range undo.removed {
+			result.Add(uint32(id))
+		}
+	}
+
+	// Walked entire history without finding a usable state
+	return nil, 0
 }

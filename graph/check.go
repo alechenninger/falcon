@@ -240,21 +240,11 @@ func (g *Graph) containsSubjectWithin(objectType schema.TypeName, objectID schem
 		return false, window
 	}
 
-	// Pick the latest usable state within the window
-	stateTime := vs.StateTimeWithin(window.Max())
+	found, stateTime := vs.ContainsWithin(subjectID, window.Max())
 	if stateTime == 0 {
-		// No state available within window
 		return false, window
 	}
-
-	// Narrow the window: our min is now at least this state's time
-	window = window.NarrowMin(stateTime)
-
-	// Check membership at this state
-	if stateTime == vs.HeadTime() {
-		return vs.Contains(subjectID), window
-	}
-	return vs.ContainsAt(subjectID, stateTime), window
+	return found, window.NarrowMin(stateTime)
 }
 
 // forEachSubjectWithin iterates over subject IDs within the given snapshot window.
@@ -277,27 +267,13 @@ func (g *Graph) forEachSubjectWithin(objectType schema.TypeName, objectID schema
 		return false, window
 	}
 
-	// Pick the latest usable state within the window
-	stateTime := vs.StateTimeWithin(window.Max())
+	snapshot, stateTime := vs.SnapshotWithin(window.Max())
 	if stateTime == 0 {
 		return false, window
 	}
-
-	// Narrow the window
 	window = window.NarrowMin(stateTime)
 
-	// Get the appropriate bitmap
-	var it interface {
-		HasNext() bool
-		Next() uint32
-	}
-	if stateTime == vs.HeadTime() {
-		it = vs.Head().Iterator()
-	} else {
-		snapshot := vs.SnapshotAt(stateTime)
-		it = snapshot.Iterator()
-	}
-
+	it := snapshot.Iterator()
 	for it.HasNext() {
 		stop, newWindow := fn(schema.ID(it.Next()), window)
 		window = newWindow
@@ -338,33 +314,13 @@ func (g *Graph) forEachUsersetSubjectWithin(objectType schema.TypeName, objectID
 			continue
 		}
 
-		// Pick the latest usable state within the window
-		stateTime := vs.StateTimeWithin(window.Max())
-		if stateTime == 0 {
+		snapshot, stateTime := vs.SnapshotWithin(window.Max())
+		if stateTime == 0 || snapshot.IsEmpty() {
 			continue
 		}
-
-		// Narrow the window
 		window = window.NarrowMin(stateTime)
 
-		// Get the appropriate bitmap
-		var it interface {
-			HasNext() bool
-			Next() uint32
-		}
-		if stateTime == vs.HeadTime() {
-			if vs.IsEmpty() {
-				continue
-			}
-			it = vs.Head().Iterator()
-		} else {
-			snapshot := vs.SnapshotAt(stateTime)
-			if snapshot.IsEmpty() {
-				continue
-			}
-			it = snapshot.Iterator()
-		}
-
+		it := snapshot.Iterator()
 		for it.HasNext() {
 			stop, newWindow := fn(ref.Type, ref.Relation, schema.ID(it.Next()), window)
 			window = newWindow
