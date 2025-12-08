@@ -110,7 +110,6 @@ func (d *Dispatcher) DispatchCheck(
 }
 
 // DispatchSingleCheck is a convenience method for checking a single object.
-// It creates an ObjectSet with a single ID and dispatches it.
 func (d *Dispatcher) DispatchSingleCheck(
 	ctx context.Context,
 	subjectType schema.TypeName,

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/store"
 )
 
 // RoutedGroup represents objects grouped by destination with the client to call.
@@ -13,13 +14,16 @@ type RoutedGroup struct {
 	Objects []ObjectSet // Objects routed to this client (may be subsets if sharding splits by ID range)
 }
 
-// Router determines which GraphClient handles a given object's tuples.
-// It abstracts the sharding topology from the check algorithm.
+// Router determines which GraphClient handles a given object's tuples and
+// provides access to the change stream and tuple loading for hydration.
 //
-// When the check algorithm needs to evaluate a relation on an object
-// (e.g., after traversing an arrow), it calls Route to get the appropriate
-// client. The Router returns either a LocalGraphClient (for local objects)
-// or a RemoteGraphClient (for objects on other shards).
+// The Router is the single gateway for all read operations in sharded mode:
+// - Query routing: Route and GroupByDestination for dispatching checks
+// - Change streaming: Subscribe and CurrentTime for receiving updates
+// - Bulk loading: LoadAll for initial hydration
+//
+// In sharded deployments, the Router filters changes and tuples to only those
+// owned by this node. In single-node mode (LocalRouter), everything passes through.
 type Router interface {
 	// Route returns a GraphClient for the node that owns the given object's tuples.
 	// All relations for an object are on the same shard, so routing is per-object.
@@ -33,17 +37,32 @@ type Router interface {
 	// For sharded deployments, objects may be split across multiple groups,
 	// and bitmaps may be split by ID range.
 	GroupByDestination(ctx context.Context, objects []ObjectSet) ([]RoutedGroup, error)
+
+	// ChangeStream methods for receiving tuple changes.
+	// In sharded mode, only changes for locally-owned objects are emitted.
+	store.ChangeStream
+
+	// LoadAll returns an iterator over tuples for locally-owned objects.
+	// Used for initial hydration on startup.
+	LoadAll(ctx context.Context) (store.TupleIterator, error)
 }
 
-// LocalRouter always returns the same local client.
-// This is used for single-node deployments or testing.
+// LocalRouter always returns the same local client and passes through all
+// changes and tuples. This is used for single-node deployments or testing.
 type LocalRouter struct {
 	client GraphClient
+	stream store.ChangeStream
+	st     store.Store
 }
 
 // NewLocalRouter creates a LocalRouter that always returns the given client.
-func NewLocalRouter(client GraphClient) *LocalRouter {
-	return &LocalRouter{client: client}
+// The stream and store are used for Subscribe/CurrentTime and LoadAll respectively.
+func NewLocalRouter(client GraphClient, stream store.ChangeStream, st store.Store) *LocalRouter {
+	return &LocalRouter{
+		client: client,
+		stream: stream,
+		st:     st,
+	}
 }
 
 // Route always returns the local client, ignoring the object type and ID.
@@ -64,3 +83,23 @@ func (r *LocalRouter) GroupByDestination(ctx context.Context, objects []ObjectSe
 		},
 	}, nil
 }
+
+// Subscribe delegates to the underlying ChangeStream.
+// In single-node mode, all changes pass through unfiltered.
+func (r *LocalRouter) Subscribe(ctx context.Context, after store.StoreTime) (<-chan store.Change, <-chan error) {
+	return r.stream.Subscribe(ctx, after)
+}
+
+// CurrentTime delegates to the underlying ChangeStream.
+func (r *LocalRouter) CurrentTime(ctx context.Context) (store.StoreTime, error) {
+	return r.stream.CurrentTime(ctx)
+}
+
+// LoadAll delegates to the underlying Store.
+// In single-node mode, all tuples pass through unfiltered.
+func (r *LocalRouter) LoadAll(ctx context.Context) (store.TupleIterator, error) {
+	return r.st.LoadAll(ctx)
+}
+
+// Compile-time interface check
+var _ Router = (*LocalRouter)(nil)

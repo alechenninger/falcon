@@ -26,3 +26,4 @@
 - Graph state is updated concurrently during traversal – we will need to review everything exhaustively to ensure there are no race conditions causing invalid state to be considered.
 - Package struture is probably not right – no clear core domain package, and nothing is internal
 - More Observers & Probes – can we structure them so we can get stats like graph walk depth tables?
+- In scatter-gather dispatch, if one userset errors, we may want to keep going in case another userset is a hit

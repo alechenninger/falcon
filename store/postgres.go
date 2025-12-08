@@ -87,8 +87,8 @@ func (s *PostgresStore) DeleteTuple(ctx context.Context, t Tuple) error {
 	return nil
 }
 
-// LoadAll retrieves all tuples from the database.
-func (s *PostgresStore) LoadAll(ctx context.Context) ([]Tuple, error) {
+// LoadAll returns an iterator over all tuples in the database.
+func (s *PostgresStore) LoadAll(ctx context.Context) (TupleIterator, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT object_type, object_id, relation, subject_type, subject_id, subject_relation
 		FROM tuples
@@ -96,35 +96,67 @@ func (s *PostgresStore) LoadAll(ctx context.Context) ([]Tuple, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tuples: %w", err)
 	}
-	defer rows.Close()
 
-	tuples, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (Tuple, error) {
-		var (
-			objectType      string
-			objectID        uint32
-			relation        string
-			subjectType     string
-			subjectID       uint32
-			subjectRelation string
-		)
-		err := row.Scan(&objectType, &objectID, &relation, &subjectType, &subjectID, &subjectRelation)
-		if err != nil {
-			return Tuple{}, err
-		}
-		return Tuple{
-			ObjectType:      schema.TypeName(objectType),
-			ObjectID:        schema.ID(objectID),
-			Relation:        schema.RelationName(relation),
-			SubjectType:     schema.TypeName(subjectType),
-			SubjectID:       schema.ID(subjectID),
-			SubjectRelation: schema.RelationName(subjectRelation),
-		}, nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan tuples: %w", err)
+	return &pgxRowsIterator{rows: rows}, nil
+}
+
+// pgxRowsIterator wraps pgx.Rows as a TupleIterator.
+type pgxRowsIterator struct {
+	rows    pgx.Rows
+	current Tuple
+	err     error
+}
+
+// Next advances to the next row.
+func (it *pgxRowsIterator) Next() bool {
+	if it.err != nil {
+		return false
+	}
+	if !it.rows.Next() {
+		return false
 	}
 
-	return tuples, nil
+	var (
+		objectType      string
+		objectID        uint32
+		relation        string
+		subjectType     string
+		subjectID       uint32
+		subjectRelation string
+	)
+	it.err = it.rows.Scan(&objectType, &objectID, &relation, &subjectType, &subjectID, &subjectRelation)
+	if it.err != nil {
+		return false
+	}
+
+	it.current = Tuple{
+		ObjectType:      schema.TypeName(objectType),
+		ObjectID:        schema.ID(objectID),
+		Relation:        schema.RelationName(relation),
+		SubjectType:     schema.TypeName(subjectType),
+		SubjectID:       schema.ID(subjectID),
+		SubjectRelation: schema.RelationName(subjectRelation),
+	}
+	return true
+}
+
+// Tuple returns the current tuple.
+func (it *pgxRowsIterator) Tuple() Tuple {
+	return it.current
+}
+
+// Err returns any error encountered during iteration.
+func (it *pgxRowsIterator) Err() error {
+	if it.err != nil {
+		return it.err
+	}
+	return it.rows.Err()
+}
+
+// Close releases the underlying rows.
+func (it *pgxRowsIterator) Close() error {
+	it.rows.Close()
+	return nil
 }
 
 // Close releases the connection pool.

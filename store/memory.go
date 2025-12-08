@@ -98,8 +98,8 @@ func (s *MemoryStore) DeleteTuple(ctx context.Context, t Tuple) error {
 	return nil
 }
 
-// LoadAll returns all tuples currently in the store.
-func (s *MemoryStore) LoadAll(ctx context.Context) ([]Tuple, error) {
+// LoadAll returns an iterator over all tuples currently in the store.
+func (s *MemoryStore) LoadAll(ctx context.Context) (TupleIterator, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -107,7 +107,7 @@ func (s *MemoryStore) LoadAll(ctx context.Context) ([]Tuple, error) {
 	for key := range s.tuples {
 		result = append(result, keyToTuple(key))
 	}
-	return result, nil
+	return NewSliceIterator(result), nil
 }
 
 func keyToTuple(k tupleKey) Tuple {

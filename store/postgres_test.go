@@ -12,6 +12,21 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// collectTuples is a test helper that collects all tuples from an iterator.
+func collectTuples(t *testing.T, iter store.TupleIterator) []store.Tuple {
+	t.Helper()
+	defer iter.Close()
+
+	var tuples []store.Tuple
+	for iter.Next() {
+		tuples = append(tuples, iter.Tuple())
+	}
+	if err := iter.Err(); err != nil {
+		t.Fatalf("iterator error: %v", err)
+	}
+	return tuples
+}
+
 func init() {
 	// Disable Ryuk for podman compatibility
 	os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
@@ -84,10 +99,11 @@ func TestPostgresStore_WriteTuple(t *testing.T) {
 	}
 
 	// Verify it was written by loading all
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 1 {
 		t.Fatalf("expected 1 tuple, got %d", len(tuples))
@@ -118,10 +134,11 @@ func TestPostgresStore_WriteTuple_Idempotent(t *testing.T) {
 	}
 
 	// Should still only have one tuple
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 1 {
 		t.Fatalf("expected 1 tuple (idempotent), got %d", len(tuples))
@@ -151,10 +168,11 @@ func TestPostgresStore_DeleteTuple(t *testing.T) {
 	}
 
 	// Verify it was deleted
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 0 {
 		t.Fatalf("expected 0 tuples after delete, got %d", len(tuples))
@@ -183,10 +201,11 @@ func TestPostgresStore_LoadAll_Empty(t *testing.T) {
 	s := setupPostgres(t)
 	ctx := context.Background()
 
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 0 {
 		t.Fatalf("expected 0 tuples, got %d", len(tuples))
@@ -210,10 +229,11 @@ func TestPostgresStore_LoadAll_Multiple(t *testing.T) {
 		}
 	}
 
-	loaded, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	loaded := collectTuples(t, iter)
 
 	if len(loaded) != len(tuples) {
 		t.Fatalf("expected %d tuples, got %d", len(tuples), len(loaded))
@@ -249,10 +269,11 @@ func TestPostgresStore_MaxUint32(t *testing.T) {
 		t.Fatalf("WriteTuple with max uint32 failed: %v", err)
 	}
 
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 1 {
 		t.Fatalf("expected 1 tuple, got %d", len(tuples))
@@ -293,10 +314,11 @@ func TestPostgresStore_DifferentSubjectTypes(t *testing.T) {
 	}
 
 	// Should have 2 distinct tuples
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 2 {
 		t.Fatalf("expected 2 tuples (different subject types), got %d", len(tuples))
@@ -308,10 +330,11 @@ func TestPostgresStore_DifferentSubjectTypes(t *testing.T) {
 	}
 
 	// User tuple should still exist
-	tuples, err = s.LoadAll(ctx)
+	iter, err = s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples = collectTuples(t, iter)
 
 	if len(tuples) != 1 {
 		t.Fatalf("expected 1 tuple after deleting group, got %d", len(tuples))
@@ -356,10 +379,11 @@ func TestPostgresStore_UsersetSubject(t *testing.T) {
 	}
 
 	// Should have 2 distinct tuples
-	tuples, err := s.LoadAll(ctx)
+	iter, err := s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples := collectTuples(t, iter)
 
 	if len(tuples) != 2 {
 		t.Fatalf("expected 2 tuples, got %d", len(tuples))
@@ -384,10 +408,11 @@ func TestPostgresStore_UsersetSubject(t *testing.T) {
 	}
 
 	// Direct tuple should still exist
-	tuples, err = s.LoadAll(ctx)
+	iter, err = s.LoadAll(ctx)
 	if err != nil {
 		t.Fatalf("LoadAll failed: %v", err)
 	}
+	tuples = collectTuples(t, iter)
 
 	if len(tuples) != 1 {
 		t.Fatalf("expected 1 tuple after deleting userset, got %d", len(tuples))

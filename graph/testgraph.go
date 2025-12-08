@@ -7,19 +7,24 @@ import (
 	"github.com/alechenninger/falcon/store"
 )
 
-// TestGraph wraps a Graph with a MemoryStore for testing.
-// It uses the observer pattern for synchronization - writes to the store
-// are applied via the Graph's subscription, and the SignalingObserver
-// allows waiting for changes to be applied.
+// TestGraph wraps a Graph with a MemoryStore and LocalRouter for testing.
+// It mirrors the production setup where the Graph subscribes to a Router,
+// which wraps the underlying Store and ChangeStream.
+//
+// The observer pattern is used for synchronization - writes to the store
+// are applied via the Graph's subscription to the Router, and the
+// SignalingObserver allows waiting for changes to be applied.
 type TestGraph struct {
 	*Graph
 	store    *store.MemoryStore
+	router   *LocalRouter
 	observer *SignalingObserver
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
-// NewTestGraph creates a Graph subscribed to a MemoryStore.
+// NewTestGraph creates a Graph with a full production-like setup:
+// MemoryStore -> LocalRouter -> Graph subscription.
 // Call Close() when done to stop the subscription.
 func NewTestGraph(s *schema.Schema) *TestGraph {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -28,17 +33,25 @@ func NewTestGraph(s *schema.Schema) *TestGraph {
 
 	g := New(s).WithObserver(observer)
 
+	// Create LocalGraphClient and Router - MemoryStore serves as both Store and ChangeStream
+	client := NewLocalGraphClient(g)
+	router := NewLocalRouter(client, ms, ms)
+
+	// Wire the Graph with the Router
+	g = g.WithRouter(router)
+
 	tg := &TestGraph{
 		Graph:    g,
 		store:    ms,
+		router:   router,
 		observer: observer,
 		ctx:      ctx,
 		cancel:   cancel,
 	}
 
-	// Start subscription in a goroutine using the standard Graph.Subscribe
+	// Subscribe to the Router (not directly to MemoryStore) - mirrors production
 	go func() {
-		_ = g.Subscribe(ctx, ms)
+		_ = g.Subscribe(ctx, router)
 	}()
 
 	// Wait for the subscription to be ready before returning
@@ -96,6 +109,11 @@ func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName
 // Store returns the underlying MemoryStore.
 func (tg *TestGraph) Store() *store.MemoryStore {
 	return tg.store
+}
+
+// Router returns the LocalRouter.
+func (tg *TestGraph) Router() *LocalRouter {
+	return tg.router
 }
 
 // Close stops the subscription.

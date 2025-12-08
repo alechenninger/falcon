@@ -7,6 +7,7 @@ import (
 	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/graph"
 	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/store"
 )
 
 // TestDispatcher_SingleGroup verifies that a single group optimization works.
@@ -17,18 +18,16 @@ func TestDispatcher_SingleGroup(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Set up a dispatcher with LocalRouter
-	client := graph.NewLocalGraphClient(tg.Graph)
-	router := graph.NewLocalRouter(client)
-	dispatcher := graph.NewDispatcher(router)
+	// Add a dispatcher using the TestGraph's existing router
+	dispatcher := graph.NewDispatcher(tg.Router())
 	tg.Graph = tg.Graph.WithDispatcher(dispatcher)
 
 	const (
-		alice   schema.ID = 1
-		bob     schema.ID = 2
-		group1  schema.ID = 10
-		group2  schema.ID = 11
-		doc100  schema.ID = 100
+		alice  schema.ID = 1
+		bob    schema.ID = 2
+		group1 schema.ID = 10
+		group2 schema.ID = 11
+		doc100 schema.ID = 100
 	)
 
 	// Alice is a member of group1, Bob is a member of group2
@@ -74,17 +73,15 @@ func TestDispatcher_ArrowTraversal(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Set up a dispatcher with LocalRouter
-	client := graph.NewLocalGraphClient(tg.Graph)
-	router := graph.NewLocalRouter(client)
-	dispatcher := graph.NewDispatcher(router)
+	// Add a dispatcher using the TestGraph's existing router
+	dispatcher := graph.NewDispatcher(tg.Router())
 	tg.Graph = tg.Graph.WithDispatcher(dispatcher)
 
 	const (
-		alice     schema.ID = 1
-		folder10  schema.ID = 10
-		folder20  schema.ID = 20
-		doc100    schema.ID = 100
+		alice    schema.ID = 1
+		folder10 schema.ID = 10
+		folder20 schema.ID = 20
+		doc100   schema.ID = 100
 	)
 
 	// Document 100 has two parent folders
@@ -119,10 +116,10 @@ func TestDispatcher_BatchCheckRelation(t *testing.T) {
 	ctx := context.Background()
 
 	const (
-		alice   schema.ID = 1
-		group1  schema.ID = 10
-		group2  schema.ID = 11
-		group3  schema.ID = 12
+		alice  schema.ID = 1
+		group1 schema.ID = 10
+		group2 schema.ID = 11
+		group3 schema.ID = 12
 	)
 
 	// Alice is only a member of group2
@@ -182,9 +179,10 @@ func TestDispatcher_BatchCheckRelation(t *testing.T) {
 // TestRouter_GroupByDestination tests the LocalRouter grouping.
 func TestRouter_GroupByDestination(t *testing.T) {
 	s := testSchema()
+	ms := store.NewMemoryStore()
 	g := graph.New(s)
 	client := graph.NewLocalGraphClient(g)
-	router := graph.NewLocalRouter(client)
+	router := graph.NewLocalRouter(client, ms, ms)
 
 	ctx := context.Background()
 
@@ -220,9 +218,10 @@ func TestRouter_GroupByDestination(t *testing.T) {
 // TestDispatcher_EmptyObjects tests dispatch with no objects.
 func TestDispatcher_EmptyObjects(t *testing.T) {
 	s := testSchema()
+	ms := store.NewMemoryStore()
 	g := graph.New(s)
 	client := graph.NewLocalGraphClient(g)
-	router := graph.NewLocalRouter(client)
+	router := graph.NewLocalRouter(client, ms, ms)
 	dispatcher := graph.NewDispatcher(router)
 
 	ctx := context.Background()
@@ -270,4 +269,3 @@ func TestBitmapSerialization(t *testing.T) {
 		t.Error("bitmap not equal after round-trip")
 	}
 }
-

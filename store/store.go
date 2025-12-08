@@ -97,9 +97,10 @@ type Store interface {
 	// this is a no-op.
 	DeleteTuple(ctx context.Context, t Tuple) error
 
-	// LoadAll retrieves all tuples from the store. This is used to hydrate
-	// the in-memory graph on startup.
-	LoadAll(ctx context.Context) ([]Tuple, error)
+	// LoadAll returns an iterator over all tuples in the store.
+	// This is used to hydrate the in-memory graph on startup.
+	// The caller must call Close on the returned iterator.
+	LoadAll(ctx context.Context) (TupleIterator, error)
 
 	// Close releases any resources held by the store.
 	Close() error
@@ -115,4 +116,66 @@ type ChangeStream interface {
 
 	// CurrentTime returns the current time of the store (latest committed change).
 	CurrentTime(ctx context.Context) (StoreTime, error)
+}
+
+// TupleIterator provides cursor-style iteration over tuples.
+// Callers must call Close when done to release resources.
+//
+// Usage:
+//
+//	iter, err := store.LoadAll(ctx)
+//	if err != nil { ... }
+//	defer iter.Close()
+//	for iter.Next() {
+//	    tuple := iter.Tuple()
+//	    // process tuple
+//	}
+//	if err := iter.Err(); err != nil { ... }
+type TupleIterator interface {
+	// Next advances to the next tuple. Returns true if there is a tuple
+	// available, false when iteration is complete or an error occurred.
+	Next() bool
+
+	// Tuple returns the current tuple. Only valid after Next returns true.
+	Tuple() Tuple
+
+	// Err returns any error encountered during iteration.
+	// Should be checked after Next returns false.
+	Err() error
+
+	// Close releases resources held by the iterator.
+	Close() error
+}
+
+// SliceIterator wraps a slice of tuples as a TupleIterator.
+// Useful for testing or in-memory implementations.
+type SliceIterator struct {
+	tuples []Tuple
+	idx    int
+}
+
+// NewSliceIterator creates a TupleIterator from a slice.
+func NewSliceIterator(tuples []Tuple) *SliceIterator {
+	return &SliceIterator{tuples: tuples, idx: -1}
+}
+
+// Next advances to the next tuple.
+func (s *SliceIterator) Next() bool {
+	s.idx++
+	return s.idx < len(s.tuples)
+}
+
+// Tuple returns the current tuple.
+func (s *SliceIterator) Tuple() Tuple {
+	return s.tuples[s.idx]
+}
+
+// Err always returns nil for SliceIterator.
+func (s *SliceIterator) Err() error {
+	return nil
+}
+
+// Close is a no-op for SliceIterator.
+func (s *SliceIterator) Close() error {
+	return nil
 }

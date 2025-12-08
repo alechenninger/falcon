@@ -6,15 +6,17 @@ import (
 
 	"github.com/alechenninger/falcon/graph"
 	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/store"
 )
 
 // TestLocalRouter_AlwaysReturnsLocalClient verifies that LocalRouter
 // always returns the same client regardless of object type/ID.
 func TestLocalRouter_AlwaysReturnsLocalClient(t *testing.T) {
 	s := testSchema()
+	ms := store.NewMemoryStore()
 	g := graph.New(s)
 	client := graph.NewLocalGraphClient(g)
-	router := graph.NewLocalRouter(client)
+	router := graph.NewLocalRouter(client, ms, ms)
 
 	ctx := context.Background()
 
@@ -44,11 +46,7 @@ func TestGraph_WithRouter_ArrowTraversal(t *testing.T) {
 	tg := graph.NewTestGraph(s)
 	defer tg.Close()
 
-	// Set up routing (single-node mode)
-	client := graph.NewLocalGraphClient(tg.Graph)
-	router := graph.NewLocalRouter(client)
-	tg.Graph = tg.Graph.WithRouter(router)
-
+	// TestGraph already has a LocalRouter set up
 	ctx := context.Background()
 
 	const (
@@ -85,11 +83,7 @@ func TestGraph_WithRouter_UsersetSubject(t *testing.T) {
 	tg := graph.NewTestGraph(s)
 	defer tg.Close()
 
-	// Set up routing (single-node mode)
-	client := graph.NewLocalGraphClient(tg.Graph)
-	router := graph.NewLocalRouter(client)
-	tg.Graph = tg.Graph.WithRouter(router)
-
+	// TestGraph already has a LocalRouter set up
 	ctx := context.Background()
 
 	const (
@@ -116,40 +110,5 @@ func TestGraph_WithRouter_UsersetSubject(t *testing.T) {
 	}
 	if !ok {
 		t.Error("expected alice to be viewer of doc100 via group membership (with routing)")
-	}
-}
-
-// TestGraph_WithoutRouter_StillWorks verifies that graphs without routers work.
-func TestGraph_WithoutRouter_StillWorks(t *testing.T) {
-	s := testSchema()
-	tg := graph.NewTestGraph(s)
-	defer tg.Close()
-	// Note: NOT setting up a router
-
-	ctx := context.Background()
-
-	const (
-		alice    schema.ID = 1
-		folder10 schema.ID = 10
-		doc100   schema.ID = 100
-	)
-
-	// Document 100's parent is folder 10
-	if err := tg.WriteTuple(ctx, "document", doc100, "parent", "folder", folder10, ""); err != nil {
-		t.Fatalf("WriteTuple failed: %v", err)
-	}
-
-	// Alice is a viewer of folder 10
-	if err := tg.WriteTuple(ctx, "folder", folder10, "viewer", "user", alice, ""); err != nil {
-		t.Fatalf("WriteTuple failed: %v", err)
-	}
-
-	// Arrow traversal should still work without a router (falls back to local)
-	ok, _, err := tg.Check("user", alice, "document", doc100, "viewer")
-	if err != nil {
-		t.Fatalf("Check failed: %v", err)
-	}
-	if !ok {
-		t.Error("expected alice to be viewer of doc100 via parent folder (without routing)")
 	}
 }

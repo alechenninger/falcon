@@ -219,24 +219,35 @@ func (g *Graph) applyRemove(objectType schema.TypeName, objectID schema.ID, rela
 	}
 }
 
-// Hydrate loads all tuples from the Store into memory. This should be called
-// on startup before subscribing to the ChangeStream.
+// Hydrate loads all tuples from the Router (or Store) into memory.
+// This should be called on startup before subscribing to the ChangeStream.
 //
-// Returns an error if no Store is configured.
+// If a Router is configured, Hydrate uses Router.LoadAll which filters tuples
+// to only those owned by this node. Otherwise, it falls back to Store.LoadAll.
+//
+// Returns an error if neither Router nor Store is configured.
 func (g *Graph) Hydrate(ctx context.Context) error {
-	if g.store == nil {
-		return fmt.Errorf("no store configured")
+	var iter store.TupleIterator
+	var err error
+
+	if g.router != nil {
+		iter, err = g.router.LoadAll(ctx)
+	} else if g.store != nil {
+		iter, err = g.store.LoadAll(ctx)
+	} else {
+		return fmt.Errorf("no router or store configured")
 	}
 
-	tuples, err := g.store.LoadAll(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load tuples: %w", err)
 	}
+	defer iter.Close()
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	for _, t := range tuples {
+	for iter.Next() {
+		t := iter.Tuple()
 		key := tupleKey{
 			ObjectType:      t.ObjectType,
 			ObjectID:        t.ObjectID,
@@ -251,6 +262,10 @@ func (g *Graph) Hydrate(ctx context.Context) error {
 			g.tuples[key] = vs
 		}
 		vs.Add(t.SubjectID, 0)
+	}
+
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("failed to iterate tuples: %w", err)
 	}
 
 	return nil
