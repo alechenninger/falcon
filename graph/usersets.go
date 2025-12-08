@@ -323,55 +323,6 @@ func (u *MultiversionUsersets) ForEachUsersetSubjectWithin(
 	return false, window
 }
 
-// CollectUsersetBitmaps collects all userset subject bitmaps for the given object/relation.
-// Returns a map from (subjectType, subjectRelation) to bitmap, along with the narrowed window.
-// Used for batch dispatch.
-func (u *MultiversionUsersets) CollectUsersetBitmaps(
-	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	targetTypes []schema.SubjectRef, window SnapshotWindow,
-) (map[schema.SubjectRef]*roaring.Bitmap, SnapshotWindow) {
-	u.mu.RLock()
-	defer u.mu.RUnlock()
-
-	result := make(map[schema.SubjectRef]*roaring.Bitmap)
-
-	for _, ref := range targetTypes {
-		if ref.Relation == "" {
-			continue // Skip direct subjects
-		}
-
-		key := usersetKey{
-			ObjectType:      objectType,
-			ObjectID:        objectID,
-			Relation:        relation,
-			SubjectType:     ref.Type,
-			SubjectRelation: ref.Relation,
-		}
-
-		vs, ok := u.tuples[key]
-		if !ok {
-			continue
-		}
-
-		// Get state within window
-		if vs.HeadTime() <= window.Max() {
-			bitmap := vs.Head()
-			if !bitmap.IsEmpty() {
-				result[ref] = bitmap
-				window = window.NarrowMin(vs.HeadTime())
-			}
-		} else {
-			bitmap, t := vs.SnapshotWithin(window.Max())
-			if bitmap != nil && !bitmap.IsEmpty() {
-				result[ref] = bitmap
-				window = window.NarrowMin(t)
-			}
-		}
-	}
-
-	return result, window
-}
-
 // ValidateTuple checks that the object type, relation, and subject reference
 // are valid according to the schema.
 func (u *MultiversionUsersets) ValidateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
