@@ -10,6 +10,15 @@ import (
 	"github.com/alechenninger/falcon/store"
 )
 
+// RelationCheck represents a check against a single object type's relation.
+// Used by CheckUnion to batch multiple checks with independent windows.
+type RelationCheck struct {
+	ObjectType schema.TypeName
+	ObjectIDs  *roaring.Bitmap
+	Relation   schema.RelationName
+	Window     SnapshotWindow // Window narrowed based on reading this type's data
+}
+
 // Graph provides authorization check operations on the relationship graph.
 // Implementations manage the underlying data and handle distributed dispatch.
 type Graph interface {
@@ -29,14 +38,17 @@ type Graph interface {
 		window SnapshotWindow, visited []VisitedKey,
 	) (bool, SnapshotWindow, error)
 
-	// BatchCheck checks if subject has relation on ANY of the given objects.
-	// Short-circuits on first true. Objects are passed as a bitmap for efficiency.
-	// Returns (allowed, narrowedWindow, error).
-	BatchCheck(ctx context.Context,
+	// CheckUnion checks if subject is in the union of all the given usersets.
+	// Returns true if subject has the relation on ANY of the objects across all checks.
+	// Each RelationCheck has its own window, allowing independent narrowing per type.
+	//
+	// Return semantics:
+	//   - Found: returns window from the successful check
+	//   - Not found: returns tightest window across all checks (max of mins, min of maxes)
+	CheckUnion(ctx context.Context,
 		subjectType schema.TypeName, subjectID schema.ID,
-		objectType schema.TypeName, objectIDs *roaring.Bitmap,
-		relation schema.RelationName,
-		window SnapshotWindow, visited []VisitedKey,
+		checks []RelationCheck,
+		visited []VisitedKey,
 	) (bool, SnapshotWindow, error)
 
 	// Schema returns the authorization schema.
@@ -109,33 +121,51 @@ func (g *LocalGraph) Check(ctx context.Context,
 		window, visited)
 }
 
-// BatchCheck checks if subject has relation on ANY of the objects.
-func (g *LocalGraph) BatchCheck(ctx context.Context,
+// CheckUnion checks if subject is in the union of all the given usersets.
+func (g *LocalGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
-	objectType schema.TypeName, objectIDs *roaring.Bitmap,
-	relation schema.RelationName,
-	window SnapshotWindow, visited []VisitedKey,
+	checks []RelationCheck,
+	visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
-	if objectIDs == nil || objectIDs.IsEmpty() {
-		return false, window, nil
+	if len(checks) == 0 {
+		return false, SnapshotWindow{}, nil
 	}
 
-	iter := objectIDs.Iterator()
-	for iter.HasNext() {
-		objectID := schema.ID(iter.Next())
-		ok, newWindow, err := check(ctx, g, g.usersets,
-			subjectType, subjectID, objectType, objectID, relation,
-			window, visited)
-		if err != nil {
-			return false, window, err
+	var tightestWindow SnapshotWindow
+	first := true
+
+	for _, chk := range checks {
+		if chk.ObjectIDs == nil || chk.ObjectIDs.IsEmpty() {
+			continue
 		}
-		window = newWindow
-		if ok {
-			return true, window, nil
+
+		iter := chk.ObjectIDs.Iterator()
+		for iter.HasNext() {
+			objectID := schema.ID(iter.Next())
+			ok, resultWindow, err := check(ctx, g, g.usersets,
+				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
+				chk.Window, visited)
+			if err != nil {
+				return false, chk.Window, err
+			}
+			if ok {
+				return true, resultWindow, nil
+			}
+			// Track tightest window for "not found" case
+			if first {
+				tightestWindow = resultWindow
+				first = false
+			} else {
+				tightestWindow = tightestWindow.Intersect(resultWindow)
+			}
 		}
 	}
 
-	return false, window, nil
+	if first {
+		// No checks were performed (all empty)
+		return false, SnapshotWindow{}, nil
+	}
+	return false, tightestWindow, nil
 }
 
 // ValidateTuple checks if a tuple is valid according to the schema.

@@ -1,11 +1,22 @@
 # TODO
 
+## Current goal
+
+We have rough "best case" numbers for a large graph in a single node. How much worse is it for a large graph distributed across several nodes?
+
+Then, let's introduce write acknowledgements and/or read repair, and we can test snapshot windows when nodes may be at different store times.
+
+At some point we need to introduce intersections, lists, and reverse lookups, though, to ensure we're not "over-fitting" to check.
+
 ## Core
 
 - [~] Routing abstraction (base). Two-layer routing: one before ID is known, one after.
 - [~] Shard assignment (for sharding hydration). Can start with static assignments maybe?
+- [ ] Hydration protocol: COPY SQL, replication slot by lease.
 - [~] Graph dispatch by shard. (should be straight forward with routing layer)
 - [ ] Intersection operator – complicates dispatch. Note "BatchCheck" is really "CheckAny" or "CheckUnion". I thnk we need a CheckSomething that takes into account the whole "set equation" – then we dispatch accordingly.
+- [ ] ListSubjects
+- [ ] Reverse indexing (ListObjects)
 - [ ] Read repair (waiting for replication when needed)
 - [ ] Abort on unsatisfiable snapshot window. Panicing for now.
 - [ ] Write acknowledgements (pre shard movement & rebalancing).
@@ -14,6 +25,7 @@
 - [ ] Schema updates, tied to storetime.
 - [ ] GC old undo entries
 - [~] Routing should not be calculated per tuple in a subjectset b/c their might be a high cardinality of tuples. We would want to scatter-gather: group all the subjects by route and dispatch concurrently (or up to some concurrency threshold).
+- [ ] If a graph gets a query that doesn't have tuples for it any more (i.e. they moved), make sure it reroutes without constraining window
 
 ## Advanced
 
@@ -27,3 +39,6 @@
 - Package struture is probably not right – no clear core domain package, and nothing is internal
 - More Observers & Probes – can we structure them so we can get stats like graph walk depth tables?
 - In scatter-gather dispatch, if one userset errors, we may want to keep going in case another userset is a hit
+- The sentinel storedelta value (meaning "from the beginning") needs more protections
+- When searching subject sets, eager filter if our subject type is not a type of the subject in the set (e.g. we are searching for a folder but the set type is user; don't bother)
+- Empty checks should probably return error rather than undefined window OR we should ALSO include the "outter" window in the signature only for this case

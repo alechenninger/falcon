@@ -763,3 +763,202 @@ func TestMVCC_Window_BumpInMiddle(t *testing.T) {
 		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
 	}
 }
+
+func TestMVCC_CheckUnion_IndependentWindows(t *testing.T) {
+	// Test that CheckUnion uses independent windows per type.
+	// Setup a schema where a user can view a document via multiple groups.
+	// Each group's userset check gets its own window based on reading that group's data.
+
+	s := &schema.Schema{
+		Types: map[schema.TypeName]*schema.ObjectType{
+			"user": {
+				Name:      "user",
+				Relations: map[schema.RelationName]*schema.Relation{},
+			},
+			"group": {
+				Name: "group",
+				Relations: map[schema.RelationName]*schema.Relation{
+					"member": {
+						Name: "member",
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("user")),
+						},
+					},
+				},
+			},
+			"document": {
+				Name: "document",
+				Relations: map[schema.RelationName]*schema.Relation{
+					"viewer": {
+						Name: "viewer",
+						Usersets: []schema.Userset{
+							schema.Direct(
+								schema.Ref("user"),
+								schema.RefWithRelation("group", "member"),
+							),
+						},
+					},
+				},
+			},
+		},
+	}
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice  schema.ID = 1
+		bob    schema.ID = 2
+		group1 schema.ID = 10
+		group2 schema.ID = 20
+		doc1   schema.ID = 100
+	)
+
+	// t=1: group1 can view doc1 (old)
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "group", group1, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=2: group2 can view doc1 (old)
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "group", group2, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=3: alice is member of group1 (old)
+	if err := tg.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=4: bob is member of group2 (newer - will be our min if we check group2)
+	if err := tg.WriteTuple(ctx, "group", group2, "member", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=5..14: Unrelated writes to advance time
+	for i := schema.ID(200); i < 210; i++ {
+		if err := tg.WriteTuple(ctx, "document", i, "viewer", "user", i, ""); err != nil {
+			t.Fatalf("WriteTuple failed: %v", err)
+		}
+	}
+
+	// Check alice's access to doc1
+	// Alice is in group1, so the check succeeds via group1.
+	// The window for group1's check is based on:
+	//   - Reading doc1's viewer tuples (t=1 for group1, t=2 for group2)
+	//   - Recursively checking group1#member where alice was added at t=3
+	// The min should be 3 (alice -> group1)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer of doc1")
+	}
+
+	// The window min should reflect the path taken (group1's userset at t=1, alice's membership at t=3)
+	// Max is 14 (replicated time)
+	if resultWindow.Max() != 14 {
+		t.Errorf("expected window.Max() = 14, got %d", resultWindow.Max())
+	}
+	// Min should be 3 (alice's membership in group1)
+	if resultWindow.Min() != 3 {
+		t.Errorf("expected window.Min() = 3, got %d", resultWindow.Min())
+	}
+}
+
+func TestMVCC_CheckUnion_TightestWindowOnNotFound(t *testing.T) {
+	// Test that CheckUnion returns the tightest window when no match is found.
+	// This ensures subsequent checks (like exclusions) are properly constrained.
+
+	s := &schema.Schema{
+		Types: map[schema.TypeName]*schema.ObjectType{
+			"user": {
+				Name:      "user",
+				Relations: map[schema.RelationName]*schema.Relation{},
+			},
+			"group": {
+				Name: "group",
+				Relations: map[schema.RelationName]*schema.Relation{
+					"member": {
+						Name: "member",
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("user")),
+						},
+					},
+				},
+			},
+			"document": {
+				Name: "document",
+				Relations: map[schema.RelationName]*schema.Relation{
+					"viewer": {
+						Name: "viewer",
+						Usersets: []schema.Userset{
+							schema.Direct(
+								schema.Ref("user"),
+								schema.RefWithRelation("group", "member"),
+							),
+						},
+					},
+				},
+			},
+		},
+	}
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice   schema.ID = 1
+		bob     schema.ID = 2
+		charlie schema.ID = 3 // Not a member of any group
+		group1  schema.ID = 10
+		group2  schema.ID = 20
+		doc1    schema.ID = 100
+	)
+
+	// t=1: group1 can view doc1 (old)
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "group", group1, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=2: group2 can view doc1 (old)
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "group", group2, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=3: alice is member of group1
+	if err := tg.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=4: bob is member of group2 (newest - this will be our min for tightest window)
+	if err := tg.WriteTuple(ctx, "group", group2, "member", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=5..14: Unrelated writes to advance time
+	for i := schema.ID(200); i < 210; i++ {
+		if err := tg.WriteTuple(ctx, "document", i, "viewer", "user", i, ""); err != nil {
+			t.Fatalf("WriteTuple failed: %v", err)
+		}
+	}
+
+	// Check charlie's access to doc1 - charlie is not in any group
+	// The check should fail, but we check both groups' memberships.
+	// The tightest window should have min = max of all mins from all checks.
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", charlie, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if ok {
+		t.Error("expected charlie to NOT be viewer of doc1")
+	}
+
+	// The window should be tight: we checked both groups
+	// - group1 check reads group1#member (no match), window narrowed by that read
+	// - group2 check reads group2#member (no match), window narrowed by that read
+	// Max should be 14 (replicated time)
+	if resultWindow.Max() != 14 {
+		t.Errorf("expected window.Max() = 14, got %d", resultWindow.Max())
+	}
+}

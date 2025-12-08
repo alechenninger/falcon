@@ -121,6 +121,17 @@ Semantics-by-techniques:
 - Atomic cross-shard writes, so clients do not need to care about sharding and do not need to code for partial writes:
   - Logical replication
 
+Guarantees
+
+- Linearizability if either:
+  1. You pick a time window pinned on "last flushed lsn" (nodes must all wait if not already caught up)
+  2. You wait for writes to be acknowledged
+- Monotonic reads if either:
+  1. There are no secondary replicas for a shard.
+  - If there are secondaries, then you can read from node 1, get max 100, then read from node 2, get max 99
+  2. You use any of the techniques to get linearizability (above)
+- Causal consistency, always
+
 ## Where to start
 
 ### 1.1 Level 0: Graph core

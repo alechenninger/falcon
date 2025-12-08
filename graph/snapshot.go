@@ -106,3 +106,12 @@ func (w SnapshotWindow) CanUse(stateTime store.StoreTime) bool {
 func (w SnapshotWindow) IsValid() bool {
 	return w.Min() <= w.max
 }
+
+// Intersect returns the tightest window that satisfies both windows.
+// This is max of mins and min of maxes.
+// Panics if the resulting window would be invalid (min > max).
+func (w SnapshotWindow) Intersect(other SnapshotWindow) SnapshotWindow {
+	newMin := max(other.Min(), w.Min())
+	newMax := min(other.Max(), w.Max())
+	return NewSnapshotWindow(newMin, newMax)
+}

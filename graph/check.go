@@ -130,32 +130,44 @@ func checkDirectAndUserset(
 ) (bool, SnapshotWindow, error) {
 	// Check direct membership first
 	found, _, newWindow := usersets.ContainsDirectWithin(objectType, objectID, relation, subjectType, subjectID, window)
-	window = newWindow
 	if found {
-		return true, window, nil
+		return true, newWindow, nil
 	}
 
-	// Check userset subjects via Graph recursion
-	// e.g., document:100#viewer@group:1#member means "members of group 1 are viewers"
-	// So we need to check if subjectType:subjectID is in group:1#member
-	var foundErr error
-	found, window = usersets.ForEachUsersetSubjectWithin(objectType, objectID, relation, targetTypes, window,
-		func(usSubjectType schema.TypeName, usSubjectRelation schema.RelationName, usSubjectID schema.ID, w SnapshotWindow) (bool, SnapshotWindow) {
-			// Check if subjectType:subjectID is in usSubjectType:usSubjectID#usSubjectRelation
-			// This recurses through the Graph interface (may be local or distributed)
-			visitedSlice := visitedMapToSlice(visited)
-			ok, newW, err := graph.Check(ctx, subjectType, subjectID, usSubjectType, usSubjectID, usSubjectRelation, w, visitedSlice)
-			if err != nil {
-				foundErr = err
-				return true, newW // stop
-			}
-			return ok, newW // stop if found
+	// Build checks for userset subjects with independent windows per type
+	// Each type reads data from the original window, getting its own narrowed window
+	var checks []RelationCheck
+	for _, ref := range targetTypes {
+		// TODO: we can know what the type of set is in this set,
+		// and if it's not the same as the subjectType we can skip the check
+
+		if ref.Relation == "" {
+			continue // Skip direct subjects
+		}
+
+		// Read data for this type from original window - each type gets independent narrowing
+		bitmap, _, typeWindow := usersets.GetSubjectBitmapWithin(
+			objectType, objectID, relation, ref.Type, ref.Relation, window)
+		if bitmap == nil || bitmap.IsEmpty() {
+			continue
+		}
+
+		checks = append(checks, RelationCheck{
+			ObjectType: ref.Type,
+			ObjectIDs:  bitmap,
+			Relation:   ref.Relation,
+			Window:     typeWindow,
 		})
-
-	if foundErr != nil {
-		return false, window, foundErr
 	}
-	return found, window, nil
+
+	if len(checks) == 0 {
+		// Use newWindow; even though false, this "false" result is based on this window.
+		return false, newWindow, nil
+	}
+
+	// Check if subject is in the union of all userset subjects
+	visitedSlice := visitedMapToSlice(visited)
+	return graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
 }
 
 // checkArrow evaluates a tuple-to-userset (arrow) operation.
@@ -184,8 +196,13 @@ func checkArrow(
 		return false, window, fmt.Errorf("relation %s has no Direct userset with target types", arrow.TuplesetRelation)
 	}
 
-	// Check each target type
+	// Build checks for each target type with independent windows
+	// Each type reads data from the original window, getting its own narrowed window
+	var checks []RelationCheck
 	for _, ref := range targetTypes {
+		// TODO: we can know what the type of set is in this set,
+		// and if it's not the same as the subjectType we can skip the check
+
 		// Skip userset references for tupleset relations - they should be direct
 		if ref.Relation != "" {
 			continue
@@ -200,25 +217,28 @@ func checkArrow(
 			continue
 		}
 
-		// Get the bitmap of target objects
-		bitmap, _, newWindow := usersets.GetSubjectBitmapWithin(objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window)
+		// Read data for this type from original window - each type gets independent narrowing
+		bitmap, _, typeWindow := usersets.GetSubjectBitmapWithin(
+			objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window)
 		if bitmap == nil || bitmap.IsEmpty() {
 			continue
 		}
-		window = newWindow
 
-		// Batch check all target objects via Graph interface
-		visitedSlice := visitedMapToSlice(visited)
-		ok, window, err := graph.BatchCheck(ctx, subjectType, subjectID, ref.Type, bitmap, arrow.ComputedUsersetRelation, window, visitedSlice)
-		if err != nil {
-			return false, window, err
-		}
-		if ok {
-			return true, window, nil
-		}
+		checks = append(checks, RelationCheck{
+			ObjectType: ref.Type,
+			ObjectIDs:  bitmap,
+			Relation:   arrow.ComputedUsersetRelation,
+			Window:     typeWindow,
+		})
 	}
 
-	return false, window, nil
+	if len(checks) == 0 {
+		return false, window, nil
+	}
+
+	// Check if subject has relation on any of the target objects
+	visitedSlice := visitedMapToSlice(visited)
+	return graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
 }
 
 // visitedMapToSlice converts visited map to slice for interface calls.
