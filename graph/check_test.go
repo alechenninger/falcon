@@ -108,7 +108,7 @@ func TestCheck_DirectMembership(t *testing.T) {
 	}
 
 	// User 1 should be a viewer
-	ok, _, err := g.Check("user", user1, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", user1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestCheck_DirectMembership(t *testing.T) {
 	}
 
 	// User 2 should NOT be a viewer
-	ok, _, err = g.Check("user", user2, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", user2, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestCheck_ComputedRelation(t *testing.T) {
 	}
 
 	// User 1 should be an editor
-	ok, _, err := g.Check("user", user1, "document", doc100, "editor")
+	ok, _, err := g.Check(ctx, "user", user1, "document", doc100, "editor")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestCheck_ComputedRelation(t *testing.T) {
 	}
 
 	// User 1 should also be a viewer (editors can view)
-	ok, _, err = g.Check("user", user1, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", user1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestCheck_ComputedRelation(t *testing.T) {
 	}
 
 	// User 2 should NOT be a viewer
-	ok, _, err = g.Check("user", user2, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", user2, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestCheck_ArrowTraversal(t *testing.T) {
 	}
 
 	// User 1 should be a viewer of doc100 (via parent folder)
-	ok, _, err := g.Check("user", user1, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", user1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -202,7 +202,7 @@ func TestCheck_ArrowTraversal(t *testing.T) {
 	}
 
 	// User 2 should NOT be a viewer
-	ok, _, err = g.Check("user", user2, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", user2, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 	}
 
 	// User 1 should be a viewer of folder 10 (via parent folder 20)
-	ok, _, err := g.Check("user", user1, "folder", folder10, "viewer")
+	ok, _, err := g.Check(ctx, "user", user1, "folder", folder10, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 	}
 
 	// User 1 should be a viewer of doc100 (via folder10 -> folder20)
-	ok, _, err = g.Check("user", user1, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", user1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestCheck_UnknownObjectType(t *testing.T) {
 	s := testSchema()
 	g := graph.NewTestGraph(s)
 
-	_, _, err := g.Check("user", 1, "unknown_type", 100, "viewer")
+	_, _, err := g.Check(ctx, "user", 1, "unknown_type", 100, "viewer")
 	if err == nil {
 		t.Error("expected error for unknown object type")
 	}
@@ -272,7 +272,7 @@ func TestCheck_UnknownRelation(t *testing.T) {
 	s := testSchema()
 	g := graph.NewTestGraph(s)
 
-	_, _, err := g.Check("user", 1, "document", 100, "unknown_relation")
+	_, _, err := g.Check(ctx, "user", 1, "document", 100, "unknown_relation")
 	if err == nil {
 		t.Error("expected error for unknown relation")
 	}
@@ -313,7 +313,7 @@ func TestRemoveTuple(t *testing.T) {
 	}
 
 	// Verify user is a viewer
-	ok, _, err := g.Check("user", user1, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", user1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestRemoveTuple(t *testing.T) {
 	}
 
 	// Verify user is no longer a viewer
-	ok, _, err = g.Check("user", user1, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", user1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -388,7 +388,7 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := g.Check(tt.subjectType, tt.subjectID, tt.objectType, tt.objectID, tt.relation)
+			got, _, err := g.Check(ctx, tt.subjectType, tt.subjectID, tt.objectType, tt.objectID, tt.relation)
 			if err != nil {
 				t.Fatalf("Check failed: %v", err)
 			}
@@ -415,7 +415,7 @@ func TestCheck_DirectRelationOnly(t *testing.T) {
 	}
 
 	// Check membership
-	ok, _, err := g.Check("user", user1, "group", group10, "member")
+	ok, _, err := g.Check(ctx, "user", user1, "group", group10, "member")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -443,7 +443,7 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 
 	// user:1 (alice) should NOT be a viewer - the userset subject is group:1#member,
 	// but alice is not a member of group 1
-	ok, _, err := g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user) failed: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 	}
 
 	// Now alice should be a viewer (via group membership)
-	ok, _, err = g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user after group membership) failed: %v", err)
 	}
@@ -491,7 +491,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	}
 
 	// user:1 should be a viewer (via both direct AND group membership)
-	ok, _, err := g.Check("user", id1, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", id1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user) failed: %v", err)
 	}
@@ -505,7 +505,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	}
 
 	// user:1 should still be a viewer (via group:1#member)
-	ok, _, err = g.Check("user", id1, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", id1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user after direct removal) failed: %v", err)
 	}
@@ -519,7 +519,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	}
 
 	// user:1 should no longer be a viewer
-	ok, _, err = g.Check("user", id1, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", id1, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user after all removals) failed: %v", err)
 	}
@@ -557,7 +557,7 @@ func TestCheck_UsersetSubject(t *testing.T) {
 	}
 
 	// Alice should be a viewer (via group membership)
-	ok, _, err := g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (alice) failed: %v", err)
 	}
@@ -566,7 +566,7 @@ func TestCheck_UsersetSubject(t *testing.T) {
 	}
 
 	// Bob should be a viewer (via group membership)
-	ok, _, err = g.Check("user", bob, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", bob, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (bob) failed: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestCheck_UsersetSubject(t *testing.T) {
 	}
 
 	// Charlie should NOT be a viewer (not a member of group 1)
-	ok, _, err = g.Check("user", charlie, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", charlie, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check (charlie) failed: %v", err)
 	}
@@ -617,7 +617,7 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	}
 
 	// Alice can view (via group 1)
-	ok, _, err := g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -626,7 +626,7 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	}
 
 	// Bob can view (via group 2)
-	ok, _, err = g.Check("user", bob, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", bob, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -635,7 +635,7 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	}
 
 	// Charlie cannot view
-	ok, _, err = g.Check("user", charlie, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", charlie, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -673,7 +673,7 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	}
 
 	// Alice can view (via group membership)
-	ok, _, err := g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -682,7 +682,7 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	}
 
 	// Bob can view (direct)
-	ok, _, err = g.Check("user", bob, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", bob, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -691,7 +691,7 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	}
 
 	// Charlie cannot view
-	ok, _, err = g.Check("user", charlie, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", charlie, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -722,7 +722,7 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	}
 
 	// Alice can view
-	ok, _, err := g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err := g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -736,7 +736,7 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	}
 
 	// Alice can no longer view
-	ok, _, err = g.Check("user", alice, "document", doc100, "viewer")
+	ok, _, err = g.Check(ctx, "user", alice, "document", doc100, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -786,7 +786,7 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	// 1. doc200 → parent → folder10
 	// 2. folder10#viewer includes group1#member
 	// 3. alice is in group1#member
-	ok, _, err := g.Check("user", alice, "document", doc200, "viewer")
+	ok, _, err := g.Check(ctx, "user", alice, "document", doc200, "viewer")
 	if err != nil {
 		t.Fatalf("Check (alice) failed: %v", err)
 	}
@@ -795,7 +795,7 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	}
 
 	// Bob should NOT be a viewer (not in group 1)
-	ok, _, err = g.Check("user", bob, "document", doc200, "viewer")
+	ok, _, err = g.Check(ctx, "user", bob, "document", doc200, "viewer")
 	if err != nil {
 		t.Fatalf("Check (bob) failed: %v", err)
 	}
@@ -809,7 +809,7 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	}
 
 	// Bob should now be a viewer
-	ok, _, err = g.Check("user", bob, "document", doc200, "viewer")
+	ok, _, err = g.Check(ctx, "user", bob, "document", doc200, "viewer")
 	if err != nil {
 		t.Fatalf("Check (bob after joining group) failed: %v", err)
 	}
@@ -864,7 +864,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	}
 
 	// serviceAccount:1 should be a viewer
-	ok, _, err := g.Check("serviceAccount", id1, "resource", resource1, "viewer")
+	ok, _, err := g.Check(ctx, "serviceAccount", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (serviceAccount) failed: %v", err)
 	}
@@ -873,7 +873,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	}
 
 	// user:1 should NOT be a viewer (different type, same ID)
-	ok, _, err = g.Check("user", id1, "resource", resource1, "viewer")
+	ok, _, err = g.Check(ctx, "user", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user) failed: %v", err)
 	}
@@ -887,7 +887,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	}
 
 	// Both should now be viewers
-	ok, _, err = g.Check("user", id1, "resource", resource1, "viewer")
+	ok, _, err = g.Check(ctx, "user", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user after add) failed: %v", err)
 	}
@@ -895,7 +895,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 		t.Error("expected user:1 to be viewer after adding")
 	}
 
-	ok, _, err = g.Check("serviceAccount", id1, "resource", resource1, "viewer")
+	ok, _, err = g.Check(ctx, "serviceAccount", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (serviceAccount after user add) failed: %v", err)
 	}
@@ -908,7 +908,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 		t.Fatalf("RemoveTuple (serviceAccount) failed: %v", err)
 	}
 
-	ok, _, err = g.Check("user", id1, "resource", resource1, "viewer")
+	ok, _, err = g.Check(ctx, "user", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user after serviceAccount removal) failed: %v", err)
 	}
@@ -916,7 +916,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 		t.Error("expected user:1 to still be viewer after removing serviceAccount:1")
 	}
 
-	ok, _, err = g.Check("serviceAccount", id1, "resource", resource1, "viewer")
+	ok, _, err = g.Check(ctx, "serviceAccount", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (serviceAccount after removal) failed: %v", err)
 	}

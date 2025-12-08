@@ -4,61 +4,37 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
 )
 
-// Check determines if the given subject has the specified relation on the
-// object. It evaluates the relation according to the schema, which may involve:
-//   - Direct tuple membership
-//   - Userset tuple membership (e.g., group members)
-//   - Union with other relations (computed usersets)
-//   - Arrow traversal to other objects (tuple to userset)
-//
-// Returns (allowed, usedTime, error) where usedTime is the effective time of the
-// snapshot that was used to answer the query. This can be used by callers
-// to understand the consistency of the result.
-func (g *Graph) Check(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
-	return g.CheckCtx(context.Background(), subjectType, subjectID, objectType, objectID, relation)
+// VisitedKey tracks nodes visited during graph traversal for cycle detection.
+type VisitedKey struct {
+	ObjectType schema.TypeName
+	ObjectID   schema.ID
+	Relation   schema.RelationName
 }
 
-// CheckCtx is like Check but accepts a context for cancellation and tracing.
-func (g *Graph) CheckCtx(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
-	// Start with max = replicated time, min = 0 (unknown)
-	window := NewSnapshotWindow(0, g.replicatedTime.Load())
-	ok, resultWindow, err := g.CheckAt(ctx, subjectType, subjectID, objectType, objectID, relation, &window)
-	return ok, resultWindow.Max(), err
-}
-
-// CheckAt is like Check but allows specifying an initial snapshot window.
-// This is used for distributed queries where the window may already be
-// constrained by other shards.
-//
-// If window is nil, uses a fresh window starting at the current replicated time.
-// Returns the narrowed window that was actually used for the query.
-func (g *Graph) CheckAt(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window *SnapshotWindow) (bool, SnapshotWindow, error) {
-	return g.CheckAtWithVisited(ctx, subjectType, subjectID, objectType, objectID, relation, window, nil)
-}
-
-// CheckAtWithVisited is like CheckAt but accepts a list of already-visited nodes
-// for cycle detection. This is used when receiving distributed queries that have
-// already traversed other shards.
-func (g *Graph) CheckAtWithVisited(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window *SnapshotWindow, visited []VisitedKey) (bool, SnapshotWindow, error) {
-	// Initialize window if not provided
-	if window == nil {
-		w := NewSnapshotWindow(0, g.replicatedTime.Load())
-		window = &w
-	}
-
+// check is the core walk algorithm. It's a standalone function that takes
+// Graph for recursion and MultiversionUsersets for data access.
+func check(
+	ctx context.Context,
+	graph Graph,
+	usersets *MultiversionUsersets,
+	subjectType schema.TypeName, subjectID schema.ID,
+	objectType schema.TypeName, objectID schema.ID,
+	relation schema.RelationName,
+	window SnapshotWindow,
+	visited []VisitedKey,
+) (bool, SnapshotWindow, error) {
 	// Validate inputs
-	ot, ok := g.schema.Types[objectType]
+	sch := usersets.Schema()
+	ot, ok := sch.Types[objectType]
 	if !ok {
-		return false, *window, fmt.Errorf("unknown object type: %s", objectType)
+		return false, window, fmt.Errorf("unknown object type: %s", objectType)
 	}
 	rel, ok := ot.Relations[relation]
 	if !ok {
-		return false, *window, fmt.Errorf("unknown relation %s on type %s", relation, objectType)
+		return false, window, fmt.Errorf("unknown relation %s on type %s", relation, objectType)
 	}
 
 	// Convert visited slice to map for O(1) lookups
@@ -67,72 +43,20 @@ func (g *Graph) CheckAtWithVisited(ctx context.Context, subjectType schema.TypeN
 		visitedMap[v] = true
 	}
 
-	return g.checkRelation(ctx, subjectType, subjectID, objectType, objectID, rel, visitedMap, *window)
-}
-
-// routeCheckRelation checks a relation on a potentially remote object.
-// If a router is configured and returns a remote client, the check is dispatched
-// via RPC. Otherwise, it falls back to local evaluation.
-//
-// This is used by checkArrow and checkDirectAndUserset when they need to
-// evaluate relations on different objects (which may live on different shards).
-func (g *Graph) routeCheckRelation(
-	ctx context.Context,
-	subjectType schema.TypeName,
-	subjectID schema.ID,
-	objectType schema.TypeName,
-	objectID schema.ID,
-	relation schema.RelationName,
-	visited map[VisitedKey]bool,
-	window SnapshotWindow,
-) (bool, SnapshotWindow, error) {
-	// If no router configured, evaluate locally (preserving visited map)
-	if g.router == nil {
-		return g.checkRelationByName(ctx, subjectType, subjectID, objectType, objectID, relation, visited, window)
-	}
-
-	// Route to get the appropriate client
-	client, err := g.router.Route(ctx, objectType, objectID)
-	if err != nil {
-		return false, window, fmt.Errorf("routing failed: %w", err)
-	}
-
-	// Convert visited map to slice for the client call
-	visitedSlice := make([]VisitedKey, 0, len(visited))
-	for k := range visited {
-		visitedSlice = append(visitedSlice, k)
-	}
-
-	// Dispatch to the client (local or remote)
-	// The client receives the full visited list for cycle detection.
-	return client.CheckRelation(ctx, subjectType, subjectID, objectType, objectID, relation, window, visitedSlice)
-}
-
-// checkRelationByName is like checkRelation but takes a relation name instead of object.
-// It looks up the relation from the schema.
-func (g *Graph) checkRelationByName(
-	ctx context.Context,
-	subjectType schema.TypeName,
-	subjectID schema.ID,
-	objectType schema.TypeName,
-	objectID schema.ID,
-	relation schema.RelationName,
-	visited map[VisitedKey]bool,
-	window SnapshotWindow,
-) (bool, SnapshotWindow, error) {
-	ot, ok := g.schema.Types[objectType]
-	if !ok {
-		return false, window, fmt.Errorf("unknown object type: %s", objectType)
-	}
-	rel, ok := ot.Relations[relation]
-	if !ok {
-		return false, window, fmt.Errorf("unknown relation %s on type %s", relation, objectType)
-	}
-	return g.checkRelation(ctx, subjectType, subjectID, objectType, objectID, rel, visited, window)
+	return checkRelation(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel, visitedMap, window)
 }
 
 // checkRelation evaluates a relation definition against the graph.
-func (g *Graph) checkRelation(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, rel *schema.Relation, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
+func checkRelation(
+	ctx context.Context,
+	graph Graph,
+	usersets *MultiversionUsersets,
+	subjectType schema.TypeName, subjectID schema.ID,
+	objectType schema.TypeName, objectID schema.ID,
+	rel *schema.Relation,
+	visited map[VisitedKey]bool,
+	window SnapshotWindow,
+) (bool, SnapshotWindow, error) {
 	key := VisitedKey{objectType, objectID, rel.Name}
 	if visited[key] {
 		// Already visiting this node - cycle detected, return false to avoid infinite loop
@@ -143,11 +67,10 @@ func (g *Graph) checkRelation(ctx context.Context, subjectType schema.TypeName, 
 
 	// Evaluate each userset in the union
 	for _, us := range rel.Usersets {
-		ok, newWindow, err := g.checkUserset(ctx, subjectType, subjectID, objectType, objectID, rel, us, visited, window)
+		ok, newWindow, err := checkUserset(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel, us, visited, window)
 		if err != nil {
 			return false, window, err
 		}
-		// Always use the narrowed window going forward
 		window = newWindow
 		if ok {
 			return true, window, nil
@@ -158,24 +81,35 @@ func (g *Graph) checkRelation(ctx context.Context, subjectType schema.TypeName, 
 }
 
 // checkUserset evaluates a single userset definition.
-func (g *Graph) checkUserset(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, rel *schema.Relation, us schema.Userset, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
+func checkUserset(
+	ctx context.Context,
+	graph Graph,
+	usersets *MultiversionUsersets,
+	subjectType schema.TypeName, subjectID schema.ID,
+	objectType schema.TypeName, objectID schema.ID,
+	rel *schema.Relation,
+	us schema.Userset,
+	visited map[VisitedKey]bool,
+	window SnapshotWindow,
+) (bool, SnapshotWindow, error) {
 	switch {
 	case len(us.This) > 0:
 		// Direct tuple membership for the current relation (including userset subjects)
-		return g.checkDirectAndUserset(ctx, subjectType, subjectID, objectType, objectID, rel.Name, us.This, visited, window)
+		return checkDirectAndUserset(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel.Name, us.This, visited, window)
 
 	case us.ComputedRelation != "":
 		// Reference to another relation on the same object (no routing needed - same object)
-		ot := g.schema.Types[objectType]
+		sch := usersets.Schema()
+		ot := sch.Types[objectType]
 		computedRel, ok := ot.Relations[us.ComputedRelation]
 		if !ok {
 			return false, window, fmt.Errorf("unknown computed relation %s on type %s", us.ComputedRelation, objectType)
 		}
-		return g.checkRelation(ctx, subjectType, subjectID, objectType, objectID, computedRel, visited, window)
+		return checkRelation(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, computedRel, visited, window)
 
 	case us.TupleToUserset != nil:
 		// Arrow traversal: follow relation to find targets, then check relation on targets
-		return g.checkArrow(ctx, subjectType, subjectID, objectType, objectID, us.TupleToUserset, visited, window)
+		return checkArrow(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, us.TupleToUserset, visited, window)
 
 	default:
 		return false, window, fmt.Errorf("invalid userset: no operation specified")
@@ -183,40 +117,40 @@ func (g *Graph) checkUserset(ctx context.Context, subjectType schema.TypeName, s
 }
 
 // checkDirectAndUserset checks both direct tuple membership and userset tuple membership.
-//
-// For direct: checks if subject_type:subject_id is directly in the relation
-// For userset: finds tuples like object#relation@other_type:other_id#other_relation
-// and recursively checks if subject is in that userset.
-//
-// targetTypes specifies the allowed subject types from the Direct userset.
-func (g *Graph) checkDirectAndUserset(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
+func checkDirectAndUserset(
+	ctx context.Context,
+	graph Graph,
+	usersets *MultiversionUsersets,
+	subjectType schema.TypeName, subjectID schema.ID,
+	objectType schema.TypeName, objectID schema.ID,
+	relation schema.RelationName,
+	targetTypes []schema.SubjectRef,
+	visited map[VisitedKey]bool,
+	window SnapshotWindow,
+) (bool, SnapshotWindow, error) {
 	// Check direct membership first
-	ok, newWindow := g.checkDirect(subjectType, subjectID, objectType, objectID, relation, window)
+	found, _, newWindow := usersets.ContainsDirectWithin(objectType, objectID, relation, subjectType, subjectID, window)
 	window = newWindow
-	if ok {
+	if found {
 		return true, window, nil
 	}
 
-	// If dispatcher is available, use batch dispatch for userset checks
-	if g.dispatcher != nil {
-		return g.checkUsersetWithDispatcher(ctx, subjectType, subjectID, objectType, objectID, relation, targetTypes, visited, window)
-	}
-
-	// Fallback: serial check of userset subjects
+	// Check userset subjects via Graph recursion
 	// e.g., document:100#viewer@group:1#member means "members of group 1 are viewers"
 	// So we need to check if subjectType:subjectID is in group:1#member
 	var foundErr error
-	found, window := g.forEachUsersetSubjectWithin(objectType, objectID, relation, targetTypes, window, func(usSubjectType schema.TypeName, usSubjectRelation schema.RelationName, usSubjectID schema.ID, w SnapshotWindow) (bool, SnapshotWindow) {
-		// Check if subjectType:subjectID is in usSubjectType:usSubjectID#usSubjectRelation
-		// e.g., is user:alice in group:1#member?
-		// This may route to a different shard if the userset object is remote.
-		ok, newW, err := g.routeCheckRelation(ctx, subjectType, subjectID, usSubjectType, usSubjectID, usSubjectRelation, visited, w)
-		if err != nil {
-			foundErr = err
-			return true, newW // stop
-		}
-		return ok, newW // stop if found
-	})
+	found, window = usersets.ForEachUsersetSubjectWithin(objectType, objectID, relation, targetTypes, window,
+		func(usSubjectType schema.TypeName, usSubjectRelation schema.RelationName, usSubjectID schema.ID, w SnapshotWindow) (bool, SnapshotWindow) {
+			// Check if subjectType:subjectID is in usSubjectType:usSubjectID#usSubjectRelation
+			// This recurses through the Graph interface (may be local or distributed)
+			visitedSlice := visitedMapToSlice(visited)
+			ok, newW, err := graph.Check(ctx, subjectType, subjectID, usSubjectType, usSubjectID, usSubjectRelation, w, visitedSlice)
+			if err != nil {
+				foundErr = err
+				return true, newW // stop
+			}
+			return ok, newW // stop if found
+		})
 
 	if foundErr != nil {
 		return false, window, foundErr
@@ -224,88 +158,21 @@ func (g *Graph) checkDirectAndUserset(ctx context.Context, subjectType schema.Ty
 	return found, window, nil
 }
 
-// checkUsersetWithDispatcher uses the dispatcher for batch userset checks.
-// It collects all userset subjects as bitmaps and dispatches them in parallel.
-func (g *Graph) checkUsersetWithDispatcher(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
-	// Collect userset subject bitmaps
-	bitmaps, window := g.collectUsersetSubjectBitmaps(objectType, objectID, relation, targetTypes, window)
-	if len(bitmaps) == 0 {
-		return false, window, nil
-	}
-
-	// Build ObjectSets for dispatch
-	// Each userset reference (type#relation) becomes a separate check
-	// because we need to check relation "usSubjectRelation" on objects of type "usSubjectType"
-	var objectSets []ObjectSet
-	for ref, bitmap := range bitmaps {
-		objectSets = append(objectSets, ObjectSet{
-			Type: ref.Type,
-			IDs:  bitmap,
-		})
-	}
-
-	// All userset subjects share the same relation to check (the userset relation)
-	// But different types may have different relations... wait, no.
-	// The relation to check IS the subject relation (e.g., "member" for group:X#member)
-	//
-	// Actually, we need to think about this more carefully:
-	// - We have userset subjects like group:1#member, group:2#member
-	// - We need to check: is subjectType:subjectID in group:1#member?
-	// - This means checking the "member" relation on group:1, group:2, etc.
-	//
-	// So for each (type, relation) pair, we dispatch a check with that relation.
-	// But DispatchCheck takes a single relation... so we may need multiple dispatches.
-
-	// Group by relation and dispatch separately
-	byRelation := make(map[schema.RelationName][]ObjectSet)
-	for ref, bitmap := range bitmaps {
-		byRelation[ref.Relation] = append(byRelation[ref.Relation], ObjectSet{
-			Type: ref.Type,
-			IDs:  bitmap,
-		})
-	}
-
-	// Convert visited map to slice for dispatch
-	visitedSlice := make([]VisitedKey, 0, len(visited))
-	for k := range visited {
-		visitedSlice = append(visitedSlice, k)
-	}
-
-	// Check each relation group
-	for rel, objects := range byRelation {
-		check := RelationCheck{
-			SubjectType: subjectType,
-			SubjectID:   subjectID,
-			Objects:     objects,
-			Relation:    rel,
-		}
-
-		allowed, newWindow, err := g.dispatcher.DispatchCheck(ctx, check, window, visitedSlice)
-		if err != nil {
-			return false, window, err
-		}
-		window = newWindow
-
-		if allowed {
-			return true, window, nil
-		}
-	}
-
-	return false, window, nil
-}
-
-// checkDirect checks if the subject has a direct tuple for the relation.
-// Returns (found, narrowedWindow).
-func (g *Graph) checkDirect(subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window SnapshotWindow) (bool, SnapshotWindow) {
-	return g.containsSubjectWithin(objectType, objectID, relation, subjectType, "", subjectID, window)
-}
-
 // checkArrow evaluates a tuple-to-userset (arrow) operation.
-// It follows the tupleset relation to find target objects, then checks the
-// computed userset relation on each target.
-func (g *Graph) checkArrow(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, arrow *schema.TupleToUserset, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
+func checkArrow(
+	ctx context.Context,
+	graph Graph,
+	usersets *MultiversionUsersets,
+	subjectType schema.TypeName, subjectID schema.ID,
+	objectType schema.TypeName, objectID schema.ID,
+	arrow *schema.TupleToUserset,
+	visited map[VisitedKey]bool,
+	window SnapshotWindow,
+) (bool, SnapshotWindow, error) {
+	sch := usersets.Schema()
+
 	// Get the target type from the schema
-	ot := g.schema.Types[objectType]
+	ot := sch.Types[objectType]
 	tuplesetRel, ok := ot.Relations[arrow.TuplesetRelation]
 	if !ok {
 		return false, window, fmt.Errorf("unknown tupleset relation %s on type %s", arrow.TuplesetRelation, objectType)
@@ -317,20 +184,7 @@ func (g *Graph) checkArrow(ctx context.Context, subjectType schema.TypeName, sub
 		return false, window, fmt.Errorf("relation %s has no Direct userset with target types", arrow.TuplesetRelation)
 	}
 
-	// If dispatcher is available, use batch dispatch
-	if g.dispatcher != nil {
-		return g.checkArrowWithDispatcher(ctx, subjectType, subjectID, objectType, objectID, arrow, targetTypes, visited, window)
-	}
-
-	// Fallback: serial check of arrow targets
-	return g.checkArrowSerial(ctx, subjectType, subjectID, objectType, objectID, arrow, targetTypes, visited, window)
-}
-
-// checkArrowSerial checks arrow targets one at a time (fallback when no dispatcher).
-func (g *Graph) checkArrowSerial(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, arrow *schema.TupleToUserset, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
-	// For each target type, get the targets and check the relation
-	// Note: tupleset relations (like "parent") typically have direct subjects
-	// (Relation=""), pointing to objects rather than usersets
+	// Check each target type
 	for _, ref := range targetTypes {
 		// Skip userset references for tupleset relations - they should be direct
 		if ref.Relation != "" {
@@ -338,52 +192,7 @@ func (g *Graph) checkArrowSerial(ctx context.Context, subjectType schema.TypeNam
 		}
 
 		// Verify the target type has the computed relation in the schema
-		targetOT, ok := g.schema.Types[ref.Type]
-		if !ok {
-			continue // Skip unknown target types
-		}
-		if _, ok := targetOT.Relations[arrow.ComputedUsersetRelation]; !ok {
-			continue // This target type doesn't have the relation, try next
-		}
-
-		// Iterate over targets and check the relation
-		// The targets may be on different shards, so we route each check.
-		var foundErr error
-		found, newWindow := g.forEachSubjectWithin(objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window, func(targetID schema.ID, w SnapshotWindow) (bool, SnapshotWindow) {
-			ok, newW, err := g.routeCheckRelation(ctx, subjectType, subjectID, ref.Type, targetID, arrow.ComputedUsersetRelation, visited, w)
-			if err != nil {
-				foundErr = err
-				return true, newW // stop
-			}
-			return ok, newW // stop if found
-		})
-		window = newWindow
-
-		if foundErr != nil {
-			return false, window, foundErr
-		}
-		if found {
-			return true, window, nil
-		}
-	}
-
-	return false, window, nil
-}
-
-// checkArrowWithDispatcher uses the dispatcher for batch arrow checks.
-// It collects all target objects as bitmaps and dispatches them in parallel.
-func (g *Graph) checkArrowWithDispatcher(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, arrow *schema.TupleToUserset, targetTypes []schema.SubjectRef, visited map[VisitedKey]bool, window SnapshotWindow) (bool, SnapshotWindow, error) {
-	// Collect target object bitmaps for all valid target types
-	var objectSets []ObjectSet
-
-	for _, ref := range targetTypes {
-		// Skip userset references for tupleset relations - they should be direct
-		if ref.Relation != "" {
-			continue
-		}
-
-		// Verify the target type has the computed relation in the schema
-		targetOT, ok := g.schema.Types[ref.Type]
+		targetOT, ok := sch.Types[ref.Type]
 		if !ok {
 			continue
 		}
@@ -392,217 +201,31 @@ func (g *Graph) checkArrowWithDispatcher(ctx context.Context, subjectType schema
 		}
 
 		// Get the bitmap of target objects
-		bitmap, stateTime, newWindow := g.getSubjectBitmapWithin(objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window)
+		bitmap, _, newWindow := usersets.GetSubjectBitmapWithin(objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window)
 		if bitmap == nil || bitmap.IsEmpty() {
 			continue
 		}
 		window = newWindow
-		_ = stateTime // Already incorporated into window
 
-		objectSets = append(objectSets, ObjectSet{
-			Type: ref.Type,
-			IDs:  bitmap,
-		})
+		// Batch check all target objects via Graph interface
+		visitedSlice := visitedMapToSlice(visited)
+		ok, window, err := graph.BatchCheck(ctx, subjectType, subjectID, ref.Type, bitmap, arrow.ComputedUsersetRelation, window, visitedSlice)
+		if err != nil {
+			return false, window, err
+		}
+		if ok {
+			return true, window, nil
+		}
 	}
 
-	if len(objectSets) == 0 {
-		return false, window, nil
-	}
+	return false, window, nil
+}
 
-	// Convert visited map to slice for dispatch
-	visitedSlice := make([]VisitedKey, 0, len(visited))
+// visitedMapToSlice converts visited map to slice for interface calls.
+func visitedMapToSlice(visited map[VisitedKey]bool) []VisitedKey {
+	result := make([]VisitedKey, 0, len(visited))
 	for k := range visited {
-		visitedSlice = append(visitedSlice, k)
+		result = append(result, k)
 	}
-
-	// Dispatch batch check for the computed userset relation
-	check := RelationCheck{
-		SubjectType: subjectType,
-		SubjectID:   subjectID,
-		Objects:     objectSets,
-		Relation:    arrow.ComputedUsersetRelation,
-	}
-
-	return g.dispatcher.DispatchCheck(ctx, check, window, visitedSlice)
-}
-
-// containsSubjectWithin checks if a subject is in the set within the given snapshot window.
-// It picks the latest state <= window.Max and narrows the window accordingly.
-// Returns (found, narrowedWindow).
-func (g *Graph) containsSubjectWithin(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName, subjectID schema.ID, window SnapshotWindow) (bool, SnapshotWindow) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	key := tupleKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
-	vs, ok := g.tuples[key]
-	if !ok {
-		return false, window
-	}
-
-	found, stateTime := vs.ContainsWithin(subjectID, window.Max())
-	if stateTime == 0 {
-		return false, window
-	}
-	return found, window.NarrowMin(stateTime)
-}
-
-// forEachSubjectWithin iterates over subject IDs within the given snapshot window.
-// For each subject, fn is called with the current window; fn returns (stop, newWindow).
-// The window narrows as we examine tuples.
-// Returns (stopped, finalWindow).
-func (g *Graph) forEachSubjectWithin(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName, window SnapshotWindow, fn func(schema.ID, SnapshotWindow) (bool, SnapshotWindow)) (bool, SnapshotWindow) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	key := tupleKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
-	vs, ok := g.tuples[key]
-	if !ok {
-		return false, window
-	}
-
-	snapshot, stateTime := vs.SnapshotWithin(window.Max())
-	if stateTime == 0 {
-		return false, window
-	}
-	window = window.NarrowMin(stateTime)
-
-	it := snapshot.Iterator()
-	for it.HasNext() {
-		stop, newWindow := fn(schema.ID(it.Next()), window)
-		window = newWindow
-		if stop {
-			return true, window
-		}
-	}
-	return false, window
-}
-
-// forEachUsersetSubjectWithin iterates over userset subjects within the given snapshot window.
-// For each (subjectType, subjectRelation, subjectID) tuple, fn is called with the current window.
-// The window narrows as we examine tuples.
-// Returns (stopped, finalWindow).
-//
-// targetTypes specifies the allowed subject types from the Direct userset.
-func (g *Graph) forEachUsersetSubjectWithin(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, window SnapshotWindow, fn func(schema.TypeName, schema.RelationName, schema.ID, SnapshotWindow) (bool, SnapshotWindow)) (bool, SnapshotWindow) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	// For each allowed subject reference (type + relation), do a direct lookup
-	for _, ref := range targetTypes {
-		// Skip direct subjects (no relation) - those are handled separately
-		if ref.Relation == "" {
-			continue
-		}
-
-		key := tupleKey{
-			ObjectType:      objectType,
-			ObjectID:        objectID,
-			Relation:        relation,
-			SubjectType:     ref.Type,
-			SubjectRelation: ref.Relation,
-		}
-
-		vs, ok := g.tuples[key]
-		if !ok {
-			continue
-		}
-
-		snapshot, stateTime := vs.SnapshotWithin(window.Max())
-		if stateTime == 0 || snapshot.IsEmpty() {
-			continue
-		}
-		window = window.NarrowMin(stateTime)
-
-		it := snapshot.Iterator()
-		for it.HasNext() {
-			stop, newWindow := fn(ref.Type, ref.Relation, schema.ID(it.Next()), window)
-			window = newWindow
-			if stop {
-				return true, window
-			}
-		}
-	}
-
-	return false, window
-}
-
-// getSubjectBitmapWithin gets the subject bitmap for the given tuple key within the snapshot window.
-// Returns the bitmap (possibly cloned), the state time, and the narrowed window.
-// Returns nil bitmap if no tuples exist.
-func (g *Graph) getSubjectBitmapWithin(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName, window SnapshotWindow) (*roaring.Bitmap, store.StoreTime, SnapshotWindow) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	key := tupleKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
-	vs, ok := g.tuples[key]
-	if !ok {
-		return nil, 0, window
-	}
-
-	snapshot, stateTime := vs.SnapshotWithin(window.Max())
-	if stateTime == 0 || snapshot == nil || snapshot.IsEmpty() {
-		return nil, 0, window
-	}
-
-	return snapshot, stateTime, window.NarrowMin(stateTime)
-}
-
-// collectUsersetSubjectBitmaps collects bitmaps of userset subjects grouped by (type, relation).
-// Each entry in the returned map represents objects that need to be checked.
-// The window is narrowed as tuples are examined.
-//
-// Key format: "type#relation" for userset references.
-func (g *Graph) collectUsersetSubjectBitmaps(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, targetTypes []schema.SubjectRef, window SnapshotWindow) (map[schema.SubjectRef]*roaring.Bitmap, SnapshotWindow) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	result := make(map[schema.SubjectRef]*roaring.Bitmap)
-
-	for _, ref := range targetTypes {
-		// Skip direct subjects (no relation) - those are handled separately
-		if ref.Relation == "" {
-			continue
-		}
-
-		key := tupleKey{
-			ObjectType:      objectType,
-			ObjectID:        objectID,
-			Relation:        relation,
-			SubjectType:     ref.Type,
-			SubjectRelation: ref.Relation,
-		}
-
-		vs, ok := g.tuples[key]
-		if !ok {
-			continue
-		}
-
-		snapshot, stateTime := vs.SnapshotWithin(window.Max())
-		if stateTime == 0 || snapshot == nil || snapshot.IsEmpty() {
-			continue
-		}
-		window = window.NarrowMin(stateTime)
-
-		result[ref] = snapshot
-	}
-
-	return result, window
+	return result
 }

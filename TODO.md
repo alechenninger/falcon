@@ -3,11 +3,11 @@
 ## Core
 
 - [~] Routing abstraction (base). Two-layer routing: one before ID is known, one after.
-- [ ] Shard assignment (for sharding hydration). Can start with static assignments maybe?
+- [~] Shard assignment (for sharding hydration). Can start with static assignments maybe?
 - [~] Graph dispatch by shard. (should be straight forward with routing layer)
-- [ ] Intersection operator – complicates dispatch
+- [ ] Intersection operator – complicates dispatch. Note "BatchCheck" is really "CheckAny" or "CheckUnion". I thnk we need a CheckSomething that takes into account the whole "set equation" – then we dispatch accordingly.
 - [ ] Read repair (waiting for replication when needed)
-- [ ] Abort on unsatisfiable snapshot window
+- [ ] Abort on unsatisfiable snapshot window. Panicing for now.
 - [ ] Write acknowledgements (pre shard movement & rebalancing).
 - [ ] Shard movement (w/ write acknowledgements).
 - [ ] Lease protocol for shard assignment.

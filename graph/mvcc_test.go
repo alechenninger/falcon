@@ -30,6 +30,54 @@ func mvccTestSchema() *schema.Schema {
 	}
 }
 
+// mvccHierarchySchema includes folder hierarchy for testing arrow narrowing.
+func mvccHierarchySchema() *schema.Schema {
+	return &schema.Schema{
+		Types: map[schema.TypeName]*schema.ObjectType{
+			"user": {
+				Name:      "user",
+				Relations: map[schema.RelationName]*schema.Relation{},
+			},
+			"folder": {
+				Name: "folder",
+				Relations: map[schema.RelationName]*schema.Relation{
+					"parent": {
+						Name: "parent",
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("folder")),
+						},
+					},
+					"viewer": {
+						Name: "viewer",
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("user")),
+							schema.Arrow("parent", "viewer"), // inherit from parent
+						},
+					},
+				},
+			},
+			"document": {
+				Name: "document",
+				Relations: map[schema.RelationName]*schema.Relation{
+					"parent": {
+						Name: "parent",
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("folder")),
+						},
+					},
+					"viewer": {
+						Name: "viewer",
+						Usersets: []schema.Userset{
+							schema.Direct(schema.Ref("user")),
+							schema.Arrow("parent", "viewer"), // inherit from parent folder
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 	s := mvccTestSchema()
 	tg := graph.NewTestGraph(s)
@@ -56,7 +104,7 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 	}
 
 	// At HEAD: both alice and bob should be viewers
-	ok, _, err := tg.Check("user", alice, "document", doc1, "viewer")
+	ok, _, err := tg.Check(ctx, "user", alice, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -64,7 +112,7 @@ func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
 		t.Error("expected alice to be viewer at HEAD")
 	}
 
-	ok, _, err = tg.Check("user", bob, "document", doc1, "viewer")
+	ok, _, err = tg.Check(ctx, "user", bob, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -119,7 +167,7 @@ func TestMVCC_VersionedSet_RemoveAt(t *testing.T) {
 	timeAfterRemove := tg.ReplicatedTime()
 
 	// At HEAD: alice should NOT be viewer
-	ok, _, err := tg.Check("user", alice, "document", doc1, "viewer")
+	ok, _, err := tg.Check(ctx, "user", alice, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -192,7 +240,7 @@ func TestMVCC_MemoryStore_ChangeStream(t *testing.T) {
 	}
 
 	// Check that the tuple was applied
-	ok, _, err := tg.Check("user", alice, "document", doc1, "viewer")
+	ok, _, err := tg.Check(ctx, "user", alice, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -228,7 +276,7 @@ func TestMVCC_SnapshotWindowNarrowing(t *testing.T) {
 	// Check returns the time used for the query
 	// When checking at HEAD, the returned min time should be at least as high as
 	// the state time we used
-	_, usedTime, err := tg.Check("user", alice, "document", doc1, "viewer")
+	_, usedTime, err := tg.Check(ctx, "user", alice, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -316,7 +364,7 @@ func TestMVCC_TruncateHistory(t *testing.T) {
 	tg.TruncateHistory(timeBeforeDelete)
 
 	// After truncation: HEAD should still work correctly
-	ok, _, err = tg.Check("user", alice, "document", doc1, "viewer")
+	ok, _, err = tg.Check(ctx, "user", alice, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -324,11 +372,394 @@ func TestMVCC_TruncateHistory(t *testing.T) {
 		t.Error("expected alice to NOT be viewer at HEAD")
 	}
 
-	ok, _, err = tg.Check("user", bob, "document", doc1, "viewer")
+	ok, _, err = tg.Check(ctx, "user", bob, "document", doc1, "viewer")
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
 	if !ok {
 		t.Error("expected bob to be viewer at HEAD")
+	}
+}
+
+func TestMVCC_MaxSnapshotWindow_NarrowsToReplicatedTime(t *testing.T) {
+	s := mvccTestSchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice schema.ID = 1
+		doc1  schema.ID = 100
+	)
+
+	// Add alice as viewer
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Check with MaxSnapshotWindow - the returned window should be narrowed
+	// to the actual replicated time, not left at MaxUint64
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer")
+	}
+
+	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+}
+
+func TestMVCC_Window_MultipleWrites(t *testing.T) {
+	s := mvccTestSchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice schema.ID = 1
+		bob   schema.ID = 2
+		doc1  schema.ID = 100
+	)
+
+	// Write two tuples - they get times 1 and 2
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Check alice - should narrow to time 1 (when alice was added)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer")
+	}
+	// Window should reflect the state we read (time 2 is replicated, but we read at time 2 which includes alice)
+	expectedWindow := graph.NewSnapshotWindow(2, 2)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+}
+
+func TestMVCC_Window_NoTuplesFound(t *testing.T) {
+	s := mvccTestSchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice   schema.ID = 1
+		charlie schema.ID = 3
+		doc1    schema.ID = 100
+	)
+
+	// Write a tuple for alice
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Check charlie (who has no access) - window should still narrow to replicated time
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", charlie, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if ok {
+		t.Error("expected charlie to NOT be viewer")
+	}
+	// Even though charlie wasn't found, the window narrows based on what we checked
+	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+}
+
+func TestMVCC_Window_HistoricalQuery(t *testing.T) {
+	s := mvccTestSchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice schema.ID = 1
+		bob   schema.ID = 2
+		doc1  schema.ID = 100
+	)
+
+	// Add alice
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	timeAfterAlice := tg.ReplicatedTime()
+
+	// Add bob
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Query with a historical window (max = timeAfterAlice)
+	historicalWindow := graph.NewSnapshotWindow(0, timeAfterAlice)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &historicalWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer at historical time")
+	}
+	// Window should be narrowed to timeAfterAlice
+	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+
+	// Bob should NOT be visible at historical time
+	ok, resultWindow, err = tg.CheckAt(ctx, "user", bob, "document", doc1, "viewer", &historicalWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if ok {
+		t.Error("expected bob to NOT be viewer at historical time")
+	}
+}
+
+func TestMVCC_Window_WideSpan(t *testing.T) {
+	s := mvccTestSchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice schema.ID = 1
+		doc1  schema.ID = 100
+	)
+
+	// Write a tuple for alice on doc1 - this will be at time 1
+	if err := tg.WriteTuple(ctx, "document", doc1, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Write many unrelated tuples to advance the replicated time
+	// These are for different documents, so they won't be read when checking doc1
+	for i := schema.ID(200); i < 210; i++ {
+		if err := tg.WriteTuple(ctx, "document", i, "viewer", "user", schema.ID(i), ""); err != nil {
+			t.Fatalf("WriteTuple failed: %v", err)
+		}
+	}
+
+	// Replicated time should now be 11 (1 + 10 unrelated writes)
+	replicatedTime := tg.ReplicatedTime()
+	if replicatedTime != 11 {
+		t.Fatalf("expected replicated time 11, got %d", replicatedTime)
+	}
+
+	// Check alice's access to doc1
+	// The window should span from time 1 (when we read the tuple) to time 11 (replicated time)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer")
+	}
+
+	// The window should have a wide span: min=1 (tuple read time), max=11 (replicated time)
+	// This demonstrates that the window reflects what data was actually accessed
+	expectedWindow := graph.NewSnapshotWindow(1, 11)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+
+	// Verify the delta is non-zero (wide window)
+	if resultWindow.Min() == resultWindow.Max() {
+		t.Error("expected a wide window with min != max")
+	}
+}
+
+func TestMVCC_Window_ArrowNarrowing(t *testing.T) {
+	// Test that window narrows based on arrow traversal.
+	// Setup:
+	//   t=1: doc1 -> folder1 (parent)  [old, won't be min]
+	//   t=2: user -> folder1 (viewer)  [this should be our min]
+	//   t=3..12: unrelated writes      [advance time]
+	// Check: user can view doc1 via folder1
+	// Expected window: [2, 12] - min is when viewer was added, not parent
+
+	s := mvccHierarchySchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice   schema.ID = 1
+		doc1    schema.ID = 100
+		folder1 schema.ID = 10
+	)
+
+	// t=1: Old tuple - doc1's parent is folder1
+	if err := tg.WriteTuple(ctx, "document", doc1, "parent", "folder", folder1, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=2: Later - alice becomes viewer of folder1
+	if err := tg.WriteTuple(ctx, "folder", folder1, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=3..12: Unrelated writes to advance time
+	for i := schema.ID(200); i < 210; i++ {
+		if err := tg.WriteTuple(ctx, "folder", i, "viewer", "user", i, ""); err != nil {
+			t.Fatalf("WriteTuple failed: %v", err)
+		}
+	}
+
+	// Check alice's access to doc1 (via folder1)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer of doc1")
+	}
+
+	// Window should be [2, 12]: min=2 (viewer tuple), max=12 (replicated time)
+	// The parent tuple at t=1 doesn't raise min because we read newer data (t=2) during traversal
+	expectedWindow := graph.NewSnapshotWindow(2, 12)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+}
+
+func TestMVCC_Window_NestedArrowNarrowing(t *testing.T) {
+	// Test window narrowing through nested arrows.
+	// Setup:
+	//   t=1: doc1 -> leafFolder (parent)
+	//   t=2: leafFolder -> midFolder (parent)
+	//   t=3: midFolder -> rootFolder (parent)
+	//   t=4: user -> rootFolder (viewer)  [this should be our min]
+	//   t=5..14: unrelated writes
+	// Check: user can view doc1 via leafFolder -> midFolder -> rootFolder
+	// Expected window: [4, 14]
+
+	s := mvccHierarchySchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice      schema.ID = 1
+		doc1       schema.ID = 100
+		leafFolder schema.ID = 10
+		midFolder  schema.ID = 11
+		rootFolder schema.ID = 12
+	)
+
+	// t=1: doc1's parent is leafFolder
+	if err := tg.WriteTuple(ctx, "document", doc1, "parent", "folder", leafFolder, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=2: leafFolder's parent is midFolder
+	if err := tg.WriteTuple(ctx, "folder", leafFolder, "parent", "folder", midFolder, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=3: midFolder's parent is rootFolder
+	if err := tg.WriteTuple(ctx, "folder", midFolder, "parent", "folder", rootFolder, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=4: alice becomes viewer of rootFolder
+	if err := tg.WriteTuple(ctx, "folder", rootFolder, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=5..14: Unrelated writes to advance time
+	for i := schema.ID(200); i < 210; i++ {
+		if err := tg.WriteTuple(ctx, "folder", i, "viewer", "user", i, ""); err != nil {
+			t.Fatalf("WriteTuple failed: %v", err)
+		}
+	}
+
+	// Check alice's access to doc1 (via leafFolder -> midFolder -> rootFolder)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer of doc1")
+	}
+
+	// Window should be [4, 14]: min=4 (viewer tuple at root), max=14 (replicated time)
+	expectedWindow := graph.NewSnapshotWindow(4, 14)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
+	}
+}
+
+func TestMVCC_Window_BumpInMiddle(t *testing.T) {
+	// Test that the newest tuple read becomes min, even if it's "in the middle" of the traversal.
+	// Setup:
+	//   t=1: user -> ancestorFolder (viewer)  [old]
+	//   t=2: doc1 -> leafFolder (parent)      [old]
+	//   t=3: leafFolder -> ancestorFolder (parent)  [THIS is our expected min - newest read]
+	//   t=4..13: unrelated writes
+	// Check: user can view doc1 via leafFolder -> ancestorFolder
+	// Expected window: [3, 13] - min is when leaf was moved to ancestor
+
+	s := mvccHierarchySchema()
+	tg := graph.NewTestGraph(s)
+	defer tg.Close()
+	ctx := context.Background()
+
+	const (
+		alice          schema.ID = 1
+		doc1           schema.ID = 100
+		leafFolder     schema.ID = 10
+		ancestorFolder schema.ID = 11
+	)
+
+	// t=1: alice becomes viewer of ancestorFolder (old)
+	if err := tg.WriteTuple(ctx, "folder", ancestorFolder, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=2: doc1's parent is leafFolder (old)
+	if err := tg.WriteTuple(ctx, "document", doc1, "parent", "folder", leafFolder, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=3: leafFolder's parent is ancestorFolder (newest - this will be min)
+	if err := tg.WriteTuple(ctx, "folder", leafFolder, "parent", "folder", ancestorFolder, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// t=4..13: Unrelated writes to advance time
+	for i := schema.ID(200); i < 210; i++ {
+		if err := tg.WriteTuple(ctx, "folder", i, "viewer", "user", i, ""); err != nil {
+			t.Fatalf("WriteTuple failed: %v", err)
+		}
+	}
+
+	// Check alice's access to doc1 (via leafFolder -> ancestorFolder)
+	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer of doc1")
+	}
+
+	// Window should be [3, 13]: min=3 (newest tuple read - leaf->ancestor), max=13 (replicated time)
+	// Even though the viewer tuple (t=1) and doc parent (t=2) are older,
+	// the leaf->ancestor link (t=3) is the newest thing we read, so it's our min.
+	expectedWindow := graph.NewSnapshotWindow(3, 13)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
 	}
 }

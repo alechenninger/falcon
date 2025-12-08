@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"runtime"
@@ -82,24 +83,38 @@ func (c ScaleConfig) Describe() string {
 		totalFolders, c.FolderDepth, numDocs, c.NumGroups, c.NumUsers, c.TupleCount())
 }
 
-// BenchGraph wraps a Graph with direct population methods for benchmarking.
+// BenchGraph wraps a LocalGraph with direct population methods for benchmarking.
 // This bypasses the store/observer machinery to enable fast bulk loading.
 type BenchGraph struct {
-	*Graph
-	time store.StoreTime // Simple incrementing counter for populating
+	usersets *MultiversionUsersets
+	graph    *LocalGraph
+	time     store.StoreTime // Simple incrementing counter for populating
 }
 
 // NewBenchGraph creates a graph for benchmarking with direct population.
 func NewBenchGraph(s *schema.Schema) *BenchGraph {
-	return &BenchGraph{
-		Graph: New(s),
-		time:  1,
+	usersets := NewMultiversionUsersets(s)
+	// Create a minimal LocalGraph with nil store/stream (won't be used for bench loading)
+	graph := &LocalGraph{
+		usersets: usersets,
+		observer: NoOpGraphObserver{},
 	}
+	return &BenchGraph{
+		usersets: usersets,
+		graph:    graph,
+		time:     1,
+	}
+}
+
+// Check delegates to the underlying LocalGraph.
+func (bg *BenchGraph) Check(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
+	ok, window, err := bg.graph.Check(ctx, subjectType, subjectID, objectType, objectID, relation, MaxSnapshotWindow, nil)
+	return ok, window.Max(), err
 }
 
 // AddDirect adds a tuple directly to the graph's in-memory state.
 func (bg *BenchGraph) AddDirect(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) {
-	bg.applyAdd(objectType, objectID, relation, subjectType, subjectID, subjectRelation, bg.time)
+	bg.usersets.applyAdd(objectType, objectID, relation, subjectType, subjectID, subjectRelation, bg.time)
 	bg.time++
 }
 
@@ -606,7 +621,7 @@ func BenchmarkCheckAtScale(b *testing.B) {
 					i := 0
 					for b.Loop() {
 						q := queries[i%len(queries)]
-						_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+						_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 						i++
 					}
 				})
@@ -618,7 +633,7 @@ func BenchmarkCheckAtScale(b *testing.B) {
 					i := 0
 					for b.Loop() {
 						q := queries[i%len(queries)]
-						_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+						_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 						i++
 					}
 				})
@@ -630,7 +645,7 @@ func BenchmarkCheckAtScale(b *testing.B) {
 					i := 0
 					for b.Loop() {
 						q := queries[i%len(queries)]
-						_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+						_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 						i++
 					}
 				})
@@ -642,7 +657,7 @@ func BenchmarkCheckAtScale(b *testing.B) {
 					i := 0
 					for b.Loop() {
 						q := queries[i%len(queries)]
-						_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+						_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 						i++
 					}
 				})
@@ -654,7 +669,7 @@ func BenchmarkCheckAtScale(b *testing.B) {
 					i := 0
 					for b.Loop() {
 						q := queries[i%len(queries)]
-						_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+						_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 						i++
 					}
 				})
@@ -691,7 +706,7 @@ func BenchmarkCheckDepth(b *testing.B) {
 				i := 0
 				for b.Loop() {
 					q := queries[i%len(queries)]
-					_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+					_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 					i++
 				}
 			} else if len(pg.GroupUserDocs) > 0 {
@@ -699,7 +714,7 @@ func BenchmarkCheckDepth(b *testing.B) {
 				i := 0
 				for b.Loop() {
 					q := queries[i%len(queries)]
-					_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+					_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 					i++
 				}
 			}
@@ -734,7 +749,7 @@ func BenchmarkCheckGroupFanOut(b *testing.B) {
 				i := 0
 				for b.Loop() {
 					q := queries[i%len(queries)]
-					_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+					_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 					i++
 				}
 			}
@@ -823,7 +838,7 @@ func BenchmarkCheckThroughput(b *testing.B) {
 	i := 0
 	for b.Loop() {
 		q := queries[i%len(queries)]
-		_, _, _ = pg.Graph.Check(q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
+		_, _, _ = pg.Graph.Check(context.Background(), q.SubjectType, q.SubjectID, q.ObjectType, q.ObjectID, q.Relation)
 		i++
 	}
 	b.ReportMetric(float64(b.N), "checks")

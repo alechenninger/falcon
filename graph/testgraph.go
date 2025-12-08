@@ -7,51 +7,37 @@ import (
 	"github.com/alechenninger/falcon/store"
 )
 
-// TestGraph wraps a Graph with a MemoryStore and LocalRouter for testing.
-// It mirrors the production setup where the Graph subscribes to a Router,
-// which wraps the underlying Store and ChangeStream.
-//
-// The observer pattern is used for synchronization - writes to the store
-// are applied via the Graph's subscription to the Router, and the
-// SignalingObserver allows waiting for changes to be applied.
+// TestGraph wraps a LocalGraph with a MemoryStore for testing.
+// It provides synchronization via SignalingObserver to wait for
+// writes to be applied.
 type TestGraph struct {
-	*Graph
+	*LocalGraph
 	store    *store.MemoryStore
-	router   *LocalRouter
 	observer *SignalingObserver
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
-// NewTestGraph creates a Graph with a full production-like setup:
-// MemoryStore -> LocalRouter -> Graph subscription.
+// NewTestGraph creates a LocalGraph with a MemoryStore for testing.
 // Call Close() when done to stop the subscription.
 func NewTestGraph(s *schema.Schema) *TestGraph {
 	ctx, cancel := context.WithCancel(context.Background())
 	ms := store.NewMemoryStore()
 	observer := NewSignalingObserver()
 
-	g := New(s).WithObserver(observer)
-
-	// Create LocalGraphClient and Router - MemoryStore serves as both Store and ChangeStream
-	client := NewLocalGraphClient(g)
-	router := NewLocalRouter(client, ms, ms)
-
-	// Wire the Graph with the Router
-	g = g.WithRouter(router)
+	g := NewLocalGraph(s, ms, ms).WithObserver(observer)
 
 	tg := &TestGraph{
-		Graph:    g,
-		store:    ms,
-		router:   router,
-		observer: observer,
-		ctx:      ctx,
-		cancel:   cancel,
+		LocalGraph: g,
+		store:      ms,
+		observer:   observer,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 
-	// Subscribe to the Router (not directly to MemoryStore) - mirrors production
+	// Start the graph (hydrate + subscribe) in background
 	go func() {
-		_ = g.Subscribe(ctx, router)
+		_ = g.Start(ctx)
 	}()
 
 	// Wait for the subscription to be ready before returning
@@ -62,7 +48,7 @@ func NewTestGraph(s *schema.Schema) *TestGraph {
 
 // WriteTuple validates and writes a tuple, waiting for it to be replicated.
 func (tg *TestGraph) WriteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
-	if err := tg.Graph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
+	if err := tg.LocalGraph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
 		return err
 	}
 
@@ -85,7 +71,7 @@ func (tg *TestGraph) WriteTuple(ctx context.Context, objectType schema.TypeName,
 
 // DeleteTuple validates and removes a tuple, waiting for it to be replicated.
 func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
-	if err := tg.Graph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
+	if err := tg.LocalGraph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
 		return err
 	}
 
@@ -111,9 +97,22 @@ func (tg *TestGraph) Store() *store.MemoryStore {
 	return tg.store
 }
 
-// Router returns the LocalRouter.
-func (tg *TestGraph) Router() *LocalRouter {
-	return tg.router
+// Check is a convenience wrapper that calls Check with MaxSnapshotWindow and nil visited.
+// Most tests don't care about the snapshot window or cycle detection setup.
+func (tg *TestGraph) Check(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
+	ok, window, err := tg.LocalGraph.Check(ctx, subjectType, subjectID, objectType, objectID, relation, MaxSnapshotWindow, nil)
+	return ok, window.Max(), err
+}
+
+// CheckAt is a test helper that checks with a specific snapshot window.
+// This is used for MVCC tests that need to verify historical state.
+func (tg *TestGraph) CheckAt(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window *SnapshotWindow) (bool, SnapshotWindow, error) {
+	return tg.LocalGraph.Check(ctx, subjectType, subjectID, objectType, objectID, relation, *window, nil)
+}
+
+// TruncateHistory is a test helper for MVCC garbage collection tests.
+func (tg *TestGraph) TruncateHistory(minTime store.StoreTime) {
+	tg.LocalGraph.usersets.TruncateHistory(minTime)
 }
 
 // Close stops the subscription.
