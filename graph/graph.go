@@ -19,13 +19,9 @@ type RelationCheck struct {
 	Window     SnapshotWindow // Window narrowed based on reading this type's data
 }
 
-// Graph provides authorization check operations on the relationship graph.
-// Implementations manage the underlying data and handle distributed dispatch.
+// Graph provides core authorization check operations.
+// This interface can be implemented by both local and remote graphs.
 type Graph interface {
-	// Start hydrates from the store and subscribes to the change stream.
-	// This blocks until the context is canceled or an error occurs.
-	Start(ctx context.Context) error
-
 	// Check determines if the subject has the relation on the object.
 	// The window constrains what snapshot times can be used; pass MaxSnapshotWindow
 	// for an unconstrained query. The visited slice tracks nodes for cycle
@@ -53,6 +49,16 @@ type Graph interface {
 
 	// Schema returns the authorization schema.
 	Schema() *schema.Schema
+}
+
+// GraphService extends Graph with lifecycle management.
+// Used for in-process graphs that need hydration and change subscription.
+type GraphService interface {
+	Graph
+
+	// Start hydrates from the store and subscribes to the change stream.
+	// This blocks until the context is canceled or an error occurs.
+	Start(ctx context.Context) error
 }
 
 // LocalGraph is a single-node Graph implementation.
@@ -178,5 +184,8 @@ func (g *LocalGraph) ReplicatedTime() store.StoreTime {
 	return g.usersets.ReplicatedTime()
 }
 
-// Compile-time interface check
-var _ Graph = (*LocalGraph)(nil)
+// Compile-time interface checks
+var (
+	_ Graph        = (*LocalGraph)(nil)
+	_ GraphService = (*LocalGraph)(nil)
+)

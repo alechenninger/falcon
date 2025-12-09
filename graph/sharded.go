@@ -383,8 +383,11 @@ func (g *ShardedGraph) SetRemoteShard(id ShardID, shard Graph) {
 	g.shards[id] = shard
 }
 
-// Compile-time interface check
-var _ Graph = (*ShardedGraph)(nil)
+// Compile-time interface checks
+var (
+	_ Graph        = (*ShardedGraph)(nil)
+	_ GraphService = (*ShardedGraph)(nil)
+)
 
 // filteringTupleIterator wraps a TupleIterator and only yields tuples matching the filter.
 type filteringTupleIterator struct {

@@ -140,8 +140,8 @@ func (x *VisitedNode) GetRelation() string {
 	return ""
 }
 
-// CheckRelationRequest is the request to check if a subject has a relation on an object.
-type CheckRelationRequest struct {
+// CheckRequest is the request to check if a subject has a relation on an object.
+type CheckRequest struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	SubjectType string                 `protobuf:"bytes,1,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
 	SubjectId   uint32                 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
@@ -157,20 +157,20 @@ type CheckRelationRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CheckRelationRequest) Reset() {
-	*x = CheckRelationRequest{}
+func (x *CheckRequest) Reset() {
+	*x = CheckRequest{}
 	mi := &file_graph_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CheckRelationRequest) String() string {
+func (x *CheckRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CheckRelationRequest) ProtoMessage() {}
+func (*CheckRequest) ProtoMessage() {}
 
-func (x *CheckRelationRequest) ProtoReflect() protoreflect.Message {
+func (x *CheckRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_graph_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -182,62 +182,62 @@ func (x *CheckRelationRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CheckRelationRequest.ProtoReflect.Descriptor instead.
-func (*CheckRelationRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CheckRequest.ProtoReflect.Descriptor instead.
+func (*CheckRequest) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CheckRelationRequest) GetSubjectType() string {
+func (x *CheckRequest) GetSubjectType() string {
 	if x != nil {
 		return x.SubjectType
 	}
 	return ""
 }
 
-func (x *CheckRelationRequest) GetSubjectId() uint32 {
+func (x *CheckRequest) GetSubjectId() uint32 {
 	if x != nil {
 		return x.SubjectId
 	}
 	return 0
 }
 
-func (x *CheckRelationRequest) GetObjectType() string {
+func (x *CheckRequest) GetObjectType() string {
 	if x != nil {
 		return x.ObjectType
 	}
 	return ""
 }
 
-func (x *CheckRelationRequest) GetObjectId() uint32 {
+func (x *CheckRequest) GetObjectId() uint32 {
 	if x != nil {
 		return x.ObjectId
 	}
 	return 0
 }
 
-func (x *CheckRelationRequest) GetRelation() string {
+func (x *CheckRequest) GetRelation() string {
 	if x != nil {
 		return x.Relation
 	}
 	return ""
 }
 
-func (x *CheckRelationRequest) GetWindow() *SnapshotWindow {
+func (x *CheckRequest) GetWindow() *SnapshotWindow {
 	if x != nil {
 		return x.Window
 	}
 	return nil
 }
 
-func (x *CheckRelationRequest) GetVisited() []*VisitedNode {
+func (x *CheckRequest) GetVisited() []*VisitedNode {
 	if x != nil {
 		return x.Visited
 	}
 	return nil
 }
 
-// CheckRelationResponse is the result of a relation check.
-type CheckRelationResponse struct {
+// CheckResponse is the result of a relation check.
+type CheckResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// allowed is true if the subject has the relation on the object.
 	Allowed bool `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
@@ -248,20 +248,20 @@ type CheckRelationResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CheckRelationResponse) Reset() {
-	*x = CheckRelationResponse{}
+func (x *CheckResponse) Reset() {
+	*x = CheckResponse{}
 	mi := &file_graph_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CheckRelationResponse) String() string {
+func (x *CheckResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CheckRelationResponse) ProtoMessage() {}
+func (*CheckResponse) ProtoMessage() {}
 
-func (x *CheckRelationResponse) ProtoReflect() protoreflect.Message {
+func (x *CheckResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_graph_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -273,50 +273,53 @@ func (x *CheckRelationResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CheckRelationResponse.ProtoReflect.Descriptor instead.
-func (*CheckRelationResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CheckResponse.ProtoReflect.Descriptor instead.
+func (*CheckResponse) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *CheckRelationResponse) GetAllowed() bool {
+func (x *CheckResponse) GetAllowed() bool {
 	if x != nil {
 		return x.Allowed
 	}
 	return false
 }
 
-func (x *CheckRelationResponse) GetWindow() *SnapshotWindow {
+func (x *CheckResponse) GetWindow() *SnapshotWindow {
 	if x != nil {
 		return x.Window
 	}
 	return nil
 }
 
-// ObjectSet represents a set of objects of the same type.
-// The IDs are stored as a serialized roaring bitmap for compression.
-type ObjectSet struct {
+// RelationCheck represents a check against a single object type's relation.
+// Used by CheckUnion to batch multiple checks with independent windows.
+type RelationCheck struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	ObjectType string                 `protobuf:"bytes,1,opt,name=object_type,json=objectType,proto3" json:"object_type,omitempty"`
 	// Serialized roaring bitmap of object IDs.
-	ObjectIds     []byte `protobuf:"bytes,2,opt,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
+	ObjectIds []byte `protobuf:"bytes,2,opt,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
+	Relation  string `protobuf:"bytes,3,opt,name=relation,proto3" json:"relation,omitempty"`
+	// Per-check window, narrowed based on reading this type's data.
+	Window        *SnapshotWindow `protobuf:"bytes,4,opt,name=window,proto3" json:"window,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ObjectSet) Reset() {
-	*x = ObjectSet{}
+func (x *RelationCheck) Reset() {
+	*x = RelationCheck{}
 	mi := &file_graph_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ObjectSet) String() string {
+func (x *RelationCheck) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ObjectSet) ProtoMessage() {}
+func (*RelationCheck) ProtoMessage() {}
 
-func (x *ObjectSet) ProtoReflect() protoreflect.Message {
+func (x *RelationCheck) ProtoReflect() protoreflect.Message {
 	mi := &file_graph_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -328,137 +331,138 @@ func (x *ObjectSet) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ObjectSet.ProtoReflect.Descriptor instead.
-func (*ObjectSet) Descriptor() ([]byte, []int) {
+// Deprecated: Use RelationCheck.ProtoReflect.Descriptor instead.
+func (*RelationCheck) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *ObjectSet) GetObjectType() string {
+func (x *RelationCheck) GetObjectType() string {
 	if x != nil {
 		return x.ObjectType
 	}
 	return ""
 }
 
-func (x *ObjectSet) GetObjectIds() []byte {
+func (x *RelationCheck) GetObjectIds() []byte {
 	if x != nil {
 		return x.ObjectIds
 	}
 	return nil
 }
 
-// BatchCheckRelationRequest checks if a subject has a relation on any of multiple objects.
-// Objects are grouped by type in ObjectSets with compressed bitmap IDs.
-type BatchCheckRelationRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	SubjectType string                 `protobuf:"bytes,1,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
-	SubjectId   uint32                 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
-	// Objects to check, grouped by type. Each ObjectSet contains a bitmap of IDs.
-	Objects       []*ObjectSet    `protobuf:"bytes,3,rep,name=objects,proto3" json:"objects,omitempty"`
-	Relation      string          `protobuf:"bytes,4,opt,name=relation,proto3" json:"relation,omitempty"`
-	Window        *SnapshotWindow `protobuf:"bytes,5,opt,name=window,proto3" json:"window,omitempty"`
-	Visited       []*VisitedNode  `protobuf:"bytes,6,rep,name=visited,proto3" json:"visited,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *BatchCheckRelationRequest) Reset() {
-	*x = BatchCheckRelationRequest{}
-	mi := &file_graph_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BatchCheckRelationRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BatchCheckRelationRequest) ProtoMessage() {}
-
-func (x *BatchCheckRelationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_graph_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BatchCheckRelationRequest.ProtoReflect.Descriptor instead.
-func (*BatchCheckRelationRequest) Descriptor() ([]byte, []int) {
-	return file_graph_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *BatchCheckRelationRequest) GetSubjectType() string {
-	if x != nil {
-		return x.SubjectType
-	}
-	return ""
-}
-
-func (x *BatchCheckRelationRequest) GetSubjectId() uint32 {
-	if x != nil {
-		return x.SubjectId
-	}
-	return 0
-}
-
-func (x *BatchCheckRelationRequest) GetObjects() []*ObjectSet {
-	if x != nil {
-		return x.Objects
-	}
-	return nil
-}
-
-func (x *BatchCheckRelationRequest) GetRelation() string {
+func (x *RelationCheck) GetRelation() string {
 	if x != nil {
 		return x.Relation
 	}
 	return ""
 }
 
-func (x *BatchCheckRelationRequest) GetWindow() *SnapshotWindow {
+func (x *RelationCheck) GetWindow() *SnapshotWindow {
 	if x != nil {
 		return x.Window
 	}
 	return nil
 }
 
-func (x *BatchCheckRelationRequest) GetVisited() []*VisitedNode {
+// CheckUnionRequest checks if a subject has a relation on any of multiple objects.
+// Each RelationCheck has its own snapshot window for independent narrowing.
+type CheckUnionRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	SubjectType string                 `protobuf:"bytes,1,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
+	SubjectId   uint32                 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// Checks to perform, each with its own object type, IDs, relation, and window.
+	Checks []*RelationCheck `protobuf:"bytes,3,rep,name=checks,proto3" json:"checks,omitempty"`
+	// visited contains the nodes already visited in this query traversal.
+	Visited       []*VisitedNode `protobuf:"bytes,4,rep,name=visited,proto3" json:"visited,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckUnionRequest) Reset() {
+	*x = CheckUnionRequest{}
+	mi := &file_graph_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckUnionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckUnionRequest) ProtoMessage() {}
+
+func (x *CheckUnionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_graph_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckUnionRequest.ProtoReflect.Descriptor instead.
+func (*CheckUnionRequest) Descriptor() ([]byte, []int) {
+	return file_graph_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CheckUnionRequest) GetSubjectType() string {
+	if x != nil {
+		return x.SubjectType
+	}
+	return ""
+}
+
+func (x *CheckUnionRequest) GetSubjectId() uint32 {
+	if x != nil {
+		return x.SubjectId
+	}
+	return 0
+}
+
+func (x *CheckUnionRequest) GetChecks() []*RelationCheck {
+	if x != nil {
+		return x.Checks
+	}
+	return nil
+}
+
+func (x *CheckUnionRequest) GetVisited() []*VisitedNode {
 	if x != nil {
 		return x.Visited
 	}
 	return nil
 }
 
-// BatchCheckRelationResponse is the result of a batch relation check.
-type BatchCheckRelationResponse struct {
+// CheckUnionResponse is the result of a union check.
+type CheckUnionResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// allowed is true if the subject has the relation on ANY of the objects.
 	Allowed bool `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
 	// window is the narrowed snapshot window after the check.
+	// If found: window from the successful check.
+	// If not found: tightest window across all checks.
 	Window        *SnapshotWindow `protobuf:"bytes,2,opt,name=window,proto3" json:"window,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *BatchCheckRelationResponse) Reset() {
-	*x = BatchCheckRelationResponse{}
+func (x *CheckUnionResponse) Reset() {
+	*x = CheckUnionResponse{}
 	mi := &file_graph_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *BatchCheckRelationResponse) String() string {
+func (x *CheckUnionResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BatchCheckRelationResponse) ProtoMessage() {}
+func (*CheckUnionResponse) ProtoMessage() {}
 
-func (x *BatchCheckRelationResponse) ProtoReflect() protoreflect.Message {
+func (x *CheckUnionResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_graph_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -470,19 +474,19 @@ func (x *BatchCheckRelationResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BatchCheckRelationResponse.ProtoReflect.Descriptor instead.
-func (*BatchCheckRelationResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use CheckUnionResponse.ProtoReflect.Descriptor instead.
+func (*CheckUnionResponse) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *BatchCheckRelationResponse) GetAllowed() bool {
+func (x *CheckUnionResponse) GetAllowed() bool {
 	if x != nil {
 		return x.Allowed
 	}
 	return false
 }
 
-func (x *BatchCheckRelationResponse) GetWindow() *SnapshotWindow {
+func (x *CheckUnionResponse) GetWindow() *SnapshotWindow {
 	if x != nil {
 		return x.Window
 	}
@@ -501,8 +505,8 @@ const file_graph_proto_rawDesc = "" +
 	"\vobject_type\x18\x01 \x01(\tR\n" +
 	"objectType\x12\x1b\n" +
 	"\tobject_id\x18\x02 \x01(\rR\bobjectId\x12\x1a\n" +
-	"\brelation\x18\x03 \x01(\tR\brelation\"\x9d\x02\n" +
-	"\x14CheckRelationRequest\x12!\n" +
+	"\brelation\x18\x03 \x01(\tR\brelation\"\x95\x02\n" +
+	"\fCheckRequest\x12!\n" +
 	"\fsubject_type\x18\x01 \x01(\tR\vsubjectType\x12\x1d\n" +
 	"\n" +
 	"subject_id\x18\x02 \x01(\rR\tsubjectId\x12\x1f\n" +
@@ -511,29 +515,30 @@ const file_graph_proto_rawDesc = "" +
 	"\tobject_id\x18\x04 \x01(\rR\bobjectId\x12\x1a\n" +
 	"\brelation\x18\x05 \x01(\tR\brelation\x124\n" +
 	"\x06window\x18\x06 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\x123\n" +
-	"\avisited\x18\a \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"g\n" +
-	"\x15CheckRelationResponse\x12\x18\n" +
+	"\avisited\x18\a \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"_\n" +
+	"\rCheckResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x124\n" +
-	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"K\n" +
-	"\tObjectSet\x12\x1f\n" +
+	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"\xa1\x01\n" +
+	"\rRelationCheck\x12\x1f\n" +
 	"\vobject_type\x18\x01 \x01(\tR\n" +
 	"objectType\x12\x1d\n" +
 	"\n" +
-	"object_ids\x18\x02 \x01(\fR\tobjectIds\"\x97\x02\n" +
-	"\x19BatchCheckRelationRequest\x12!\n" +
+	"object_ids\x18\x02 \x01(\fR\tobjectIds\x12\x1a\n" +
+	"\brelation\x18\x03 \x01(\tR\brelation\x124\n" +
+	"\x06window\x18\x04 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"\xbf\x01\n" +
+	"\x11CheckUnionRequest\x12!\n" +
 	"\fsubject_type\x18\x01 \x01(\tR\vsubjectType\x12\x1d\n" +
 	"\n" +
-	"subject_id\x18\x02 \x01(\rR\tsubjectId\x121\n" +
-	"\aobjects\x18\x03 \x03(\v2\x17.falcon.graph.ObjectSetR\aobjects\x12\x1a\n" +
-	"\brelation\x18\x04 \x01(\tR\brelation\x124\n" +
-	"\x06window\x18\x05 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\x123\n" +
-	"\avisited\x18\x06 \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"l\n" +
-	"\x1aBatchCheckRelationResponse\x12\x18\n" +
+	"subject_id\x18\x02 \x01(\rR\tsubjectId\x123\n" +
+	"\x06checks\x18\x03 \x03(\v2\x1b.falcon.graph.RelationCheckR\x06checks\x123\n" +
+	"\avisited\x18\x04 \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"d\n" +
+	"\x12CheckUnionResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x124\n" +
-	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window2\xd1\x01\n" +
-	"\fGraphService\x12X\n" +
-	"\rCheckRelation\x12\".falcon.graph.CheckRelationRequest\x1a#.falcon.graph.CheckRelationResponse\x12g\n" +
-	"\x12BatchCheckRelation\x12'.falcon.graph.BatchCheckRelationRequest\x1a(.falcon.graph.BatchCheckRelationResponseB5Z3github.com/alechenninger/falcon/graph/proto;graphpbb\x06proto3"
+	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window2\xa1\x01\n" +
+	"\fGraphService\x12@\n" +
+	"\x05Check\x12\x1a.falcon.graph.CheckRequest\x1a\x1b.falcon.graph.CheckResponse\x12O\n" +
+	"\n" +
+	"CheckUnion\x12\x1f.falcon.graph.CheckUnionRequest\x1a .falcon.graph.CheckUnionResponseB5Z3github.com/alechenninger/falcon/graph/proto;graphpbb\x06proto3"
 
 var (
 	file_graph_proto_rawDescOnce sync.Once
@@ -549,26 +554,26 @@ func file_graph_proto_rawDescGZIP() []byte {
 
 var file_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_graph_proto_goTypes = []any{
-	(*SnapshotWindow)(nil),             // 0: falcon.graph.SnapshotWindow
-	(*VisitedNode)(nil),                // 1: falcon.graph.VisitedNode
-	(*CheckRelationRequest)(nil),       // 2: falcon.graph.CheckRelationRequest
-	(*CheckRelationResponse)(nil),      // 3: falcon.graph.CheckRelationResponse
-	(*ObjectSet)(nil),                  // 4: falcon.graph.ObjectSet
-	(*BatchCheckRelationRequest)(nil),  // 5: falcon.graph.BatchCheckRelationRequest
-	(*BatchCheckRelationResponse)(nil), // 6: falcon.graph.BatchCheckRelationResponse
+	(*SnapshotWindow)(nil),     // 0: falcon.graph.SnapshotWindow
+	(*VisitedNode)(nil),        // 1: falcon.graph.VisitedNode
+	(*CheckRequest)(nil),       // 2: falcon.graph.CheckRequest
+	(*CheckResponse)(nil),      // 3: falcon.graph.CheckResponse
+	(*RelationCheck)(nil),      // 4: falcon.graph.RelationCheck
+	(*CheckUnionRequest)(nil),  // 5: falcon.graph.CheckUnionRequest
+	(*CheckUnionResponse)(nil), // 6: falcon.graph.CheckUnionResponse
 }
 var file_graph_proto_depIdxs = []int32{
-	0, // 0: falcon.graph.CheckRelationRequest.window:type_name -> falcon.graph.SnapshotWindow
-	1, // 1: falcon.graph.CheckRelationRequest.visited:type_name -> falcon.graph.VisitedNode
-	0, // 2: falcon.graph.CheckRelationResponse.window:type_name -> falcon.graph.SnapshotWindow
-	4, // 3: falcon.graph.BatchCheckRelationRequest.objects:type_name -> falcon.graph.ObjectSet
-	0, // 4: falcon.graph.BatchCheckRelationRequest.window:type_name -> falcon.graph.SnapshotWindow
-	1, // 5: falcon.graph.BatchCheckRelationRequest.visited:type_name -> falcon.graph.VisitedNode
-	0, // 6: falcon.graph.BatchCheckRelationResponse.window:type_name -> falcon.graph.SnapshotWindow
-	2, // 7: falcon.graph.GraphService.CheckRelation:input_type -> falcon.graph.CheckRelationRequest
-	5, // 8: falcon.graph.GraphService.BatchCheckRelation:input_type -> falcon.graph.BatchCheckRelationRequest
-	3, // 9: falcon.graph.GraphService.CheckRelation:output_type -> falcon.graph.CheckRelationResponse
-	6, // 10: falcon.graph.GraphService.BatchCheckRelation:output_type -> falcon.graph.BatchCheckRelationResponse
+	0, // 0: falcon.graph.CheckRequest.window:type_name -> falcon.graph.SnapshotWindow
+	1, // 1: falcon.graph.CheckRequest.visited:type_name -> falcon.graph.VisitedNode
+	0, // 2: falcon.graph.CheckResponse.window:type_name -> falcon.graph.SnapshotWindow
+	0, // 3: falcon.graph.RelationCheck.window:type_name -> falcon.graph.SnapshotWindow
+	4, // 4: falcon.graph.CheckUnionRequest.checks:type_name -> falcon.graph.RelationCheck
+	1, // 5: falcon.graph.CheckUnionRequest.visited:type_name -> falcon.graph.VisitedNode
+	0, // 6: falcon.graph.CheckUnionResponse.window:type_name -> falcon.graph.SnapshotWindow
+	2, // 7: falcon.graph.GraphService.Check:input_type -> falcon.graph.CheckRequest
+	5, // 8: falcon.graph.GraphService.CheckUnion:input_type -> falcon.graph.CheckUnionRequest
+	3, // 9: falcon.graph.GraphService.Check:output_type -> falcon.graph.CheckResponse
+	6, // 10: falcon.graph.GraphService.CheckUnion:output_type -> falcon.graph.CheckUnionResponse
 	9, // [9:11] is the sub-list for method output_type
 	7, // [7:9] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name

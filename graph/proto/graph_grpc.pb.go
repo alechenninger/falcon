@@ -19,8 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GraphService_CheckRelation_FullMethodName      = "/falcon.graph.GraphService/CheckRelation"
-	GraphService_BatchCheckRelation_FullMethodName = "/falcon.graph.GraphService/BatchCheckRelation"
+	GraphService_Check_FullMethodName      = "/falcon.graph.GraphService/Check"
+	GraphService_CheckUnion_FullMethodName = "/falcon.graph.GraphService/CheckUnion"
 )
 
 // GraphServiceClient is the client API for GraphService service.
@@ -28,16 +28,18 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // GraphService provides cross-node graph query operations.
+// These RPCs mirror the Graph interface methods for distributed execution.
 type GraphServiceClient interface {
-	// CheckRelation checks if a subject has a relation on an object within a snapshot window.
+	// Check determines if a subject has a relation on an object within a snapshot window.
 	// This is called when traversing arrows or userset subjects that point to objects
 	// on different shards.
-	CheckRelation(ctx context.Context, in *CheckRelationRequest, opts ...grpc.CallOption) (*CheckRelationResponse, error)
-	// BatchCheckRelation checks if a subject has a relation on any of the given objects.
+	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error)
+	// CheckUnion checks if a subject has a relation on any of the given objects.
 	// This is used for scatter-gather: the caller groups objects by destination node,
 	// then calls this RPC once per node with all relevant objects.
 	// Returns true if the subject has the relation on ANY of the objects (short-circuits).
-	BatchCheckRelation(ctx context.Context, in *BatchCheckRelationRequest, opts ...grpc.CallOption) (*BatchCheckRelationResponse, error)
+	// Each RelationCheck has its own snapshot window for independent narrowing.
+	CheckUnion(ctx context.Context, in *CheckUnionRequest, opts ...grpc.CallOption) (*CheckUnionResponse, error)
 }
 
 type graphServiceClient struct {
@@ -48,20 +50,20 @@ func NewGraphServiceClient(cc grpc.ClientConnInterface) GraphServiceClient {
 	return &graphServiceClient{cc}
 }
 
-func (c *graphServiceClient) CheckRelation(ctx context.Context, in *CheckRelationRequest, opts ...grpc.CallOption) (*CheckRelationResponse, error) {
+func (c *graphServiceClient) Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(CheckRelationResponse)
-	err := c.cc.Invoke(ctx, GraphService_CheckRelation_FullMethodName, in, out, cOpts...)
+	out := new(CheckResponse)
+	err := c.cc.Invoke(ctx, GraphService_Check_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *graphServiceClient) BatchCheckRelation(ctx context.Context, in *BatchCheckRelationRequest, opts ...grpc.CallOption) (*BatchCheckRelationResponse, error) {
+func (c *graphServiceClient) CheckUnion(ctx context.Context, in *CheckUnionRequest, opts ...grpc.CallOption) (*CheckUnionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BatchCheckRelationResponse)
-	err := c.cc.Invoke(ctx, GraphService_BatchCheckRelation_FullMethodName, in, out, cOpts...)
+	out := new(CheckUnionResponse)
+	err := c.cc.Invoke(ctx, GraphService_CheckUnion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,16 +75,18 @@ func (c *graphServiceClient) BatchCheckRelation(ctx context.Context, in *BatchCh
 // for forward compatibility.
 //
 // GraphService provides cross-node graph query operations.
+// These RPCs mirror the Graph interface methods for distributed execution.
 type GraphServiceServer interface {
-	// CheckRelation checks if a subject has a relation on an object within a snapshot window.
+	// Check determines if a subject has a relation on an object within a snapshot window.
 	// This is called when traversing arrows or userset subjects that point to objects
 	// on different shards.
-	CheckRelation(context.Context, *CheckRelationRequest) (*CheckRelationResponse, error)
-	// BatchCheckRelation checks if a subject has a relation on any of the given objects.
+	Check(context.Context, *CheckRequest) (*CheckResponse, error)
+	// CheckUnion checks if a subject has a relation on any of the given objects.
 	// This is used for scatter-gather: the caller groups objects by destination node,
 	// then calls this RPC once per node with all relevant objects.
 	// Returns true if the subject has the relation on ANY of the objects (short-circuits).
-	BatchCheckRelation(context.Context, *BatchCheckRelationRequest) (*BatchCheckRelationResponse, error)
+	// Each RelationCheck has its own snapshot window for independent narrowing.
+	CheckUnion(context.Context, *CheckUnionRequest) (*CheckUnionResponse, error)
 	mustEmbedUnimplementedGraphServiceServer()
 }
 
@@ -93,11 +97,11 @@ type GraphServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedGraphServiceServer struct{}
 
-func (UnimplementedGraphServiceServer) CheckRelation(context.Context, *CheckRelationRequest) (*CheckRelationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckRelation not implemented")
+func (UnimplementedGraphServiceServer) Check(context.Context, *CheckRequest) (*CheckResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Check not implemented")
 }
-func (UnimplementedGraphServiceServer) BatchCheckRelation(context.Context, *BatchCheckRelationRequest) (*BatchCheckRelationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method BatchCheckRelation not implemented")
+func (UnimplementedGraphServiceServer) CheckUnion(context.Context, *CheckUnionRequest) (*CheckUnionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckUnion not implemented")
 }
 func (UnimplementedGraphServiceServer) mustEmbedUnimplementedGraphServiceServer() {}
 func (UnimplementedGraphServiceServer) testEmbeddedByValue()                      {}
@@ -120,38 +124,38 @@ func RegisterGraphServiceServer(s grpc.ServiceRegistrar, srv GraphServiceServer)
 	s.RegisterService(&GraphService_ServiceDesc, srv)
 }
 
-func _GraphService_CheckRelation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CheckRelationRequest)
+func _GraphService_Check_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GraphServiceServer).CheckRelation(ctx, in)
+		return srv.(GraphServiceServer).Check(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GraphService_CheckRelation_FullMethodName,
+		FullMethod: GraphService_Check_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GraphServiceServer).CheckRelation(ctx, req.(*CheckRelationRequest))
+		return srv.(GraphServiceServer).Check(ctx, req.(*CheckRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GraphService_BatchCheckRelation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BatchCheckRelationRequest)
+func _GraphService_CheckUnion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckUnionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GraphServiceServer).BatchCheckRelation(ctx, in)
+		return srv.(GraphServiceServer).CheckUnion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: GraphService_BatchCheckRelation_FullMethodName,
+		FullMethod: GraphService_CheckUnion_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GraphServiceServer).BatchCheckRelation(ctx, req.(*BatchCheckRelationRequest))
+		return srv.(GraphServiceServer).CheckUnion(ctx, req.(*CheckUnionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -164,12 +168,12 @@ var GraphService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*GraphServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CheckRelation",
-			Handler:    _GraphService_CheckRelation_Handler,
+			MethodName: "Check",
+			Handler:    _GraphService_Check_Handler,
 		},
 		{
-			MethodName: "BatchCheckRelation",
-			Handler:    _GraphService_BatchCheckRelation_Handler,
+			MethodName: "CheckUnion",
+			Handler:    _GraphService_CheckUnion_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
