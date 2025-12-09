@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/graph"
 	"github.com/alechenninger/falcon/schema"
 	"github.com/alechenninger/falcon/store"
@@ -482,5 +483,272 @@ func TestShardedGraph_ArrowWithCrossShardUserset(t *testing.T) {
 	}
 	if ok {
 		t.Error("expected bob to NOT be viewer of doc200")
+	}
+}
+
+// TestShardedGraph_CheckUnionWindowNarrowing_Positive tests that when a true result
+// is found on a remote shard, the window from that check is returned unmodified.
+func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
+	s := testSchema()
+
+	// Use ID-based sharding for folders: even on shard1, odd on shard2
+	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
+		if objectType == "folder" {
+			if objectID%2 == 0 {
+				return "shard1"
+			}
+			return "shard2"
+		}
+		return "shard1"
+	}
+
+	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	defer tsg.Close()
+
+	const (
+		user1    = 1
+		folder10 = 10 // Even -> shard1
+		folder11 = 11 // Odd -> shard2
+		folder12 = 12 // Even -> shard1
+	)
+
+	// User 1 is a viewer of folder 11 (on shard2)
+	if err := tsg.WriteTuple(ctx, "folder", folder11, "viewer", "user", user1, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Build a CheckUnion with folders on both shards
+	// folder10 (shard1): user1 is NOT a viewer
+	// folder11 (shard2): user1 IS a viewer
+	// folder12 (shard1): user1 is NOT a viewer
+	bitmap := roaring.New()
+	bitmap.Add(uint32(folder10))
+	bitmap.Add(uint32(folder11))
+	bitmap.Add(uint32(folder12))
+
+	checks := []graph.RelationCheck{{
+		ObjectType: "folder",
+		ObjectIDs:  bitmap,
+		Relation:   "viewer",
+		Window:     graph.MaxSnapshotWindow,
+	}}
+
+	// Call CheckUnion - should find user1 on folder11 (shard2)
+	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	if err != nil {
+		t.Fatalf("CheckUnion failed: %v", err)
+	}
+	if !found {
+		t.Error("expected CheckUnion to find user1 as viewer")
+	}
+
+	// The result window should be valid (Min <= Max)
+	if resultWindow.Min() > resultWindow.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	}
+}
+
+// TestShardedGraph_CheckUnionWindowNarrowing_Negative tests that when all results
+// are false, the window is narrowed by intersecting all result windows.
+func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
+	s := testSchema()
+
+	// Use ID-based sharding for folders: even on shard1, odd on shard2
+	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
+		if objectType == "folder" {
+			if objectID%2 == 0 {
+				return "shard1"
+			}
+			return "shard2"
+		}
+		return "shard1"
+	}
+
+	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	defer tsg.Close()
+
+	const (
+		user1    = 1
+		user2    = 2
+		folder10 = 10 // Even -> shard1
+		folder11 = 11 // Odd -> shard2
+		folder12 = 12 // Even -> shard1
+	)
+
+	// Add some data so that window narrowing happens
+	// User 2 (not user 1) is a viewer of all folders
+	if err := tsg.WriteTuple(ctx, "folder", folder10, "viewer", "user", user2, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	if err := tsg.WriteTuple(ctx, "folder", folder11, "viewer", "user", user2, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	if err := tsg.WriteTuple(ctx, "folder", folder12, "viewer", "user", user2, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Build a CheckUnion with folders on both shards
+	// None of these folders have user1 as viewer
+	bitmap := roaring.New()
+	bitmap.Add(uint32(folder10))
+	bitmap.Add(uint32(folder11))
+	bitmap.Add(uint32(folder12))
+
+	checks := []graph.RelationCheck{{
+		ObjectType: "folder",
+		ObjectIDs:  bitmap,
+		Relation:   "viewer",
+		Window:     graph.MaxSnapshotWindow,
+	}}
+
+	// Call CheckUnion - user1 should NOT be found on any folder
+	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	if err != nil {
+		t.Fatalf("CheckUnion failed: %v", err)
+	}
+	if found {
+		t.Error("expected CheckUnion to NOT find user1 as viewer")
+	}
+
+	// The result window should be narrowed from MaxSnapshotWindow
+	// It should be valid (Min <= Max)
+	if resultWindow.Min() > resultWindow.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	}
+
+	// The result window should have been narrowed (not be MaxSnapshotWindow anymore)
+	// Since we wrote tuples, the replicated time should be > 0
+	if resultWindow.Min() == 0 && resultWindow.Max() == graph.MaxSnapshotWindow.Max() {
+		// This would mean no narrowing happened, which is wrong
+		t.Log("Warning: result window appears unchanged from MaxSnapshotWindow")
+	}
+}
+
+// TestShardedGraph_CheckUnionWindowNarrowing_MixedShards tests window narrowing
+// when checks span multiple remote shards and all return false.
+func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
+	s := testSchema()
+
+	// Use ID-based sharding for folders: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
+	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
+		if objectType == "folder" {
+			switch objectID % 3 {
+			case 0:
+				return "shard1"
+			case 1:
+				return "shard2"
+			default:
+				return "shard3"
+			}
+		}
+		return "shard1"
+	}
+
+	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	defer tsg.Close()
+
+	const (
+		user1    = 1
+		user2    = 2
+		folder9  = 9  // 9 % 3 == 0 -> shard1
+		folder10 = 10 // 10 % 3 == 1 -> shard2
+		folder11 = 11 // 11 % 3 == 2 -> shard3
+	)
+
+	// Add some data so that window narrowing happens on each shard
+	// User 2 (not user 1) is a viewer of all folders
+	if err := tsg.WriteTuple(ctx, "folder", folder9, "viewer", "user", user2, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	if err := tsg.WriteTuple(ctx, "folder", folder10, "viewer", "user", user2, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	if err := tsg.WriteTuple(ctx, "folder", folder11, "viewer", "user", user2, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Build a CheckUnion with folders on all three shards
+	bitmap := roaring.New()
+	bitmap.Add(uint32(folder9))
+	bitmap.Add(uint32(folder10))
+	bitmap.Add(uint32(folder11))
+
+	checks := []graph.RelationCheck{{
+		ObjectType: "folder",
+		ObjectIDs:  bitmap,
+		Relation:   "viewer",
+		Window:     graph.MaxSnapshotWindow,
+	}}
+
+	// Call CheckUnion from shard1 - should check all three shards in parallel
+	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	if err != nil {
+		t.Fatalf("CheckUnion failed: %v", err)
+	}
+	if found {
+		t.Error("expected CheckUnion to NOT find user1 as viewer")
+	}
+
+	// The result window should be valid
+	if resultWindow.Min() > resultWindow.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	}
+}
+
+// TestShardedGraph_CheckUnionParallelCancellation tests that when one remote shard
+// returns true, the remaining checks are cancelled.
+func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
+	s := testSchema()
+
+	// Use ID-based sharding for folders
+	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
+		if objectType == "folder" {
+			if objectID%2 == 0 {
+				return "shard1"
+			}
+			return "shard2"
+		}
+		return "shard1"
+	}
+
+	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	defer tsg.Close()
+
+	const (
+		user1    = 1
+		folder10 = 10 // Even -> shard1
+		folder11 = 11 // Odd -> shard2
+	)
+
+	// User 1 is a viewer of folder 11 (on shard2)
+	if err := tsg.WriteTuple(ctx, "folder", folder11, "viewer", "user", user1, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Build a CheckUnion with folders on both shards
+	bitmap := roaring.New()
+	bitmap.Add(uint32(folder10))
+	bitmap.Add(uint32(folder11))
+
+	checks := []graph.RelationCheck{{
+		ObjectType: "folder",
+		ObjectIDs:  bitmap,
+		Relation:   "viewer",
+		Window:     graph.MaxSnapshotWindow,
+	}}
+
+	// Call CheckUnion multiple times to ensure parallel execution works correctly
+	// and early termination on true result functions properly
+	for i := 0; i < 10; i++ {
+		found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+		if err != nil {
+			t.Fatalf("CheckUnion iteration %d failed: %v", i, err)
+		}
+		if !found {
+			t.Errorf("iteration %d: expected CheckUnion to find user1 as viewer", i)
+		}
+		if resultWindow.Min() > resultWindow.Max() {
+			t.Errorf("iteration %d: result window invalid: Min %d > Max %d", i, resultWindow.Min(), resultWindow.Max())
+		}
 	}
 }

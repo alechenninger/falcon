@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"sync"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/schema"
@@ -141,8 +142,17 @@ func (g *ShardedGraph) Check(ctx context.Context,
 	return remoteShard.Check(ctx, subjectType, subjectID, objectType, objectID, relation, window, visited)
 }
 
+// checkUnionResult holds the result of a remote CheckUnion call.
+type checkUnionResult struct {
+	shardID ShardID
+	found   bool
+	window  SnapshotWindow
+	err     error
+}
+
 // CheckUnion checks if subject is in the union of all the given usersets.
 // Groups checks by shard and dispatches accordingly.
+// Remote shard checks run in parallel and cancel when any returns true.
 func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
 	checks []RelationCheck,
@@ -205,7 +215,7 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	var tightestWindow SnapshotWindow
 	first := true
 
-	// Process local checks first
+	// Process local checks first (fast path - no network)
 	for _, chk := range localChecks {
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
@@ -229,7 +239,23 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 		}
 	}
 
-	// Process remote checks
+	// Process remote checks in parallel
+	if len(remoteChecks) == 0 {
+		if first {
+			return false, SnapshotWindow{}, nil
+		}
+		return false, tightestWindow, nil
+	}
+
+	// Create a cancellable context for remote checks
+	remoteCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Channel to collect results from remote shards
+	results := make(chan checkUnionResult, len(remoteChecks))
+
+	// Launch remote checks in parallel
+	var wg sync.WaitGroup
 	for shardID, shardChecks := range remoteChecks {
 		remoteShard, ok := g.shards[shardID]
 		if !ok {
@@ -237,19 +263,53 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 			continue
 		}
 
-		ok, resultWindow, err := remoteShard.CheckUnion(ctx, subjectType, subjectID, shardChecks, visited)
-		if err != nil {
-			return false, SnapshotWindow{}, err
+		wg.Add(1)
+		go func(sid ShardID, shard Graph, checks []RelationCheck) {
+			defer wg.Done()
+
+			ok, resultWindow, err := shard.CheckUnion(remoteCtx, subjectType, subjectID, checks, visited)
+
+			// Check if context was cancelled before sending
+			select {
+			case <-remoteCtx.Done():
+				// Context cancelled, don't send result
+				return
+			default:
+			}
+
+			results <- checkUnionResult{
+				shardID: sid,
+				found:   ok,
+				window:  resultWindow,
+				err:     err,
+			}
+		}(shardID, remoteShard, shardChecks)
+	}
+
+	// Close results channel when all goroutines complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	for result := range results {
+		if result.err != nil {
+			// Cancel remaining checks on error
+			cancel()
+			return false, SnapshotWindow{}, result.err
 		}
-		if ok {
-			return true, resultWindow, nil
+		if result.found {
+			// Found! Cancel remaining checks and return immediately
+			cancel()
+			return true, result.window, nil
 		}
 		// Track tightest window for "not found" case
 		if first {
-			tightestWindow = resultWindow
+			tightestWindow = result.window
 			first = false
 		} else {
-			tightestWindow = tightestWindow.Intersect(resultWindow)
+			tightestWindow = tightestWindow.Intersect(result.window)
 		}
 	}
 

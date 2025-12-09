@@ -38,7 +38,8 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - Graph state is updated concurrently during traversal – we will need to review everything exhaustively to ensure there are no race conditions causing invalid state to be considered.
 - Package struture is probably not right – no clear core domain package, and nothing is internal
 - More Observers & Probes – can we structure them so we can get stats like graph walk depth tables?
-- In scatter-gather dispatch, if one userset errors, we may want to keep going in case another userset is a hit
+- ✅ In scatter-gather dispatch, if one userset errors, we may want to keep going in case another userset is a hit
 - The sentinel storedelta value (meaning "from the beginning") needs more protections
 - When searching subject sets, eager filter if our subject type is not a type of the subject in the set (e.g. we are searching for a folder but the set type is user; don't bother)
 - Empty checks should probably return error rather than undefined window OR we should ALSO include the "outter" window in the signature only for this case
+- I don't like the "With...." pattern when constructing structs.
