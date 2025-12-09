@@ -60,9 +60,9 @@ func (g *RemoteGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
-) (bool, SnapshotWindow, error) {
+) (CheckResult, error) {
 	if len(checks) == 0 {
-		return false, SnapshotWindow{}, nil
+		return CheckResult{}, nil
 	}
 
 	req := &graphpb.CheckUnionRequest{
@@ -74,10 +74,60 @@ func (g *RemoteGraph) CheckUnion(ctx context.Context,
 
 	resp, err := g.client.CheckUnion(ctx, req)
 	if err != nil {
-		return false, SnapshotWindow{}, err
+		return CheckResult{}, err
 	}
 
-	return resp.Allowed, snapshotWindowFromProto(resp.Window), nil
+	return checkResultFromProto(resp), nil
+}
+
+// checkResultFromProto converts a proto CheckUnionResponse to CheckResult.
+func checkResultFromProto(resp *graphpb.CheckUnionResponse) CheckResult {
+	return CheckResult{
+		Found:         resp.Allowed,
+		DependentSets: dependentSetsFromProto(resp.DependentSets),
+		Window:        snapshotWindowFromProto(resp.Window),
+	}
+}
+
+// dependentSetsToProto converts DependentSets to proto representation.
+func dependentSetsToProto(sets []DependentSet) []*graphpb.DependentSet {
+	if sets == nil {
+		return nil
+	}
+	result := make([]*graphpb.DependentSet, len(sets))
+	for i, s := range sets {
+		var objectIDs []byte
+		if s.ObjectIDs != nil {
+			objectIDs, _ = s.ObjectIDs.ToBytes()
+		}
+		result[i] = &graphpb.DependentSet{
+			ObjectType: string(s.ObjectType),
+			Relation:   string(s.Relation),
+			ObjectIds:  objectIDs,
+		}
+	}
+	return result
+}
+
+// dependentSetsFromProto converts proto DependentSets to Go type.
+func dependentSetsFromProto(sets []*graphpb.DependentSet) []DependentSet {
+	if sets == nil {
+		return nil
+	}
+	result := make([]DependentSet, len(sets))
+	for i, s := range sets {
+		var bitmap *roaring.Bitmap
+		if len(s.ObjectIds) > 0 {
+			bitmap = roaring.New()
+			bitmap.FromBuffer(s.ObjectIds)
+		}
+		result[i] = DependentSet{
+			ObjectType: schema.TypeName(s.ObjectType),
+			Relation:   schema.RelationName(s.Relation),
+			ObjectIDs:  bitmap,
+		}
+	}
+	return result
 }
 
 // Schema returns the authorization schema.

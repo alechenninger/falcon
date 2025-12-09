@@ -166,8 +166,7 @@ func (g *ShardedGraph) Check(ctx context.Context,
 // checkUnionResult holds the result of a remote CheckUnion call.
 type checkUnionResult struct {
 	shardID ShardID
-	found   bool
-	window  SnapshotWindow
+	result  CheckResult
 	err     error
 }
 
@@ -179,13 +178,13 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
-) (bool, SnapshotWindow, error) {
+) (CheckResult, error) {
 	ctx, probe := g.shardedObserver.CheckUnionStarted(ctx, subjectType, subjectID)
 	defer probe.End()
 
 	if len(checks) == 0 {
 		probe.Empty()
-		return false, SnapshotWindow{}, nil
+		return CheckResult{}, nil
 	}
 
 	// Partition checks by shard
@@ -250,11 +249,22 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
 				chk.Window, visited)
 			if err != nil {
-				return false, chk.Window, err
+				return CheckResult{Window: chk.Window}, err
 			}
 			if ok {
 				probe.Result(true, resultWindow)
-				return true, resultWindow, nil
+				// Found: return single matching object
+				matchBitmap := roaring.New()
+				matchBitmap.Add(uint32(objectID))
+				return CheckResult{
+					Found: true,
+					DependentSets: []DependentSet{{
+						ObjectType: chk.ObjectType,
+						Relation:   chk.Relation,
+						ObjectIDs:  matchBitmap,
+					}},
+					Window: resultWindow,
+				}, nil
 			}
 			// Track tightest window for "not found" case
 			if first {
@@ -270,10 +280,10 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	if len(remoteChecks) == 0 {
 		if first {
 			probe.Empty()
-			return false, SnapshotWindow{}, nil
+			return CheckResult{}, nil
 		}
 		probe.Result(false, tightestWindow)
-		return false, tightestWindow, nil
+		return buildNotFoundResult(checks, tightestWindow), nil
 	}
 
 	// Create a cancellable context for remote checks
@@ -297,7 +307,7 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 		go func(sid ShardID, shard Graph, checks []RelationCheck) {
 			defer wg.Done()
 
-			ok, resultWindow, err := shard.CheckUnion(remoteCtx, subjectType, subjectID, checks, visited)
+			result, err := shard.CheckUnion(remoteCtx, subjectType, subjectID, checks, visited)
 
 			// Check if context was cancelled before sending
 			select {
@@ -309,8 +319,7 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 
 			results <- checkUnionResult{
 				shardID: sid,
-				found:   ok,
-				window:  resultWindow,
+				result:  result,
 				err:     err,
 			}
 		}(shardID, remoteShard, shardChecks)
@@ -333,35 +342,55 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 			failedShards = append(failedShards, result.shardID)
 			continue
 		}
-		probe.RemoteShardResult(result.shardID, result.found, result.window)
-		if result.found {
+		probe.RemoteShardResult(result.shardID, result.result.Found, result.result.Window)
+		if result.result.Found {
 			// Found! Cancel remaining checks and return immediately
 			cancel()
-			probe.Result(true, result.window)
-			return true, result.window, nil
+			probe.Result(true, result.result.Window)
+			return result.result, nil
 		}
 		// Track tightest window for "not found" case
 		if first {
-			tightestWindow = result.window
+			tightestWindow = result.result.Window
 			first = false
 		} else {
-			tightestWindow = tightestWindow.Intersect(result.window)
+			tightestWindow = tightestWindow.Intersect(result.result.Window)
 		}
 	}
 
 	// Check if we had any errors
 	if len(failedShards) > 0 {
 		probe.Inconclusive(failedShards)
-		return false, SnapshotWindow{}, fmt.Errorf("check inconclusive: shards failed: %v", failedShards)
+		return CheckResult{}, fmt.Errorf("check inconclusive: shards failed: %v", failedShards)
 	}
 
 	if first {
 		// No checks were performed (all empty)
 		probe.Empty()
-		return false, SnapshotWindow{}, nil
+		return CheckResult{}, nil
 	}
 	probe.Result(false, tightestWindow)
-	return false, tightestWindow, nil
+	return buildNotFoundResult(checks, tightestWindow), nil
+}
+
+// buildNotFoundResult creates a CheckResult for the "not found" case,
+// referencing all input checks as relevant.
+func buildNotFoundResult(checks []RelationCheck, window SnapshotWindow) CheckResult {
+	dependentSets := make([]DependentSet, 0, len(checks))
+	for _, chk := range checks {
+		if chk.ObjectIDs != nil && !chk.ObjectIDs.IsEmpty() {
+			dependentSets = append(dependentSets, DependentSet{
+				ObjectType: chk.ObjectType,
+				Relation:   chk.Relation,
+				ObjectIDs:  nil, // nil = "all objects from input check"
+			})
+		}
+	}
+	return CheckResult{
+		Found:         false,
+		DependentSets: dependentSets,
+		Window:        window,
+	}
 }
 
 // ValidateTuple checks if a tuple is valid according to the schema.

@@ -51,7 +51,7 @@ func (s *GraphServer) CheckUnion(ctx context.Context, req *graphpb.CheckUnionReq
 	}
 	visited := visitedKeysFromProto(req.Visited)
 
-	allowed, resultWindow, err := s.graph.CheckUnion(ctx,
+	result, err := s.graph.CheckUnion(ctx,
 		schema.TypeName(req.SubjectType),
 		schema.ID(req.SubjectId),
 		checks,
@@ -62,8 +62,9 @@ func (s *GraphServer) CheckUnion(ctx context.Context, req *graphpb.CheckUnionReq
 	}
 
 	return &graphpb.CheckUnionResponse{
-		Allowed: allowed,
-		Window:  snapshotWindowToProto(resultWindow),
+		Allowed:       result.Found,
+		Window:        snapshotWindowToProto(result.Window),
+		DependentSets: dependentSetsToProto(result.DependentSets),
 	}, nil
 }
 

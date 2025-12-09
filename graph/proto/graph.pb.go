@@ -436,6 +436,70 @@ func (x *CheckUnionRequest) GetVisited() []*VisitedNode {
 	return nil
 }
 
+// DependentSet identifies objects that were relevant to a check result.
+// Used for provenance tracking in snapshot window narrowing.
+type DependentSet struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	ObjectType string                 `protobuf:"bytes,1,opt,name=object_type,json=objectType,proto3" json:"object_type,omitempty"`
+	Relation   string                 `protobuf:"bytes,2,opt,name=relation,proto3" json:"relation,omitempty"`
+	// Serialized roaring bitmap of object IDs that were relevant.
+	// If empty, means "all objects from the corresponding input check" (optimization).
+	ObjectIds     []byte `protobuf:"bytes,3,opt,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DependentSet) Reset() {
+	*x = DependentSet{}
+	mi := &file_graph_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DependentSet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DependentSet) ProtoMessage() {}
+
+func (x *DependentSet) ProtoReflect() protoreflect.Message {
+	mi := &file_graph_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DependentSet.ProtoReflect.Descriptor instead.
+func (*DependentSet) Descriptor() ([]byte, []int) {
+	return file_graph_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DependentSet) GetObjectType() string {
+	if x != nil {
+		return x.ObjectType
+	}
+	return ""
+}
+
+func (x *DependentSet) GetRelation() string {
+	if x != nil {
+		return x.Relation
+	}
+	return ""
+}
+
+func (x *DependentSet) GetObjectIds() []byte {
+	if x != nil {
+		return x.ObjectIds
+	}
+	return nil
+}
+
 // CheckUnionResponse is the result of a union check.
 type CheckUnionResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -444,14 +508,18 @@ type CheckUnionResponse struct {
 	// window is the narrowed snapshot window after the check.
 	// If found: window from the successful check.
 	// If not found: tightest window across all checks.
-	Window        *SnapshotWindow `protobuf:"bytes,2,opt,name=window,proto3" json:"window,omitempty"`
+	Window *SnapshotWindow `protobuf:"bytes,2,opt,name=window,proto3" json:"window,omitempty"`
+	// dependent_sets identifies which object sets were relevant to the decision.
+	// For found: single set with the matching object ID.
+	// For not found: sets referencing all input checks (object_ids empty = all from input).
+	DependentSets []*DependentSet `protobuf:"bytes,3,rep,name=dependent_sets,json=dependentSets,proto3" json:"dependent_sets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckUnionResponse) Reset() {
 	*x = CheckUnionResponse{}
-	mi := &file_graph_proto_msgTypes[6]
+	mi := &file_graph_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -463,7 +531,7 @@ func (x *CheckUnionResponse) String() string {
 func (*CheckUnionResponse) ProtoMessage() {}
 
 func (x *CheckUnionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_graph_proto_msgTypes[6]
+	mi := &file_graph_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -476,7 +544,7 @@ func (x *CheckUnionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckUnionResponse.ProtoReflect.Descriptor instead.
 func (*CheckUnionResponse) Descriptor() ([]byte, []int) {
-	return file_graph_proto_rawDescGZIP(), []int{6}
+	return file_graph_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CheckUnionResponse) GetAllowed() bool {
@@ -489,6 +557,13 @@ func (x *CheckUnionResponse) GetAllowed() bool {
 func (x *CheckUnionResponse) GetWindow() *SnapshotWindow {
 	if x != nil {
 		return x.Window
+	}
+	return nil
+}
+
+func (x *CheckUnionResponse) GetDependentSets() []*DependentSet {
+	if x != nil {
+		return x.DependentSets
 	}
 	return nil
 }
@@ -531,10 +606,17 @@ const file_graph_proto_rawDesc = "" +
 	"\n" +
 	"subject_id\x18\x02 \x01(\rR\tsubjectId\x123\n" +
 	"\x06checks\x18\x03 \x03(\v2\x1b.falcon.graph.RelationCheckR\x06checks\x123\n" +
-	"\avisited\x18\x04 \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"d\n" +
+	"\avisited\x18\x04 \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"j\n" +
+	"\fDependentSet\x12\x1f\n" +
+	"\vobject_type\x18\x01 \x01(\tR\n" +
+	"objectType\x12\x1a\n" +
+	"\brelation\x18\x02 \x01(\tR\brelation\x12\x1d\n" +
+	"\n" +
+	"object_ids\x18\x03 \x01(\fR\tobjectIds\"\xa7\x01\n" +
 	"\x12CheckUnionResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x124\n" +
-	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window2\xa1\x01\n" +
+	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\x12A\n" +
+	"\x0edependent_sets\x18\x03 \x03(\v2\x1a.falcon.graph.DependentSetR\rdependentSets2\xa1\x01\n" +
 	"\fGraphService\x12@\n" +
 	"\x05Check\x12\x1a.falcon.graph.CheckRequest\x1a\x1b.falcon.graph.CheckResponse\x12O\n" +
 	"\n" +
@@ -552,7 +634,7 @@ func file_graph_proto_rawDescGZIP() []byte {
 	return file_graph_proto_rawDescData
 }
 
-var file_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_graph_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_graph_proto_goTypes = []any{
 	(*SnapshotWindow)(nil),     // 0: falcon.graph.SnapshotWindow
 	(*VisitedNode)(nil),        // 1: falcon.graph.VisitedNode
@@ -560,25 +642,27 @@ var file_graph_proto_goTypes = []any{
 	(*CheckResponse)(nil),      // 3: falcon.graph.CheckResponse
 	(*RelationCheck)(nil),      // 4: falcon.graph.RelationCheck
 	(*CheckUnionRequest)(nil),  // 5: falcon.graph.CheckUnionRequest
-	(*CheckUnionResponse)(nil), // 6: falcon.graph.CheckUnionResponse
+	(*DependentSet)(nil),       // 6: falcon.graph.DependentSet
+	(*CheckUnionResponse)(nil), // 7: falcon.graph.CheckUnionResponse
 }
 var file_graph_proto_depIdxs = []int32{
-	0, // 0: falcon.graph.CheckRequest.window:type_name -> falcon.graph.SnapshotWindow
-	1, // 1: falcon.graph.CheckRequest.visited:type_name -> falcon.graph.VisitedNode
-	0, // 2: falcon.graph.CheckResponse.window:type_name -> falcon.graph.SnapshotWindow
-	0, // 3: falcon.graph.RelationCheck.window:type_name -> falcon.graph.SnapshotWindow
-	4, // 4: falcon.graph.CheckUnionRequest.checks:type_name -> falcon.graph.RelationCheck
-	1, // 5: falcon.graph.CheckUnionRequest.visited:type_name -> falcon.graph.VisitedNode
-	0, // 6: falcon.graph.CheckUnionResponse.window:type_name -> falcon.graph.SnapshotWindow
-	2, // 7: falcon.graph.GraphService.Check:input_type -> falcon.graph.CheckRequest
-	5, // 8: falcon.graph.GraphService.CheckUnion:input_type -> falcon.graph.CheckUnionRequest
-	3, // 9: falcon.graph.GraphService.Check:output_type -> falcon.graph.CheckResponse
-	6, // 10: falcon.graph.GraphService.CheckUnion:output_type -> falcon.graph.CheckUnionResponse
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	0,  // 0: falcon.graph.CheckRequest.window:type_name -> falcon.graph.SnapshotWindow
+	1,  // 1: falcon.graph.CheckRequest.visited:type_name -> falcon.graph.VisitedNode
+	0,  // 2: falcon.graph.CheckResponse.window:type_name -> falcon.graph.SnapshotWindow
+	0,  // 3: falcon.graph.RelationCheck.window:type_name -> falcon.graph.SnapshotWindow
+	4,  // 4: falcon.graph.CheckUnionRequest.checks:type_name -> falcon.graph.RelationCheck
+	1,  // 5: falcon.graph.CheckUnionRequest.visited:type_name -> falcon.graph.VisitedNode
+	0,  // 6: falcon.graph.CheckUnionResponse.window:type_name -> falcon.graph.SnapshotWindow
+	6,  // 7: falcon.graph.CheckUnionResponse.dependent_sets:type_name -> falcon.graph.DependentSet
+	2,  // 8: falcon.graph.GraphService.Check:input_type -> falcon.graph.CheckRequest
+	5,  // 9: falcon.graph.GraphService.CheckUnion:input_type -> falcon.graph.CheckUnionRequest
+	3,  // 10: falcon.graph.GraphService.Check:output_type -> falcon.graph.CheckResponse
+	7,  // 11: falcon.graph.GraphService.CheckUnion:output_type -> falcon.graph.CheckUnionResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_graph_proto_init() }
@@ -592,7 +676,7 @@ func file_graph_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_graph_proto_rawDesc), len(file_graph_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

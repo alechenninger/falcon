@@ -151,31 +151,31 @@ func TestRemoteGraph_CheckUnion(t *testing.T) {
 	}}
 
 	// CheckUnion via remote - should find user1 on folder11
-	ok, resultWindow, err := remote.CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := remote.CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if !ok {
+	if !result.Found {
 		t.Error("expected CheckUnion to find user1 as viewer")
 	}
 	// Window should be narrowed to the single tuple's time [1, 1]
 	expectedWindow := graph.NewSnapshotWindow(1, 1)
-	if resultWindow != expectedWindow {
-		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
+	if result.Window != expectedWindow {
+		t.Errorf("expected window %v, got %v", expectedWindow, result.Window)
 	}
 
 	// CheckUnion via remote - user2 should NOT be found
-	ok, resultWindow, err = remote.CheckUnion(ctx, "user", user2, checks, nil)
+	result, err = remote.CheckUnion(ctx, "user", user2, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if ok {
+	if result.Found {
 		t.Error("expected CheckUnion to NOT find user2 as viewer")
 	}
 	// Window should be [1, 1]: we accessed the versioned set at time 1 (even though user2 wasn't in it)
 	expectedNotFound := graph.NewSnapshotWindow(1, 1)
-	if resultWindow != expectedNotFound {
-		t.Errorf("expected window %v, got %v", expectedNotFound, resultWindow)
+	if result.Window != expectedNotFound {
+		t.Errorf("expected window %v, got %v", expectedNotFound, result.Window)
 	}
 }
 
@@ -294,11 +294,11 @@ func TestRemoteGraph_CheckUnionEmpty(t *testing.T) {
 	remote := graph.NewRemoteGraph(client, s)
 
 	// CheckUnion with empty checks
-	ok, _, err := remote.CheckUnion(ctx, "user", 1, nil, nil)
+	result, err := remote.CheckUnion(ctx, "user", 1, nil, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if ok {
+	if result.Found {
 		t.Error("expected CheckUnion with empty checks to return false")
 	}
 }

@@ -536,17 +536,17 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 	}}
 
 	// Call CheckUnion - should find user1 on folder11 (shard2)
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if !found {
+	if !result.Found {
 		t.Error("expected CheckUnion to find user1 as viewer")
 	}
 
 	// The result window should be valid (Min <= Max)
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 }
 
@@ -604,23 +604,23 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 	}}
 
 	// Call CheckUnion - user1 should NOT be found on any folder
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if found {
+	if result.Found {
 		t.Error("expected CheckUnion to NOT find user1 as viewer")
 	}
 
 	// The result window should be narrowed from MaxSnapshotWindow
 	// It should be valid (Min <= Max)
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 
 	// The result window should have been narrowed (not be MaxSnapshotWindow anymore)
 	// Since we wrote tuples, the replicated time should be > 0
-	if resultWindow.Min() == 0 && resultWindow.Max() == graph.MaxSnapshotWindow.Max() {
+	if result.Window.Min() == 0 && result.Window.Max() == graph.MaxSnapshotWindow.Max() {
 		// This would mean no narrowing happened, which is wrong
 		t.Log("Warning: result window appears unchanged from MaxSnapshotWindow")
 	}
@@ -683,17 +683,17 @@ func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 	}}
 
 	// Call CheckUnion from shard1 - should check all three shards in parallel
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if found {
+	if result.Found {
 		t.Error("expected CheckUnion to NOT find user1 as viewer")
 	}
 
 	// The result window should be valid
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 }
 
@@ -746,27 +746,27 @@ func TestShardedGraph_CheckUnionWindowNarrowing_LocalOnly(t *testing.T) {
 
 	// Call CheckUnion - user1 should NOT be found on any folder
 	// All checks are local (no remote shards)
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if found {
+	if result.Found {
 		t.Error("expected CheckUnion to NOT find user1 as viewer")
 	}
 
 	// The result window should be valid (Min <= Max)
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 
 	// The window should be narrowed - Max should be at most the replicated time
 	replicatedTime := tsg.Shard("shard1").ReplicatedTime()
-	if resultWindow.Max() > replicatedTime {
-		t.Errorf("result window Max %d should be <= replicated time %d", resultWindow.Max(), replicatedTime)
+	if result.Window.Max() > replicatedTime {
+		t.Errorf("result window Max %d should be <= replicated time %d", result.Window.Max(), replicatedTime)
 	}
 
 	// Min should be > 0 since we wrote tuples (window narrowed based on data access)
-	if resultWindow.Min() == 0 {
+	if result.Window.Min() == 0 {
 		t.Error("expected result window Min to be narrowed (> 0) after accessing data")
 	}
 }
@@ -819,17 +819,17 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Positive(t *testing.T
 	}}
 
 	// Call CheckUnion from shard1 - checks go to shard2 and shard3 in parallel
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if !found {
+	if !result.Found {
 		t.Error("expected CheckUnion to find user1 as viewer")
 	}
 
 	// The result window should be valid
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 }
 
@@ -893,17 +893,17 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 
 	// Call CheckUnion from shard1 - checks go to shard2 and shard3 in parallel
 	// user1 should NOT be found on any folder
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
-	if found {
+	if result.Found {
 		t.Error("expected CheckUnion to NOT find user1 as viewer")
 	}
 
 	// The result window should be valid (Min <= Max)
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 
 	// The window should be narrowed - Max should be at most the min of replicated times from both shards
@@ -913,12 +913,12 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 	if replicatedTime3 < minReplicatedTime {
 		minReplicatedTime = replicatedTime3
 	}
-	if resultWindow.Max() > minReplicatedTime {
-		t.Errorf("result window Max %d should be <= min replicated time %d", resultWindow.Max(), minReplicatedTime)
+	if result.Window.Max() > minReplicatedTime {
+		t.Errorf("result window Max %d should be <= min replicated time %d", result.Window.Max(), minReplicatedTime)
 	}
 
 	// Min should be > 0 since we wrote tuples (window narrowed based on data access)
-	if resultWindow.Min() == 0 {
+	if result.Window.Min() == 0 {
 		t.Error("expected result window Min to be narrowed (> 0) after accessing data")
 	}
 }
@@ -968,15 +968,15 @@ func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 	// Call CheckUnion multiple times to ensure parallel execution works correctly
 	// and early termination on true result functions properly
 	for i := 0; i < 10; i++ {
-		found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+		result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 		if err != nil {
 			t.Fatalf("CheckUnion iteration %d failed: %v", i, err)
 		}
-		if !found {
+		if !result.Found {
 			t.Errorf("iteration %d: expected CheckUnion to find user1 as viewer", i)
 		}
-		if resultWindow.Min() > resultWindow.Max() {
-			t.Errorf("iteration %d: result window invalid: Min %d > Max %d", i, resultWindow.Min(), resultWindow.Max())
+		if result.Window.Min() > result.Window.Max() {
+			t.Errorf("iteration %d: result window invalid: Min %d > Max %d", i, result.Window.Min(), result.Window.Max())
 		}
 	}
 }
@@ -993,9 +993,9 @@ func (f *FailingGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
 	checks []graph.RelationCheck,
 	visited []graph.VisitedKey,
-) (bool, graph.SnapshotWindow, error) {
+) (graph.CheckResult, error) {
 	if f.CheckUnionErr != nil {
-		return false, graph.SnapshotWindow{}, f.CheckUnionErr
+		return graph.CheckResult{}, f.CheckUnionErr
 	}
 	return f.Graph.CheckUnion(ctx, subjectType, subjectID, checks, visited)
 }
@@ -1046,11 +1046,11 @@ func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 
 	// Call CheckUnion - shard1 returns false, shard2 errors
 	// Should return inconclusive error
-	found, _, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err == nil {
 		t.Fatal("expected error from CheckUnion when shard fails")
 	}
-	if found {
+	if result.Found {
 		t.Error("expected found to be false when inconclusive")
 	}
 	if !strings.Contains(err.Error(), "inconclusive") {
@@ -1115,11 +1115,11 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 	}}
 
 	// Call CheckUnion - both remote shards error
-	found, _, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err == nil {
 		t.Fatal("expected error from CheckUnion when all shards fail")
 	}
-	if found {
+	if result.Found {
 		t.Error("expected found to be false when inconclusive")
 	}
 	if !strings.Contains(err.Error(), "inconclusive") {
@@ -1182,15 +1182,15 @@ func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 
 	// Call CheckUnion - shard1 returns true (found), shard2 errors
 	// Should return true and no error (short-circuit)
-	found, resultWindow, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err != nil {
 		t.Fatalf("expected no error when found on another shard, got: %v", err)
 	}
-	if !found {
+	if !result.Found {
 		t.Error("expected found to be true")
 	}
-	if resultWindow.Min() > resultWindow.Max() {
-		t.Errorf("result window invalid: Min %d > Max %d", resultWindow.Min(), resultWindow.Max())
+	if result.Window.Min() > result.Window.Max() {
+		t.Errorf("result window invalid: Min %d > Max %d", result.Window.Min(), result.Window.Max())
 	}
 }
 
@@ -1243,11 +1243,11 @@ func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 	}}
 
 	// Call CheckUnion - shard2 returns false, shard3 errors
-	found, _, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
 	if err == nil {
 		t.Fatal("expected error from CheckUnion when some shards fail")
 	}
-	if found {
+	if result.Found {
 		t.Error("expected found to be false when inconclusive")
 	}
 	if !strings.Contains(err.Error(), "inconclusive") {

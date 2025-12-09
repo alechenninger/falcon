@@ -167,7 +167,8 @@ func checkDirectAndUserset(
 
 	// Check if subject is in the union of all userset subjects
 	visitedSlice := visitedMapToSlice(visited)
-	return graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
+	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
+	return result.Found, result.Window, err
 }
 
 // checkArrow evaluates a tuple-to-userset (arrow) operation.
@@ -238,7 +239,8 @@ func checkArrow(
 
 	// Check if subject has relation on any of the target objects
 	visitedSlice := visitedMapToSlice(visited)
-	return graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
+	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
+	return result.Found, result.Window, err
 }
 
 // visitedMapToSlice converts visited map to slice for interface calls.

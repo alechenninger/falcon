@@ -181,6 +181,8 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 	}
 
 	// Now continue walking back to find the oldest time with the same answer.
+	// Our causal dependency in this case depends not on the entire set, but on this specific subject.
+
 	// historyIdx is the index we stopped at (or len(history) if we used head/headUndo).
 	oldestTime := resultTime
 	currentTime := resultTime

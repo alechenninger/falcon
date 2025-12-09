@@ -19,6 +19,24 @@ type RelationCheck struct {
 	Window     SnapshotWindow // Window narrowed based on reading this type's data
 }
 
+// DependentSet identifies objects that were relevant to a check result.
+type DependentSet struct {
+	ObjectType schema.TypeName
+	Relation   schema.RelationName
+
+	// ObjectIDs identifies the specific objects that mattered.
+	// If nil, means "all objects from the corresponding input check" (optimization).
+	// If non-nil, the specific subset (e.g., single matching ID for union positive).
+	ObjectIDs *roaring.Bitmap
+}
+
+// CheckResult represents the outcome of a check with provenance information.
+type CheckResult struct {
+	Found         bool
+	DependentSets []DependentSet
+	Window        SnapshotWindow // combined window for the result
+}
+
 // Graph provides core authorization check operations.
 // This interface can be implemented by both local and remote graphs.
 type Graph interface {
@@ -38,14 +56,15 @@ type Graph interface {
 	// Returns true if subject has the relation on ANY of the objects across all checks.
 	// Each RelationCheck has its own window, allowing independent narrowing per type.
 	//
-	// Return semantics:
-	//   - Found: returns window from the successful check
-	//   - Not found: returns tightest window across all checks (max of mins, min of maxes)
+	// The returned CheckResult includes:
+	//   - Found: whether subject was found in any userset
+	//   - DependentSets: which object sets were relevant to the decision
+	//   - Window: combined snapshot window for the result
 	CheckUnion(ctx context.Context,
 		subjectType schema.TypeName, subjectID schema.ID,
 		checks []RelationCheck,
 		visited []VisitedKey,
-	) (bool, SnapshotWindow, error)
+	) (CheckResult, error)
 
 	// Schema returns the authorization schema.
 	Schema() *schema.Schema
@@ -132,9 +151,9 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
-) (bool, SnapshotWindow, error) {
+) (CheckResult, error) {
 	if len(checks) == 0 {
-		return false, SnapshotWindow{}, nil
+		return CheckResult{}, nil
 	}
 
 	var tightestWindow SnapshotWindow
@@ -152,10 +171,21 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
 				chk.Window, visited)
 			if err != nil {
-				return false, chk.Window, err
+				return CheckResult{Window: chk.Window}, err
 			}
 			if ok {
-				return true, resultWindow, nil
+				// Found: return single matching object
+				matchBitmap := roaring.New()
+				matchBitmap.Add(uint32(objectID))
+				return CheckResult{
+					Found: true,
+					DependentSets: []DependentSet{{
+						ObjectType: chk.ObjectType,
+						Relation:   chk.Relation,
+						ObjectIDs:  matchBitmap,
+					}},
+					Window: resultWindow,
+				}, nil
 			}
 			// Track tightest window for "not found" case
 			if first {
@@ -169,9 +199,25 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 
 	if first {
 		// No checks were performed (all empty)
-		return false, SnapshotWindow{}, nil
+		return CheckResult{}, nil
 	}
-	return false, tightestWindow, nil
+
+	// Not found: all input checks were relevant (nil ObjectIDs = reference to input)
+	dependentSets := make([]DependentSet, 0, len(checks))
+	for _, chk := range checks {
+		if chk.ObjectIDs != nil && !chk.ObjectIDs.IsEmpty() {
+			dependentSets = append(dependentSets, DependentSet{
+				ObjectType: chk.ObjectType,
+				Relation:   chk.Relation,
+				ObjectIDs:  nil, // nil = "all objects from input check"
+			})
+		}
+	}
+	return CheckResult{
+		Found:         false,
+		DependentSets: dependentSets,
+		Window:        tightestWindow,
+	}, nil
 }
 
 // ValidateTuple checks if a tuple is valid according to the schema.

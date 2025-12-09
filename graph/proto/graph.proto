@@ -83,6 +83,16 @@ message CheckUnionRequest {
   repeated VisitedNode visited = 4;
 }
 
+// DependentSet identifies objects that were relevant to a check result.
+// Used for provenance tracking in snapshot window narrowing.
+message DependentSet {
+  string object_type = 1;
+  string relation = 2;
+  // Serialized roaring bitmap of object IDs that were relevant.
+  // If empty, means "all objects from the corresponding input check" (optimization).
+  bytes object_ids = 3;
+}
+
 // CheckUnionResponse is the result of a union check.
 message CheckUnionResponse {
   // allowed is true if the subject has the relation on ANY of the objects.
@@ -91,4 +101,8 @@ message CheckUnionResponse {
   // If found: window from the successful check.
   // If not found: tightest window across all checks.
   SnapshotWindow window = 2;
+  // dependent_sets identifies which object sets were relevant to the decision.
+  // For found: single set with the matching object ID.
+  // For not found: sets referencing all input checks (object_ids empty = all from input).
+  repeated DependentSet dependent_sets = 3;
 }
