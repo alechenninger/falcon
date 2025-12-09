@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/alechenninger/falcon/store"
@@ -25,6 +26,11 @@ func (w SnapshotWindow) isMaxWindow() bool {
 // SnapshotWindow represents the time range for a consistent snapshot read.
 // As we traverse the graph, we narrow the window by raising Min when we
 // pick states from tuples, ensuring all reads are from a consistent snapshot.
+// Used this way, the window represents the snapshots in which we would get the
+// same answer. It ensures causal consistency
+// (through constraints on what versions queries are limited to see),
+// while also lazily assigning a specific, "effective" snapshot
+// (by giving the range of what would still be causally consistent).
 //
 // Internally, Min is stored as a delta from Max to save memory (4 bytes vs 8).
 // Since Min <= Max, the delta is always non-negative.
@@ -105,6 +111,11 @@ func (w SnapshotWindow) CanUse(stateTime store.StoreTime) bool {
 // This is always true for properly constructed windows.
 func (w SnapshotWindow) IsValid() bool {
 	return w.Min() <= w.max
+}
+
+// String returns a string representation showing the actual Min and Max values.
+func (w SnapshotWindow) String() string {
+	return fmt.Sprintf("SnapshotWindow{Min: %d, Max: %d}", w.Min(), w.Max())
 }
 
 // Intersect returns the tightest window that satisfies both windows.
