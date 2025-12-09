@@ -350,14 +350,16 @@ func TestVersionedSet_HeadTimeQuery(t *testing.T) {
 	// Query at exactly headTime should match HEAD state
 	headTime := vs.HeadTime()
 
+	// ID 1 was added at 10, unchanged since - oldest valid time is 10
 	found1, stateTime := vs.ContainsWithin(1, headTime)
-	if !found1 || stateTime != headTime {
-		t.Errorf("ContainsWithin(1, headTime) = (%v, %d), want (true, %d)", found1, stateTime, headTime)
+	if !found1 || stateTime != 10 {
+		t.Errorf("ContainsWithin(1, headTime) = (%v, %d), want (true, 10)", found1, stateTime)
 	}
 
+	// ID 2 was added at 20 - oldest valid time is 20
 	found2, stateTime := vs.ContainsWithin(2, headTime)
-	if !found2 || stateTime != headTime {
-		t.Errorf("ContainsWithin(2, headTime) = (%v, %d), want (true, %d)", found2, stateTime, headTime)
+	if !found2 || stateTime != 20 {
+		t.Errorf("ContainsWithin(2, headTime) = (%v, %d), want (true, 20)", found2, stateTime)
 	}
 
 	snapshot, stateTime := vs.SnapshotWithin(headTime)
@@ -376,18 +378,19 @@ func TestVersionedSet_QueryFutureTime(t *testing.T) {
 	vs.Add(1, 10)
 	vs.Add(2, 20)
 
-	headTime := vs.HeadTime()
-	futureTime := headTime + 1000
+	futureTime := vs.HeadTime() + 1000
 
-	// Query at future time should match HEAD state (stateTime = headTime)
+	// Query at future time should return oldest time where the answer is valid
+	// ID 1 was added at 10, unchanged since
 	found1, stateTime := vs.ContainsWithin(1, futureTime)
-	if !found1 || stateTime != headTime {
-		t.Errorf("ContainsWithin(1, futureTime) = (%v, %d), want (true, %d)", found1, stateTime, headTime)
+	if !found1 || stateTime != 10 {
+		t.Errorf("ContainsWithin(1, futureTime) = (%v, %d), want (true, 10)", found1, stateTime)
 	}
 
+	// ID 2 was added at 20
 	found2, stateTime := vs.ContainsWithin(2, futureTime)
-	if !found2 || stateTime != headTime {
-		t.Errorf("ContainsWithin(2, futureTime) = (%v, %d), want (true, %d)", found2, stateTime, headTime)
+	if !found2 || stateTime != 20 {
+		t.Errorf("ContainsWithin(2, futureTime) = (%v, %d), want (true, 20)", found2, stateTime)
 	}
 }
 
@@ -407,17 +410,17 @@ func TestVersionedSet_ContainsWithin(t *testing.T) {
 		wantFound     bool
 		wantStateTime store.StoreTime
 	}{
-		// max >= head: use head state
-		{"id1 max=100", 1, 100, false, 30},
-		{"id2 max=100", 2, 100, true, 30},
-		{"id1 max=30", 1, 30, false, 30},
-		{"id2 max=30", 2, 30, true, 30},
+		// max >= head: returns oldest time where the answer is valid
+		{"id1 max=100", 1, 100, false, 30}, // removed at 30, oldest "not found" time is 30
+		{"id2 max=100", 2, 100, true, 20},  // added at 20, unchanged since, oldest "found" time is 20
+		{"id1 max=30", 1, 30, false, 30},   // removed at 30
+		{"id2 max=30", 2, 30, true, 20},    // added at 20, unchanged since
 
-		// max between entries: find latest state <= max
-		{"id1 max=25", 1, 25, true, 20},
-		{"id2 max=25", 2, 25, true, 20},
-		{"id1 max=15", 1, 15, true, 10},
-		{"id2 max=15", 2, 15, false, 10},
+		// max between entries: find oldest time where the answer matches
+		{"id1 max=25", 1, 25, true, 10},  // added at 10, oldest "found" time is 10
+		{"id2 max=25", 2, 25, true, 20},  // added at 20, oldest "found" time is 20
+		{"id1 max=15", 1, 15, true, 10},  // added at 10
+		{"id2 max=15", 2, 15, false, 10}, // not added yet, oldest "not found" time is 10
 
 		// max < oldest: no state available
 		{"id1 max=5", 1, 5, false, 0},
@@ -484,4 +487,207 @@ func TestVersionedSet_SnapshotWithin(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestVersionedSet_SnapshotWithin_ReturnsLatestTime verifies that SnapshotWithin
+// always returns the LATEST time <= maxTime, NOT the oldest. This is because
+// snapshots return actual data, which would change if we went further back.
+func TestVersionedSet_SnapshotWithin_ReturnsLatestTime(t *testing.T) {
+	vs := newVersionedSet(0)
+
+	// Add IDs at different times
+	vs.Add(1, 10)
+	vs.Add(2, 20)
+	vs.Add(3, 30)
+
+	// Query at max=100 - should return time 30 (latest), not time 10 (oldest)
+	snapshot, stateTime := vs.SnapshotWithin(100)
+	if stateTime != 30 {
+		t.Errorf("SnapshotWithin should return latest time 30, got %d", stateTime)
+	}
+	if snapshot.GetCardinality() != 3 {
+		t.Errorf("expected 3 IDs in snapshot at time 30, got %d", snapshot.GetCardinality())
+	}
+
+	// Query at max=25 - should return time 20 (latest <= 25), not time 10
+	snapshot, stateTime = vs.SnapshotWithin(25)
+	if stateTime != 20 {
+		t.Errorf("SnapshotWithin should return latest time 20, got %d", stateTime)
+	}
+	if snapshot.GetCardinality() != 2 {
+		t.Errorf("expected 2 IDs in snapshot at time 20, got %d", snapshot.GetCardinality())
+	}
+
+	// Contrast with ContainsWithin for ID 1 - should return oldest time (10)
+	// since ID 1 was added at 10 and unchanged
+	found, containsTime := vs.ContainsWithin(1, 100)
+	if !found || containsTime != 10 {
+		t.Errorf("ContainsWithin should return oldest time 10 for ID 1, got %d", containsTime)
+	}
+}
+
+// TestVersionedSet_ContainsWithin_OldestTime tests that ContainsWithin returns
+// the oldest stateTime that gives the same answer, maximizing snapshot window width.
+func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
+	t.Run("always negative returns oldest snapshot", func(t *testing.T) {
+		vs := newVersionedSet(0)
+
+		// Add some IDs, but never add ID 99
+		vs.Add(1, 10)
+		vs.Add(2, 20)
+		vs.Add(3, 30)
+
+		// Query for ID 99 which was never added - should return oldest time
+		found, stateTime := vs.ContainsWithin(99, 100)
+		if found {
+			t.Error("expected ID 99 to not be found")
+		}
+		// Should return oldest available time (10) since answer is always "not found"
+		if stateTime != 10 {
+			t.Errorf("expected oldest time 10, got %d", stateTime)
+		}
+	})
+
+	t.Run("always positive returns oldest snapshot", func(t *testing.T) {
+		vs := newVersionedSet(0)
+
+		// Add ID 1 at time 10, then add unrelated IDs
+		vs.Add(1, 10)
+		vs.Add(2, 20)
+		vs.Add(3, 30)
+
+		// Query for ID 1 - should return time 10 (when it was added, oldest time it exists)
+		found, stateTime := vs.ContainsWithin(1, 100)
+		if !found {
+			t.Error("expected ID 1 to be found")
+		}
+		// ID 1 was added at time 10, so that's the oldest time where it exists
+		if stateTime != 10 {
+			t.Errorf("expected oldest time 10, got %d", stateTime)
+		}
+	})
+
+	t.Run("found at 10 not at 9 uses 10", func(t *testing.T) {
+		vs := newVersionedSet(0)
+
+		// Create state at time 9 (ID 1 not present)
+		vs.Add(2, 9) // unrelated, creates a snapshot at time 9
+		// ID 1 added at time 10
+		vs.Add(1, 10)
+
+		// Query for ID 1 at max=20 - should return 10 (oldest time where found)
+		// At time 9: ID 1 not present
+		// At time 10: ID 1 present
+		found, stateTime := vs.ContainsWithin(1, 20)
+		if !found {
+			t.Error("expected ID 1 to be found")
+		}
+		if stateTime != 10 {
+			t.Errorf("expected time 10 (when added), got %d", stateTime)
+		}
+
+		// Query for ID 1 at max=9 - not found, oldest "not found" time is 9
+		found, stateTime = vs.ContainsWithin(1, 9)
+		if found {
+			t.Error("expected ID 1 to NOT be found at max=9")
+		}
+		if stateTime != 9 {
+			t.Errorf("expected time 9 (oldest not-found time), got %d", stateTime)
+		}
+	})
+
+	t.Run("not found at 10 or 9 but found at 8 uses 9", func(t *testing.T) {
+		vs := newVersionedSet(0)
+
+		// ID 1: add at 8, remove at 9
+		vs.Add(1, 8)
+		vs.Remove(1, 9)
+		vs.Add(2, 10) // unrelated
+
+		// Query for ID 1 at max=10 - not found, oldest time with "not found" is 9
+		found, stateTime := vs.ContainsWithin(1, 10)
+		if found {
+			t.Error("expected ID 1 to not be found at max=10")
+		}
+		// ID 1 was removed at time 9, so 9 is the oldest time where it's absent
+		if stateTime != 9 {
+			t.Errorf("expected time 9 (when removed), got %d", stateTime)
+		}
+
+		// Query at max=8 - found (before removal)
+		found, stateTime = vs.ContainsWithin(1, 8)
+		if !found {
+			t.Error("expected ID 1 to be found at max=8")
+		}
+		if stateTime != 8 {
+			t.Errorf("expected time 8, got %d", stateTime)
+		}
+	})
+
+	t.Run("add remove add sequence", func(t *testing.T) {
+		vs := newVersionedSet(0)
+
+		// ID 1: add at 10, remove at 20, add at 30
+		vs.Add(1, 10)
+		vs.Remove(1, 20)
+		vs.Add(1, 30)
+
+		// At max=100: found, oldest time with "found" is 30 (since removed at 20)
+		found, stateTime := vs.ContainsWithin(1, 100)
+		if !found {
+			t.Error("expected ID 1 to be found at max=100")
+		}
+		if stateTime != 30 {
+			t.Errorf("expected time 30 (re-added), got %d", stateTime)
+		}
+
+		// At max=25: not found, oldest time with "not found" is 20
+		found, stateTime = vs.ContainsWithin(1, 25)
+		if found {
+			t.Error("expected ID 1 to not be found at max=25")
+		}
+		if stateTime != 20 {
+			t.Errorf("expected time 20 (removed), got %d", stateTime)
+		}
+
+		// At max=15: found, oldest time with "found" is 10
+		found, stateTime = vs.ContainsWithin(1, 15)
+		if !found {
+			t.Error("expected ID 1 to be found at max=15")
+		}
+		if stateTime != 10 {
+			t.Errorf("expected time 10 (added), got %d", stateTime)
+		}
+	})
+
+	t.Run("multiple unrelated changes preserve oldest time", func(t *testing.T) {
+		vs := newVersionedSet(0)
+
+		// ID 1 added at time 10
+		vs.Add(1, 10)
+		// Many unrelated changes
+		vs.Add(2, 20)
+		vs.Add(3, 30)
+		vs.Add(4, 40)
+		vs.Remove(2, 50)
+		vs.Add(5, 60)
+
+		// Query for ID 1 - should still return 10 (unchanged since then)
+		found, stateTime := vs.ContainsWithin(1, 100)
+		if !found {
+			t.Error("expected ID 1 to be found")
+		}
+		if stateTime != 10 {
+			t.Errorf("expected oldest time 10, got %d", stateTime)
+		}
+
+		// Query for ID 2 - removed at 50, should return 50
+		found, stateTime = vs.ContainsWithin(2, 100)
+		if found {
+			t.Error("expected ID 2 to not be found (removed)")
+		}
+		if stateTime != 50 {
+			t.Errorf("expected time 50 (removed), got %d", stateTime)
+		}
+	})
 }

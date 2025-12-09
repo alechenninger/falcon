@@ -167,20 +167,104 @@ func (v *versionedSet) OldestTime() store.StoreTime {
 }
 
 // ContainsWithin checks if the ID is in the set at the latest state <= maxTime.
-// Returns (found, stateTime) where stateTime is the time of the state used,
-// or (false, 0) if no state is available within the time bound.
+// Returns (found, stateTime) where stateTime is the OLDEST time that gives
+// the same answer, allowing for maximum snapshot window width.
+// Returns (false, 0) if no state is available within the time bound.
 func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bool, store.StoreTime) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
+	// First, find the result at the latest state <= maxTime
+	result, resultTime, historyIdx := v.findStateAtMax(id, maxTime)
+	if resultTime == 0 {
+		return false, 0 // No state available
+	}
+
+	// Now continue walking back to find the oldest time with the same answer.
+	// historyIdx is the index we stopped at (or len(history) if we used head/headUndo).
+	oldestTime := resultTime
+	currentTime := resultTime
+
+	// Determine the starting point for our backward search.
+	// If we used head state (historyIdx == len(history)), check headUndo first.
+	// Otherwise, we stopped at history[historyIdx], check if that entry changed our ID.
+	if historyIdx == len(v.history) {
+		// Used head state - check if headUndo changed our ID
+		if v.headUndo != nil {
+			if slices.Contains(v.headUndo.added, id) && result {
+				return result, oldestTime // Added at headTime
+			}
+			if slices.Contains(v.headUndo.removed, id) && !result {
+				return result, oldestTime // Removed at headTime
+			}
+		}
+	} else {
+		// Stopped at history[historyIdx] - this entry might be where state changed.
+		// We returned the state BEFORE undoing this entry, but the entry might
+		// record an earlier change that led to this state.
+		// Actually, we need to check what happened BETWEEN historyIdx and headUndo.
+
+		// Check if headUndo changed our ID (state at headTime)
+		if v.headUndo != nil {
+			if slices.Contains(v.headUndo.added, id) && result {
+				return result, oldestTime // The current result came from headUndo
+			}
+			if slices.Contains(v.headUndo.removed, id) && !result {
+				return result, oldestTime // The current result came from headUndo
+			}
+		}
+
+		// Check entries from len-1 down to historyIdx (inclusive) for changes
+		for i := len(v.history) - 1; i >= historyIdx; i-- {
+			undo := &v.history[i]
+			if slices.Contains(undo.added, id) && result {
+				return result, oldestTime // This entry made it present
+			}
+			if slices.Contains(undo.removed, id) && !result {
+				return result, oldestTime // This entry made it absent
+			}
+		}
+	}
+
+	// Continue from just before where we found our state
+	startIdx := historyIdx - 1
+	if historyIdx == len(v.history) {
+		startIdx = len(v.history) - 1
+	}
+
+	for i := startIdx; i >= 0; i-- {
+		undo := &v.history[i]
+		entryTime := currentTime.Less(undo.timeDelta)
+
+		// Check if this entry changed the state for our ID
+		if slices.Contains(undo.added, id) && result {
+			oldestTime = entryTime
+			break
+		}
+		if slices.Contains(undo.removed, id) && !result {
+			oldestTime = entryTime
+			break
+		}
+
+		oldestTime = entryTime
+		currentTime = entryTime
+	}
+
+	return result, oldestTime
+}
+
+// findStateAtMax finds the state of an ID at the latest time <= maxTime.
+// Returns (result, stateTime, historyIdx) where historyIdx is the history
+// index we stopped at (or len(history) if we used head state).
+func (v *versionedSet) findStateAtMax(id schema.ID, maxTime store.StoreTime) (bool, store.StoreTime, int) {
 	// If head is within bounds, use it
 	if v.headTime <= maxTime {
-		return v.head.Contains(uint32(id)), v.headTime
+		return v.head.Contains(uint32(id)), v.headTime, len(v.history)
 	}
 
 	// headTime > maxTime, need to find an older state
 	if v.headUndo == nil {
-		return false, 0 // No history available
+		return false, 0, 0 // No history available
 	}
 
 	// Start with head state and undo changes
@@ -200,7 +284,7 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 		undo := &v.history[i]
 		currentTime = currentTime.Less(undo.timeDelta)
 		if currentTime <= maxTime {
-			return result, currentTime
+			return result, currentTime, i
 		}
 		// Continue undoing
 		if slices.Contains(undo.added, id) {
@@ -212,7 +296,7 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 	}
 
 	// Walked entire history without finding a usable state
-	return false, 0
+	return false, 0, 0
 }
 
 // SnapshotWithin returns a clone of the bitmap at the latest state <= maxTime.
@@ -221,6 +305,9 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 func (v *versionedSet) SnapshotWithin(maxTime store.StoreTime) (*roaring.Bitmap, store.StoreTime) {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+
+	// We CANNOT go back before the latest state within maxTime here,
+	// because it would always change the answer.
 
 	// If head is within bounds, use it
 	if v.headTime <= maxTime {

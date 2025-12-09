@@ -433,7 +433,7 @@ func TestMVCC_Window_MultipleWrites(t *testing.T) {
 		t.Fatalf("WriteTuple failed: %v", err)
 	}
 
-	// Check alice - should narrow to time 1 (when alice was added)
+	// Check alice - should return oldest time where alice is a viewer (time 1)
 	ok, resultWindow, err := tg.CheckAt(ctx, "user", alice, "document", doc1, "viewer", &graph.MaxSnapshotWindow)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
@@ -441,8 +441,8 @@ func TestMVCC_Window_MultipleWrites(t *testing.T) {
 	if !ok {
 		t.Error("expected alice to be viewer")
 	}
-	// Window should reflect the state we read (time 2 is replicated, but we read at time 2 which includes alice)
-	expectedWindow := graph.NewSnapshotWindow(2, 2)
+	// Window should be [1, 2]: min=1 (oldest time alice was a viewer), max=2 (replicated time)
+	expectedWindow := graph.NewSnapshotWindow(1, 2)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected resultWindow == %v, got %v", expectedWindow, resultWindow)
 	}
