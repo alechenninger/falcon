@@ -95,7 +95,7 @@ func (u *MultiversionUsersets) Hydrate(iter store.TupleIterator) error {
 // Subscribe consumes changes from the given ChangeStream and applies them.
 // The observer is notified at key points for instrumentation/testing.
 // This blocks until the context is canceled or an error occurs.
-func (u *MultiversionUsersets) Subscribe(ctx context.Context, stream store.ChangeStream, observer GraphObserver) error {
+func (u *MultiversionUsersets) Subscribe(ctx context.Context, stream store.ChangeStream, observer UsersetsObserver) error {
 	afterTime := u.replicatedTime.Load()
 	changes, errCh := stream.Subscribe(ctx, afterTime)
 
@@ -122,7 +122,7 @@ func (u *MultiversionUsersets) Subscribe(ctx context.Context, stream store.Chang
 // applyChange applies a single change to the in-memory state.
 // Empty tuples (with zero-value ObjectType) are skipped but still advance replicatedTime.
 // This allows sharded graphs to filter tuple data while keeping time synchronized.
-func (u *MultiversionUsersets) applyChange(ctx context.Context, change store.Change, observer GraphObserver) {
+func (u *MultiversionUsersets) applyChange(ctx context.Context, change store.Change, observer UsersetsObserver) {
 	_, probe := observer.ApplyChangeStarted(ctx, change)
 	defer probe.End()
 

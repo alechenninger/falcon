@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
@@ -23,13 +24,14 @@ type Router func(objectType schema.TypeName, objectID schema.ID) ShardID
 // other Graph instances for remote shards. The check algorithm calls
 // back to ShardedGraph.CheckUnion for recursion, enabling cross-shard routing.
 type ShardedGraph struct {
-	localShardID ShardID
-	usersets     *MultiversionUsersets
-	shards       map[ShardID]Graph // remote shards (does NOT include self)
-	router       Router
-	stream       store.ChangeStream
-	st           store.Store
-	observer     GraphObserver
+	localShardID    ShardID
+	usersets        *MultiversionUsersets
+	shards          map[ShardID]Graph // remote shards (does NOT include self)
+	router          Router
+	stream          store.ChangeStream
+	st              store.Store
+	observer        UsersetsObserver
+	shardedObserver ShardedGraphObserver
 }
 
 // NewShardedGraph creates a new ShardedGraph.
@@ -50,29 +52,48 @@ func NewShardedGraph(
 	st store.Store,
 ) *ShardedGraph {
 	return &ShardedGraph{
-		localShardID: localShardID,
-		usersets:     NewMultiversionUsersets(s),
-		shards:       shards,
-		router:       router,
-		stream:       stream,
-		st:           st,
-		observer:     NoOpGraphObserver{},
+		localShardID:    localShardID,
+		usersets:        NewMultiversionUsersets(s),
+		shards:          shards,
+		router:          router,
+		stream:          stream,
+		st:              st,
+		observer:        NoOpUsersetsObserver{},
+		shardedObserver: NoOpShardedGraphObserver{},
 	}
 }
 
-// WithObserver returns a copy with the given observer for instrumentation.
-func (g *ShardedGraph) WithObserver(obs GraphObserver) *ShardedGraph {
+// WithObserver returns a copy with the given UsersetsObserver for instrumentation.
+func (g *ShardedGraph) WithObserver(obs UsersetsObserver) *ShardedGraph {
 	if obs == nil {
-		obs = NoOpGraphObserver{}
+		obs = NoOpUsersetsObserver{}
 	}
 	return &ShardedGraph{
-		localShardID: g.localShardID,
-		usersets:     g.usersets,
-		shards:       g.shards,
-		router:       g.router,
-		stream:       g.stream,
-		st:           g.st,
-		observer:     obs,
+		localShardID:    g.localShardID,
+		usersets:        g.usersets,
+		shards:          g.shards,
+		router:          g.router,
+		stream:          g.stream,
+		st:              g.st,
+		observer:        obs,
+		shardedObserver: g.shardedObserver,
+	}
+}
+
+// WithShardedObserver returns a copy with the given ShardedGraphObserver for instrumentation.
+func (g *ShardedGraph) WithShardedObserver(obs ShardedGraphObserver) *ShardedGraph {
+	if obs == nil {
+		obs = NoOpShardedGraphObserver{}
+	}
+	return &ShardedGraph{
+		localShardID:    g.localShardID,
+		usersets:        g.usersets,
+		shards:          g.shards,
+		router:          g.router,
+		stream:          g.stream,
+		st:              g.st,
+		observer:        g.observer,
+		shardedObserver: obs,
 	}
 }
 
@@ -153,12 +174,17 @@ type checkUnionResult struct {
 // CheckUnion checks if subject is in the union of all the given usersets.
 // Groups checks by shard and dispatches accordingly.
 // Remote shard checks run in parallel and cancel when any returns true.
+// If some shards error but none return true, returns an inconclusive error.
 func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	subjectType schema.TypeName, subjectID schema.ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
+	ctx, probe := g.shardedObserver.CheckUnionStarted(ctx, subjectType, subjectID)
+	defer probe.End()
+
 	if len(checks) == 0 {
+		probe.Empty()
 		return false, SnapshotWindow{}, nil
 	}
 
@@ -227,6 +253,7 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 				return false, chk.Window, err
 			}
 			if ok {
+				probe.Result(true, resultWindow)
 				return true, resultWindow, nil
 			}
 			// Track tightest window for "not found" case
@@ -242,8 +269,10 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	// Process remote checks in parallel
 	if len(remoteChecks) == 0 {
 		if first {
+			probe.Empty()
 			return false, SnapshotWindow{}, nil
 		}
+		probe.Result(false, tightestWindow)
 		return false, tightestWindow, nil
 	}
 
@@ -259,11 +288,12 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	for shardID, shardChecks := range remoteChecks {
 		remoteShard, ok := g.shards[shardID]
 		if !ok {
-			// Unknown shard - skip (in production this would be an error)
+			probe.UnknownShard(shardID)
 			continue
 		}
 
 		wg.Add(1)
+		probe.RemoteShardDispatched(shardID)
 		go func(sid ShardID, shard Graph, checks []RelationCheck) {
 			defer wg.Done()
 
@@ -292,16 +322,22 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 		close(results)
 	}()
 
+	// Track shards that failed
+	var failedShards []ShardID
+
 	// Collect results
 	for result := range results {
 		if result.err != nil {
-			// Cancel remaining checks on error
-			cancel()
-			return false, SnapshotWindow{}, result.err
+			// Report error via observer but continue processing other shards
+			probe.RemoteShardError(result.shardID, result.err)
+			failedShards = append(failedShards, result.shardID)
+			continue
 		}
+		probe.RemoteShardResult(result.shardID, result.found, result.window)
 		if result.found {
 			// Found! Cancel remaining checks and return immediately
 			cancel()
+			probe.Result(true, result.window)
 			return true, result.window, nil
 		}
 		// Track tightest window for "not found" case
@@ -313,10 +349,18 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 		}
 	}
 
+	// Check if we had any errors
+	if len(failedShards) > 0 {
+		probe.Inconclusive(failedShards)
+		return false, SnapshotWindow{}, fmt.Errorf("check inconclusive: shards failed: %v", failedShards)
+	}
+
 	if first {
 		// No checks were performed (all empty)
+		probe.Empty()
 		return false, SnapshotWindow{}, nil
 	}
+	probe.Result(false, tightestWindow)
 	return false, tightestWindow, nil
 }
 

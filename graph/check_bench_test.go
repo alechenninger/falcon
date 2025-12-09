@@ -97,7 +97,7 @@ func NewBenchGraph(s *schema.Schema) *BenchGraph {
 	// Create a minimal LocalGraph with nil store/stream (won't be used for bench loading)
 	graph := &LocalGraph{
 		usersets: usersets,
-		observer: NoOpGraphObserver{},
+		observer: NoOpUsersetsObserver{},
 	}
 	return &BenchGraph{
 		usersets: usersets,

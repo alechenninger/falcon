@@ -61,7 +61,7 @@ type LocalGraph struct {
 	usersets *MultiversionUsersets
 	stream   store.ChangeStream
 	st       store.Store
-	observer GraphObserver
+	observer UsersetsObserver
 }
 
 // NewLocalGraph creates a new LocalGraph.
@@ -70,14 +70,14 @@ func NewLocalGraph(s *schema.Schema, stream store.ChangeStream, st store.Store) 
 		usersets: NewMultiversionUsersets(s),
 		stream:   stream,
 		st:       st,
-		observer: NoOpGraphObserver{},
+		observer: NoOpUsersetsObserver{},
 	}
 }
 
 // WithObserver returns a copy with the given observer for instrumentation.
-func (g *LocalGraph) WithObserver(obs GraphObserver) *LocalGraph {
+func (g *LocalGraph) WithObserver(obs UsersetsObserver) *LocalGraph {
 	if obs == nil {
-		obs = NoOpGraphObserver{}
+		obs = NoOpUsersetsObserver{}
 	}
 	return &LocalGraph{
 		usersets: g.usersets,
