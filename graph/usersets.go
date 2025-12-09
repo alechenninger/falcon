@@ -120,6 +120,8 @@ func (u *MultiversionUsersets) Subscribe(ctx context.Context, stream store.Chang
 }
 
 // applyChange applies a single change to the in-memory state.
+// Empty tuples (with zero-value ObjectType) are skipped but still advance replicatedTime.
+// This allows sharded graphs to filter tuple data while keeping time synchronized.
 func (u *MultiversionUsersets) applyChange(ctx context.Context, change store.Change, observer GraphObserver) {
 	_, probe := observer.ApplyChangeStarted(ctx, change)
 	defer probe.End()
@@ -132,11 +134,14 @@ func (u *MultiversionUsersets) applyChange(ctx context.Context, change store.Cha
 	// without literally blocking reads.
 
 	t := change.Tuple
-	switch change.Op {
-	case store.OpInsert:
-		u.applyAdd(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
-	case store.OpDelete:
-		u.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
+	// Skip empty tuples (filtered changes) but still advance time
+	if t.ObjectType != "" {
+		switch change.Op {
+		case store.OpInsert:
+			u.applyAdd(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
+		case store.OpDelete:
+			u.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
+		}
 	}
 	u.replicatedTime.Store(change.Time)
 	probe.Applied(change.Time)
