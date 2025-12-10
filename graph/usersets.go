@@ -12,12 +12,29 @@ import (
 
 // usersetKey uniquely identifies a set of subjects for a given object, relation,
 // subject type, and subject relation.
+//
+// Uses compact TypeID/RelationID instead of strings for memory efficiency.
+// Total size: 8 bytes (vs ~72 bytes with strings).
 type usersetKey struct {
-	ObjectType      schema.TypeName
-	ObjectID        schema.ID
-	Relation        schema.RelationName
-	SubjectType     schema.TypeName
-	SubjectRelation schema.RelationName // Empty for direct subjects
+	ObjectType      schema.TypeID     // 1 byte
+	Relation        schema.RelationID // 1 byte
+	SubjectType     schema.TypeID     // 1 byte
+	SubjectRelation schema.RelationID // 1 byte (0 = no relation)
+	ObjectID        schema.ID         // 4 bytes
+}
+
+// makeKey creates a usersetKey from string type/relation names using schema lookup.
+func (u *MultiversionUsersets) makeKey(
+	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
+	subjectType schema.TypeName, subjectRelation schema.RelationName,
+) usersetKey {
+	return usersetKey{
+		ObjectType:      u.schema.GetTypeID(objectType),
+		ObjectID:        objectID,
+		Relation:        u.schema.GetRelationID(objectType, relation),
+		SubjectType:     u.schema.GetTypeID(subjectType),
+		SubjectRelation: u.schema.GetRelationID(subjectType, subjectRelation),
+	}
 }
 
 // MultiversionUsersets stores authorization tuples as compressed subject sets
@@ -102,13 +119,7 @@ func (u *MultiversionUsersets) Hydrate(iter store.TupleIterator) error {
 
 	for iter.Next() {
 		t := iter.Tuple()
-		key := usersetKey{
-			ObjectType:      t.ObjectType,
-			ObjectID:        t.ObjectID,
-			Relation:        t.Relation,
-			SubjectType:     t.SubjectType,
-			SubjectRelation: t.SubjectRelation,
-		}
+		key := u.makeKey(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectRelation)
 
 		vs, ok := u.tuples[key]
 		if !ok {
@@ -182,13 +193,7 @@ func (u *MultiversionUsersets) applyAdd(objectType schema.TypeName, objectID sch
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	key := usersetKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
+	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
 
 	vs, ok := u.tuples[key]
 	if !ok {
@@ -203,13 +208,7 @@ func (u *MultiversionUsersets) applyRemove(objectType schema.TypeName, objectID 
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	key := usersetKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
+	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
 
 	if vs, ok := u.tuples[key]; ok {
 		vs.Remove(subjectID, t)
@@ -227,28 +226,22 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
-	key := UsersetKey{
+	obsKey := UsersetKey{
 		ObjectType:      objectType,
 		ObjectID:        objectID,
 		Relation:        relation,
 		SubjectType:     subjectType,
 		SubjectRelation: "",
 	}
-	probe := u.observer.ContainsDirectStarted(key, subjectID, window)
+	probe := u.observer.ContainsDirectStarted(obsKey, subjectID, window)
 	defer probe.End()
 
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	internalKey := usersetKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: "",
-	}
+	key := u.makeKey(objectType, objectID, relation, subjectType, "")
 
-	vs, ok := u.tuples[internalKey]
+	vs, ok := u.tuples[key]
 	if !ok {
 		// Not found - window max is still correct, min is 0 (always not found)
 		result := NewSnapshotWindow(0, window.Max())
@@ -275,28 +268,22 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
-	key := UsersetKey{
+	obsKey := UsersetKey{
 		ObjectType:      objectType,
 		ObjectID:        objectID,
 		Relation:        relation,
 		SubjectType:     subjectType,
 		SubjectRelation: subjectRelation,
 	}
-	probe := u.observer.ContainsUsersetSubjectStarted(key, subjectID, window)
+	probe := u.observer.ContainsUsersetSubjectStarted(obsKey, subjectID, window)
 	defer probe.End()
 
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	internalKey := usersetKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
+	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
 
-	vs, ok := u.tuples[internalKey]
+	vs, ok := u.tuples[key]
 	if !ok {
 		result := NewSnapshotWindow(0, window.Max())
 		probe.Result(false, result)
@@ -335,13 +322,7 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	key := usersetKey{
-		ObjectType:      objectType,
-		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
-		SubjectRelation: subjectRelation,
-	}
+	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
 
 	vs, ok := u.tuples[key]
 	if !ok {

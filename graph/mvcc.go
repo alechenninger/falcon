@@ -10,6 +10,15 @@ import (
 	"github.com/alechenninger/falcon/store"
 )
 
+// inlineThreshold is the maximum number of elements stored inline before
+// promoting to a roaring bitmap. Chosen to balance memory savings on small
+// sets (like parent relations with 1 element) vs overhead.
+const inlineThreshold = 3
+
+// inlineMode indicates elements are stored in the inline array (count 0-3).
+// bitmapMode indicates elements are stored in the head bitmap.
+const bitmapMode = 255
+
 // undoEntry records a change that can be undone to reconstruct historical state.
 // In the history slice, timeDelta stores the time gap to the next (newer) entry.
 type undoEntry struct {
@@ -18,8 +27,12 @@ type undoEntry struct {
 	removed   []schema.ID      // IDs removed at this time (undo = add back)
 }
 
-// versionedSet stores a bitmap with MVCC support via undo chains.
+// versionedSet stores a set of IDs with MVCC support via undo chains.
 // HEAD is always the current state; historical reads walk the undo chain.
+//
+// Small-set optimization: sets with <= inlineThreshold elements are stored
+// inline in the inline array to avoid roaring bitmap allocation overhead.
+// This saves ~80 bytes per small set (common for parent relations).
 //
 // Structure:
 //   - headUndo: the most recent change (at headTime), or nil if no history
@@ -29,19 +42,92 @@ type undoEntry struct {
 type versionedSet struct {
 	mu       sync.RWMutex
 	headTime store.StoreTime // Timestamp of the current head state
-	head     *roaring.Bitmap // Always current state
+
+	// Small set storage (inline mode): count is 0-3, elements in inline[0:count]
+	// Large set storage (bitmap mode): count is bitmapMode (255), elements in head
+	inline [inlineThreshold]schema.ID
+	count  uint8 // 0-3 = inline mode, bitmapMode = use bitmap
+
+	head     *roaring.Bitmap // Only allocated when count == bitmapMode
 	headUndo *undoEntry      // Most recent change (at headTime), nil if no history
 	history  []undoEntry     // Older entries, oldest first
 }
 
 // newVersionedSet creates a new versioned set starting at the given time.
+// The set starts empty in inline mode (no bitmap allocated).
 func newVersionedSet(t store.StoreTime) *versionedSet {
 	return &versionedSet{
 		headTime: t,
-		head:     roaring.New(),
+		count:    0, // Inline mode, empty
+		head:     nil,
 		headUndo: nil,
 		history:  nil,
 	}
+}
+
+// isInlineMode returns true if the set is using inline storage.
+func (v *versionedSet) isInlineMode() bool {
+	return v.count != bitmapMode
+}
+
+// inlineContains checks if the ID is in the inline array.
+// Must be called with at least a read lock held.
+func (v *versionedSet) inlineContains(id schema.ID) bool {
+	for i := uint8(0); i < v.count; i++ {
+		if v.inline[i] == id {
+			return true
+		}
+	}
+	return false
+}
+
+// inlineAdd adds an ID to the inline array if space available.
+// Returns true if added, false if already present or no space.
+// Must be called with write lock held.
+func (v *versionedSet) inlineAdd(id schema.ID) bool {
+	// Check if already present
+	for i := uint8(0); i < v.count; i++ {
+		if v.inline[i] == id {
+			return false // Already present
+		}
+	}
+	// Check if space available
+	if v.count >= inlineThreshold {
+		return false // No space, need to promote
+	}
+	v.inline[v.count] = id
+	v.count++
+	return true
+}
+
+// inlineRemove removes an ID from the inline array.
+// Returns true if removed, false if not present.
+// Must be called with write lock held.
+func (v *versionedSet) inlineRemove(id schema.ID) bool {
+	for i := uint8(0); i < v.count; i++ {
+		if v.inline[i] == id {
+			// Shift remaining elements
+			for j := i; j < v.count-1; j++ {
+				v.inline[j] = v.inline[j+1]
+			}
+			v.count--
+			return true
+		}
+	}
+	return false
+}
+
+// promoteTobitmap converts from inline mode to bitmap mode.
+// Must be called with write lock held.
+func (v *versionedSet) promoteToBitmap() {
+	if !v.isInlineMode() {
+		return // Already in bitmap mode
+	}
+	v.head = roaring.New()
+	for i := uint8(0); i < v.count; i++ {
+		v.head.Add(uint32(v.inline[i]))
+	}
+	v.count = bitmapMode
 }
 
 // Add adds an ID to the set at the given time.
@@ -50,11 +136,21 @@ func (v *versionedSet) Add(id schema.ID, t store.StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	if v.head.Contains(uint32(id)) {
-		return // Already present, no change
+	if v.isInlineMode() {
+		if v.inlineContains(id) {
+			return // Already present
+		}
+		if !v.inlineAdd(id) {
+			// No space, promote to bitmap and add
+			v.promoteToBitmap()
+			v.head.Add(uint32(id))
+		}
+	} else {
+		if v.head.Contains(uint32(id)) {
+			return // Already present
+		}
+		v.head.Add(uint32(id))
 	}
-
-	v.head.Add(uint32(id))
 
 	// Record undo: this was an add, so undo = remove
 	v.recordUndo(t, []schema.ID{id}, nil)
@@ -68,7 +164,19 @@ func (v *versionedSet) Add(id schema.ID, t store.StoreTime) {
 func (v *versionedSet) AddBulk(id schema.ID) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	v.head.Add(uint32(id))
+
+	if v.isInlineMode() {
+		if v.inlineContains(id) {
+			return // Already present
+		}
+		if !v.inlineAdd(id) {
+			// No space, promote to bitmap and add
+			v.promoteToBitmap()
+			v.head.Add(uint32(id))
+		}
+	} else {
+		v.head.Add(uint32(id))
+	}
 }
 
 // Remove removes an ID from the set at the given time.
@@ -77,14 +185,21 @@ func (v *versionedSet) Remove(id schema.ID, t store.StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	if !v.head.Contains(uint32(id)) {
-		return // Not present, no change
+	var removed bool
+	if v.isInlineMode() {
+		removed = v.inlineRemove(id)
+	} else {
+		if !v.head.Contains(uint32(id)) {
+			return // Not present
+		}
+		v.head.Remove(uint32(id))
+		removed = true
 	}
 
-	v.head.Remove(uint32(id))
-
-	// Record undo: this was a remove, so undo = add back
-	v.recordUndo(t, nil, []schema.ID{id})
+	if removed {
+		// Record undo: this was a remove, so undo = add back
+		v.recordUndo(t, nil, []schema.ID{id})
+	}
 }
 
 // recordUndo records a new undo entry and maintains the delta chain.
@@ -107,13 +222,20 @@ func (v *versionedSet) recordUndo(t store.StoreTime, added, removed []schema.ID)
 func (v *versionedSet) Contains(id schema.ID) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+	if v.isInlineMode() {
+		return v.inlineContains(id)
+	}
 	return v.head.Contains(uint32(id))
 }
 
 // Head returns the current HEAD bitmap. The caller must not modify it.
+// If in inline mode, promotes to bitmap mode first.
 func (v *versionedSet) Head() *roaring.Bitmap {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.isInlineMode() {
+		v.promoteToBitmap()
+	}
 	return v.head
 }
 
@@ -124,10 +246,13 @@ func (v *versionedSet) HeadTime() store.StoreTime {
 	return v.headTime
 }
 
-// IsEmpty returns true if the HEAD bitmap is empty.
+// IsEmpty returns true if the HEAD set is empty.
 func (v *versionedSet) IsEmpty() bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+	if v.isInlineMode() {
+		return v.count == 0
+	}
 	return v.head.IsEmpty()
 }
 
@@ -300,7 +425,13 @@ func (v *versionedSet) ContainsWithinObserved(id schema.ID, maxTime store.StoreT
 func (v *versionedSet) findStateAtMax(id schema.ID, maxTime store.StoreTime) (bool, store.StoreTime, int) {
 	// If head is within bounds, use it
 	if v.headTime <= maxTime {
-		return v.head.Contains(uint32(id)), v.headTime, len(v.history)
+		var contains bool
+		if v.isInlineMode() {
+			contains = v.inlineContains(id)
+		} else {
+			contains = v.head.Contains(uint32(id))
+		}
+		return contains, v.headTime, len(v.history)
 	}
 
 	// headTime > maxTime, need to find an older state
@@ -309,7 +440,12 @@ func (v *versionedSet) findStateAtMax(id schema.ID, maxTime store.StoreTime) (bo
 	}
 
 	// Start with head state and undo changes
-	result := v.head.Contains(uint32(id))
+	var result bool
+	if v.isInlineMode() {
+		result = v.inlineContains(id)
+	} else {
+		result = v.head.Contains(uint32(id))
+	}
 
 	// Undo headUndo first
 	if slices.Contains(v.headUndo.added, id) {
@@ -363,6 +499,14 @@ func (v *versionedSet) SnapshotWithinObserved(maxTime store.StoreTime, obs MVCCO
 		probe.HeadUsed()
 		probe.HistoryDepth(0)
 		probe.Result(true, v.headTime)
+		// Create bitmap from current state
+		if v.isInlineMode() {
+			result := roaring.New()
+			for i := uint8(0); i < v.count; i++ {
+				result.Add(uint32(v.inline[i]))
+			}
+			return result, v.headTime
+		}
 		return v.head.Clone(), v.headTime
 	}
 
@@ -374,7 +518,15 @@ func (v *versionedSet) SnapshotWithinObserved(maxTime store.StoreTime, obs MVCCO
 	}
 
 	// Start with head state and undo changes
-	result := v.head.Clone()
+	var result *roaring.Bitmap
+	if v.isInlineMode() {
+		result = roaring.New()
+		for i := uint8(0); i < v.count; i++ {
+			result.Add(uint32(v.inline[i]))
+		}
+	} else {
+		result = v.head.Clone()
+	}
 
 	// Undo headUndo first
 	for _, id := range v.headUndo.added {

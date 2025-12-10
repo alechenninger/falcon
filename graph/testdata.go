@@ -72,17 +72,30 @@ func MediumTestDataConfig() TestDataConfig {
 
 // TestDataSchema returns the schema used by the test data generator.
 // This is the same schema as testSchema() in check_test.go.
+//
+// Type IDs:
+//
+//	user=1, group=2, folder=3, document=4
+//
+// Relation IDs (per type):
+//
+//	group: member=1
+//	folder: parent=1, viewer=2, editor=3
+//	document: parent=1, viewer=2, editor=3
 func TestDataSchema() *schema.Schema {
-	return &schema.Schema{
+	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"group": {
+				ID:   2,
 				Name: "group",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
+						ID:   1,
 						Name: "member",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -91,15 +104,18 @@ func TestDataSchema() *schema.Schema {
 				},
 			},
 			"folder": {
+				ID:   3,
 				Name: "folder",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -110,6 +126,7 @@ func TestDataSchema() *schema.Schema {
 						},
 					},
 					"editor": {
+						ID:   3,
 						Name: "editor",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -122,15 +139,18 @@ func TestDataSchema() *schema.Schema {
 				},
 			},
 			"document": {
+				ID:   4,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -141,6 +161,7 @@ func TestDataSchema() *schema.Schema {
 						},
 					},
 					"editor": {
+						ID:   3,
 						Name: "editor",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -154,6 +175,8 @@ func TestDataSchema() *schema.Schema {
 			},
 		},
 	}
+	s.Compile()
+	return s
 }
 
 // GenerateTestData generates deterministic test tuples based on the config.

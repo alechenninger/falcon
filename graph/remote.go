@@ -2,6 +2,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"math"
 
 	"github.com/RoaringBitmap/roaring"
@@ -38,13 +39,13 @@ func (g *RemoteGraph) Check(ctx context.Context,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
 	req := &graphpb.CheckRequest{
-		SubjectType: string(subjectType),
-		SubjectId:   uint32(subjectID),
-		ObjectType:  string(objectType),
-		ObjectId:    uint32(objectID),
-		Relation:    string(relation),
-		Window:      snapshotWindowToProto(window),
-		Visited:     visitedKeysToProto(visited),
+		SubjectTypeId: uint32(g.schema.GetTypeID(subjectType)),
+		SubjectId:     uint32(subjectID),
+		ObjectTypeId:  uint32(g.schema.GetTypeID(objectType)),
+		ObjectId:      uint32(objectID),
+		RelationId:    uint32(g.schema.GetRelationID(objectType, relation)),
+		Window:        snapshotWindowToProto(window),
+		Visited:       g.visitedKeysToProto(visited),
 	}
 
 	resp, err := g.client.Check(ctx, req)
@@ -66,10 +67,10 @@ func (g *RemoteGraph) CheckUnion(ctx context.Context,
 	}
 
 	req := &graphpb.CheckUnionRequest{
-		SubjectType: string(subjectType),
-		SubjectId:   uint32(subjectID),
-		Checks:      relationChecksToProto(checks),
-		Visited:     visitedKeysToProto(visited),
+		SubjectTypeId: uint32(g.schema.GetTypeID(subjectType)),
+		SubjectId:     uint32(subjectID),
+		Checks:        g.relationChecksToProto(checks),
+		Visited:       g.visitedKeysToProto(visited),
 	}
 
 	resp, err := g.client.CheckUnion(ctx, req)
@@ -77,20 +78,20 @@ func (g *RemoteGraph) CheckUnion(ctx context.Context,
 		return CheckResult{}, err
 	}
 
-	return checkResultFromProto(resp), nil
+	return g.checkResultFromProto(resp), nil
 }
 
 // checkResultFromProto converts a proto CheckUnionResponse to CheckResult.
-func checkResultFromProto(resp *graphpb.CheckUnionResponse) CheckResult {
+func (g *RemoteGraph) checkResultFromProto(resp *graphpb.CheckUnionResponse) CheckResult {
 	return CheckResult{
 		Found:         resp.Allowed,
-		DependentSets: dependentSetsFromProto(resp.DependentSets),
+		DependentSets: g.dependentSetsFromProto(resp.DependentSets),
 		Window:        snapshotWindowFromProto(resp.Window),
 	}
 }
 
 // dependentSetsToProto converts DependentSets to proto representation.
-func dependentSetsToProto(sets []DependentSet) []*graphpb.DependentSet {
+func (g *RemoteGraph) dependentSetsToProto(sets []DependentSet) []*graphpb.DependentSet {
 	if sets == nil {
 		return nil
 	}
@@ -101,16 +102,16 @@ func dependentSetsToProto(sets []DependentSet) []*graphpb.DependentSet {
 			objectIDs, _ = s.ObjectIDs.ToBytes()
 		}
 		result[i] = &graphpb.DependentSet{
-			ObjectType: string(s.ObjectType),
-			Relation:   string(s.Relation),
-			ObjectIds:  objectIDs,
+			ObjectTypeId: uint32(g.schema.GetTypeID(s.ObjectType)),
+			RelationId:   uint32(g.schema.GetRelationID(s.ObjectType, s.Relation)),
+			ObjectIds:    objectIDs,
 		}
 	}
 	return result
 }
 
 // dependentSetsFromProto converts proto DependentSets to Go type.
-func dependentSetsFromProto(sets []*graphpb.DependentSet) []DependentSet {
+func (g *RemoteGraph) dependentSetsFromProto(sets []*graphpb.DependentSet) []DependentSet {
 	if sets == nil {
 		return nil
 	}
@@ -121,9 +122,18 @@ func dependentSetsFromProto(sets []*graphpb.DependentSet) []DependentSet {
 			bitmap = roaring.New()
 			bitmap.FromBuffer(s.ObjectIds)
 		}
+		objType := g.schema.TypeByID(schema.TypeID(s.ObjectTypeId))
+		var objTypeName schema.TypeName
+		var relName schema.RelationName
+		if objType != nil {
+			objTypeName = objType.Name
+			if rel := objType.RelationByID(schema.RelationID(s.RelationId)); rel != nil {
+				relName = rel.Name
+			}
+		}
 		result[i] = DependentSet{
-			ObjectType: schema.TypeName(s.ObjectType),
-			Relation:   schema.RelationName(s.Relation),
+			ObjectType: objTypeName,
+			Relation:   relName,
 			ObjectIDs:  bitmap,
 		}
 	}
@@ -168,39 +178,48 @@ func snapshotWindowFromProto(w *graphpb.SnapshotWindow) SnapshotWindow {
 }
 
 // visitedKeysToProto converts a slice of VisitedKey to proto representation.
-func visitedKeysToProto(visited []VisitedKey) []*graphpb.VisitedNode {
+func (g *RemoteGraph) visitedKeysToProto(visited []VisitedKey) []*graphpb.VisitedNode {
 	if visited == nil {
 		return nil
 	}
 	result := make([]*graphpb.VisitedNode, len(visited))
 	for i, v := range visited {
 		result[i] = &graphpb.VisitedNode{
-			ObjectType: string(v.ObjectType),
-			ObjectId:   uint32(v.ObjectID),
-			Relation:   string(v.Relation),
+			ObjectTypeId: uint32(g.schema.GetTypeID(v.ObjectType)),
+			ObjectId:     uint32(v.ObjectID),
+			RelationId:   uint32(g.schema.GetRelationID(v.ObjectType, v.Relation)),
 		}
 	}
 	return result
 }
 
 // visitedKeysFromProto converts proto VisitedNodes to a slice of VisitedKey.
-func visitedKeysFromProto(visited []*graphpb.VisitedNode) []VisitedKey {
+func (g *RemoteGraph) visitedKeysFromProto(visited []*graphpb.VisitedNode) []VisitedKey {
 	if visited == nil {
 		return nil
 	}
 	result := make([]VisitedKey, len(visited))
 	for i, v := range visited {
+		objType := g.schema.TypeByID(schema.TypeID(v.ObjectTypeId))
+		var objTypeName schema.TypeName
+		var relName schema.RelationName
+		if objType != nil {
+			objTypeName = objType.Name
+			if rel := objType.RelationByID(schema.RelationID(v.RelationId)); rel != nil {
+				relName = rel.Name
+			}
+		}
 		result[i] = VisitedKey{
-			ObjectType: schema.TypeName(v.ObjectType),
+			ObjectType: objTypeName,
 			ObjectID:   schema.ID(v.ObjectId),
-			Relation:   schema.RelationName(v.Relation),
+			Relation:   relName,
 		}
 	}
 	return result
 }
 
 // relationChecksToProto converts a slice of RelationCheck to proto representation.
-func relationChecksToProto(checks []RelationCheck) []*graphpb.RelationCheck {
+func (g *RemoteGraph) relationChecksToProto(checks []RelationCheck) []*graphpb.RelationCheck {
 	result := make([]*graphpb.RelationCheck, len(checks))
 	for i, c := range checks {
 		var objectIDs []byte
@@ -208,17 +227,17 @@ func relationChecksToProto(checks []RelationCheck) []*graphpb.RelationCheck {
 			objectIDs, _ = c.ObjectIDs.ToBytes()
 		}
 		result[i] = &graphpb.RelationCheck{
-			ObjectType: string(c.ObjectType),
-			ObjectIds:  objectIDs,
-			Relation:   string(c.Relation),
-			Window:     snapshotWindowToProto(c.Window),
+			ObjectTypeId: uint32(g.schema.GetTypeID(c.ObjectType)),
+			ObjectIds:    objectIDs,
+			RelationId:   uint32(g.schema.GetRelationID(c.ObjectType, c.Relation)),
+			Window:       snapshotWindowToProto(c.Window),
 		}
 	}
 	return result
 }
 
 // relationChecksFromProto converts proto RelationChecks to a slice of RelationCheck.
-func relationChecksFromProto(checks []*graphpb.RelationCheck) ([]RelationCheck, error) {
+func (g *RemoteGraph) relationChecksFromProto(checks []*graphpb.RelationCheck) ([]RelationCheck, error) {
 	result := make([]RelationCheck, len(checks))
 	for i, c := range checks {
 		bitmap := roaring.New()
@@ -227,10 +246,18 @@ func relationChecksFromProto(checks []*graphpb.RelationCheck) ([]RelationCheck, 
 				return nil, err
 			}
 		}
+		objType := g.schema.TypeByID(schema.TypeID(c.ObjectTypeId))
+		if objType == nil {
+			return nil, fmt.Errorf("unknown object type ID: %d", c.ObjectTypeId)
+		}
+		var relName schema.RelationName
+		if rel := objType.RelationByID(schema.RelationID(c.RelationId)); rel != nil {
+			relName = rel.Name
+		}
 		result[i] = RelationCheck{
-			ObjectType: schema.TypeName(c.ObjectType),
+			ObjectType: objType.Name,
 			ObjectIDs:  bitmap,
-			Relation:   schema.RelationName(c.Relation),
+			Relation:   relName,
 			Window:     snapshotWindowFromProto(c.Window),
 		}
 	}

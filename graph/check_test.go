@@ -17,17 +17,23 @@ var ctx = context.Background()
 //   - group: has "member" relation pointing to users
 //   - folder: has "viewer" relation pointing to users or group#member, with hierarchy via "parent"
 //   - document: has "parent" pointing to folder, "viewer"/"editor" computed from parent
+//
+// Type IDs: user=1, group=2, folder=3, document=4
+// Relation IDs: member=1, parent=1, viewer=2, editor=3
 func testSchema() *schema.Schema {
-	return &schema.Schema{
+	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"group": {
+				ID:   2,
 				Name: "group",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
+						ID:   1,
 						Name: "member",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")), // @user:1
@@ -36,15 +42,18 @@ func testSchema() *schema.Schema {
 				},
 			},
 			"folder": {
+				ID:   3,
 				Name: "folder",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")), // @folder:1
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -57,15 +66,18 @@ func testSchema() *schema.Schema {
 				},
 			},
 			"document": {
+				ID:   4,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")), // @folder:1
 						},
 					},
 					"editor": {
+						ID:   3,
 						Name: "editor",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -76,6 +88,7 @@ func testSchema() *schema.Schema {
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -90,6 +103,8 @@ func testSchema() *schema.Schema {
 			},
 		},
 	}
+	s.Compile()
+	return s
 }
 
 func TestCheck_DirectMembership(t *testing.T) {
@@ -827,17 +842,21 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"serviceAccount": {
+				ID:        2,
 				Name:      "serviceAccount",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"resource": {
+				ID:   3,
 				Name: "resource",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
+						ID:   1,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -850,6 +869,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 			},
 		},
 	}
+	s.Compile()
 
 	g := graph.NewTestGraph(s)
 

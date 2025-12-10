@@ -9,16 +9,19 @@ import (
 )
 
 func mvccTestSchema() *schema.Schema {
-	return &schema.Schema{
+	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"document": {
+				ID:   2,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
+						ID:   1,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -28,26 +31,32 @@ func mvccTestSchema() *schema.Schema {
 			},
 		},
 	}
+	s.Compile()
+	return s
 }
 
 // mvccHierarchySchema includes folder hierarchy for testing arrow narrowing.
 func mvccHierarchySchema() *schema.Schema {
-	return &schema.Schema{
+	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"folder": {
+				ID:   2,
 				Name: "folder",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -57,15 +66,18 @@ func mvccHierarchySchema() *schema.Schema {
 				},
 			},
 			"document": {
+				ID:   3,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -76,6 +88,8 @@ func mvccHierarchySchema() *schema.Schema {
 			},
 		},
 	}
+	s.Compile()
+	return s
 }
 
 func TestMVCC_VersionedSet_ContainsAt(t *testing.T) {
@@ -772,13 +786,16 @@ func TestMVCC_CheckUnion_IndependentWindows(t *testing.T) {
 	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"group": {
+				ID:   2,
 				Name: "group",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
+						ID:   1,
 						Name: "member",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -787,9 +804,11 @@ func TestMVCC_CheckUnion_IndependentWindows(t *testing.T) {
 				},
 			},
 			"document": {
+				ID:   3,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
+						ID:   1,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -802,6 +821,7 @@ func TestMVCC_CheckUnion_IndependentWindows(t *testing.T) {
 			},
 		},
 	}
+	s.Compile()
 	tg := graph.NewTestGraph(s)
 	defer tg.Close()
 	ctx := context.Background()
@@ -873,13 +893,16 @@ func TestMVCC_CheckUnion_TightestWindowOnNotFound(t *testing.T) {
 	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"group": {
+				ID:   2,
 				Name: "group",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
+						ID:   1,
 						Name: "member",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -888,9 +911,11 @@ func TestMVCC_CheckUnion_TightestWindowOnNotFound(t *testing.T) {
 				},
 			},
 			"document": {
+				ID:   3,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"viewer": {
+						ID:   1,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -903,6 +928,7 @@ func TestMVCC_CheckUnion_TightestWindowOnNotFound(t *testing.T) {
 			},
 		},
 	}
+	s.Compile()
 	tg := graph.NewTestGraph(s)
 	defer tg.Close()
 	ctx := context.Background()

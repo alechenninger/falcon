@@ -33,18 +33,23 @@ message SnapshotWindow {
 // has already been visited in the current query traversal.
 // Used for cycle detection across distributed nodes.
 message VisitedNode {
-  string object_type = 1;
+  // object_type_id is the schema TypeID for the object type.
+  uint32 object_type_id = 1;
   uint32 object_id = 2;
-  string relation = 3;
+  // relation_id is the schema RelationID for the relation.
+  uint32 relation_id = 3;
 }
 
 // CheckRequest is the request to check if a subject has a relation on an object.
 message CheckRequest {
-  string subject_type = 1;
+  // subject_type_id is the schema TypeID for the subject type.
+  uint32 subject_type_id = 1;
   uint32 subject_id = 2;
-  string object_type = 3;
+  // object_type_id is the schema TypeID for the object type.
+  uint32 object_type_id = 3;
   uint32 object_id = 4;
-  string relation = 5;
+  // relation_id is the schema RelationID for the relation on object_type.
+  uint32 relation_id = 5;
   // window constrains the snapshot for consistent reads across shards.
   SnapshotWindow window = 6;
   // visited contains the nodes already visited in this query traversal.
@@ -64,10 +69,12 @@ message CheckResponse {
 // RelationCheck represents a check against a single object type's relation.
 // Used by CheckUnion to batch multiple checks with independent windows.
 message RelationCheck {
-  string object_type = 1;
+  // object_type_id is the schema TypeID for the object type.
+  uint32 object_type_id = 1;
   // Serialized roaring bitmap of object IDs.
   bytes object_ids = 2;
-  string relation = 3;
+  // relation_id is the schema RelationID for the relation on object_type.
+  uint32 relation_id = 3;
   // Per-check window, narrowed based on reading this type's data.
   SnapshotWindow window = 4;
 }
@@ -75,7 +82,8 @@ message RelationCheck {
 // CheckUnionRequest checks if a subject has a relation on any of multiple objects.
 // Each RelationCheck has its own snapshot window for independent narrowing.
 message CheckUnionRequest {
-  string subject_type = 1;
+  // subject_type_id is the schema TypeID for the subject type.
+  uint32 subject_type_id = 1;
   uint32 subject_id = 2;
   // Checks to perform, each with its own object type, IDs, relation, and window.
   repeated RelationCheck checks = 3;
@@ -86,8 +94,10 @@ message CheckUnionRequest {
 // DependentSet identifies objects that were relevant to a check result.
 // Used for provenance tracking in snapshot window narrowing.
 message DependentSet {
-  string object_type = 1;
-  string relation = 2;
+  // object_type_id is the schema TypeID for the object type.
+  uint32 object_type_id = 1;
+  // relation_id is the schema RelationID for the relation on object_type.
+  uint32 relation_id = 2;
   // Serialized roaring bitmap of object IDs that were relevant.
   // If empty, means "all objects from the corresponding input check" (optimization).
   bytes object_ids = 3;

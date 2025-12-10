@@ -119,17 +119,22 @@ func (bg *BenchGraph) AddDirect(objectType schema.TypeName, objectID schema.ID, 
 }
 
 // benchSchema creates a schema for scale testing with deep hierarchies and groups.
+// Type IDs: user=1, group=2, folder=3, document=4
+// Relation IDs: member=1, parent=1, viewer=2, editor=3
 func benchSchema() *schema.Schema {
-	return &schema.Schema{
+	s := &schema.Schema{
 		Types: map[schema.TypeName]*schema.ObjectType{
 			"user": {
+				ID:        1,
 				Name:      "user",
 				Relations: map[schema.RelationName]*schema.Relation{},
 			},
 			"group": {
+				ID:   2,
 				Name: "group",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"member": {
+						ID:   1,
 						Name: "member",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("user")),
@@ -138,15 +143,18 @@ func benchSchema() *schema.Schema {
 				},
 			},
 			"folder": {
+				ID:   3,
 				Name: "folder",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -157,6 +165,7 @@ func benchSchema() *schema.Schema {
 						},
 					},
 					"editor": {
+						ID:   3,
 						Name: "editor",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -169,15 +178,18 @@ func benchSchema() *schema.Schema {
 				},
 			},
 			"document": {
+				ID:   4,
 				Name: "document",
 				Relations: map[schema.RelationName]*schema.Relation{
 					"parent": {
+						ID:   1,
 						Name: "parent",
 						Usersets: []schema.Userset{
 							schema.Direct(schema.Ref("folder")),
 						},
 					},
 					"viewer": {
+						ID:   2,
 						Name: "viewer",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -189,6 +201,7 @@ func benchSchema() *schema.Schema {
 						},
 					},
 					"editor": {
+						ID:   3,
 						Name: "editor",
 						Usersets: []schema.Userset{
 							schema.Direct(
@@ -202,6 +215,8 @@ func benchSchema() *schema.Schema {
 			},
 		},
 	}
+	s.Compile()
+	return s
 }
 
 // PopulatedGraph holds a fully populated graph and query fixtures.

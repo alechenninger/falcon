@@ -48,6 +48,8 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - The DependentSet return is probably an optimization most of the time, but if it didn't change the window and was a huge result set, that would be bad. Fortunately, we can fall back to a narrower window without including dependent results if we detect the sets would be too large, even compressed, to transmit over the network. This would probably be quite an expensive check as it is, given it would mean a huge number of sets were checked to be a meaningfully large bitmap (e.g. 10k+?)
 - Also re dependent set stuff: is figuring out all these windows pointless if this is the "end" of the query? Not if we ever want to return consistency tokens for "advanced" use cases.
 - How would this design deal with partial evaluation of conditionals? I guess it counts as dependent for the sake of causality.
+- DependentSets could be serialized different for small sets similar to versionedSet
+- We could use the type/relation IDs internally in more places vs names
 
 ## Thoughts / Maybe bad ideas
 

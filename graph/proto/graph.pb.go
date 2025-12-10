@@ -81,10 +81,12 @@ func (x *SnapshotWindow) GetMax() uint64 {
 // has already been visited in the current query traversal.
 // Used for cycle detection across distributed nodes.
 type VisitedNode struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ObjectType    string                 `protobuf:"bytes,1,opt,name=object_type,json=objectType,proto3" json:"object_type,omitempty"`
-	ObjectId      uint32                 `protobuf:"varint,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
-	Relation      string                 `protobuf:"bytes,3,opt,name=relation,proto3" json:"relation,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// object_type_id is the schema TypeID for the object type.
+	ObjectTypeId uint32 `protobuf:"varint,1,opt,name=object_type_id,json=objectTypeId,proto3" json:"object_type_id,omitempty"`
+	ObjectId     uint32 `protobuf:"varint,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
+	// relation_id is the schema RelationID for the relation.
+	RelationId    uint32 `protobuf:"varint,3,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -119,11 +121,11 @@ func (*VisitedNode) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *VisitedNode) GetObjectType() string {
+func (x *VisitedNode) GetObjectTypeId() uint32 {
 	if x != nil {
-		return x.ObjectType
+		return x.ObjectTypeId
 	}
-	return ""
+	return 0
 }
 
 func (x *VisitedNode) GetObjectId() uint32 {
@@ -133,21 +135,24 @@ func (x *VisitedNode) GetObjectId() uint32 {
 	return 0
 }
 
-func (x *VisitedNode) GetRelation() string {
+func (x *VisitedNode) GetRelationId() uint32 {
 	if x != nil {
-		return x.Relation
+		return x.RelationId
 	}
-	return ""
+	return 0
 }
 
 // CheckRequest is the request to check if a subject has a relation on an object.
 type CheckRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	SubjectType string                 `protobuf:"bytes,1,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
-	SubjectId   uint32                 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
-	ObjectType  string                 `protobuf:"bytes,3,opt,name=object_type,json=objectType,proto3" json:"object_type,omitempty"`
-	ObjectId    uint32                 `protobuf:"varint,4,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
-	Relation    string                 `protobuf:"bytes,5,opt,name=relation,proto3" json:"relation,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// subject_type_id is the schema TypeID for the subject type.
+	SubjectTypeId uint32 `protobuf:"varint,1,opt,name=subject_type_id,json=subjectTypeId,proto3" json:"subject_type_id,omitempty"`
+	SubjectId     uint32 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// object_type_id is the schema TypeID for the object type.
+	ObjectTypeId uint32 `protobuf:"varint,3,opt,name=object_type_id,json=objectTypeId,proto3" json:"object_type_id,omitempty"`
+	ObjectId     uint32 `protobuf:"varint,4,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
+	// relation_id is the schema RelationID for the relation on object_type.
+	RelationId uint32 `protobuf:"varint,5,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	// window constrains the snapshot for consistent reads across shards.
 	Window *SnapshotWindow `protobuf:"bytes,6,opt,name=window,proto3" json:"window,omitempty"`
 	// visited contains the nodes already visited in this query traversal.
@@ -187,11 +192,11 @@ func (*CheckRequest) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *CheckRequest) GetSubjectType() string {
+func (x *CheckRequest) GetSubjectTypeId() uint32 {
 	if x != nil {
-		return x.SubjectType
+		return x.SubjectTypeId
 	}
-	return ""
+	return 0
 }
 
 func (x *CheckRequest) GetSubjectId() uint32 {
@@ -201,11 +206,11 @@ func (x *CheckRequest) GetSubjectId() uint32 {
 	return 0
 }
 
-func (x *CheckRequest) GetObjectType() string {
+func (x *CheckRequest) GetObjectTypeId() uint32 {
 	if x != nil {
-		return x.ObjectType
+		return x.ObjectTypeId
 	}
-	return ""
+	return 0
 }
 
 func (x *CheckRequest) GetObjectId() uint32 {
@@ -215,11 +220,11 @@ func (x *CheckRequest) GetObjectId() uint32 {
 	return 0
 }
 
-func (x *CheckRequest) GetRelation() string {
+func (x *CheckRequest) GetRelationId() uint32 {
 	if x != nil {
-		return x.Relation
+		return x.RelationId
 	}
-	return ""
+	return 0
 }
 
 func (x *CheckRequest) GetWindow() *SnapshotWindow {
@@ -295,11 +300,13 @@ func (x *CheckResponse) GetWindow() *SnapshotWindow {
 // RelationCheck represents a check against a single object type's relation.
 // Used by CheckUnion to batch multiple checks with independent windows.
 type RelationCheck struct {
-	state      protoimpl.MessageState `protogen:"open.v1"`
-	ObjectType string                 `protobuf:"bytes,1,opt,name=object_type,json=objectType,proto3" json:"object_type,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// object_type_id is the schema TypeID for the object type.
+	ObjectTypeId uint32 `protobuf:"varint,1,opt,name=object_type_id,json=objectTypeId,proto3" json:"object_type_id,omitempty"`
 	// Serialized roaring bitmap of object IDs.
 	ObjectIds []byte `protobuf:"bytes,2,opt,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
-	Relation  string `protobuf:"bytes,3,opt,name=relation,proto3" json:"relation,omitempty"`
+	// relation_id is the schema RelationID for the relation on object_type.
+	RelationId uint32 `protobuf:"varint,3,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	// Per-check window, narrowed based on reading this type's data.
 	Window        *SnapshotWindow `protobuf:"bytes,4,opt,name=window,proto3" json:"window,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -336,11 +343,11 @@ func (*RelationCheck) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *RelationCheck) GetObjectType() string {
+func (x *RelationCheck) GetObjectTypeId() uint32 {
 	if x != nil {
-		return x.ObjectType
+		return x.ObjectTypeId
 	}
-	return ""
+	return 0
 }
 
 func (x *RelationCheck) GetObjectIds() []byte {
@@ -350,11 +357,11 @@ func (x *RelationCheck) GetObjectIds() []byte {
 	return nil
 }
 
-func (x *RelationCheck) GetRelation() string {
+func (x *RelationCheck) GetRelationId() uint32 {
 	if x != nil {
-		return x.Relation
+		return x.RelationId
 	}
-	return ""
+	return 0
 }
 
 func (x *RelationCheck) GetWindow() *SnapshotWindow {
@@ -367,9 +374,10 @@ func (x *RelationCheck) GetWindow() *SnapshotWindow {
 // CheckUnionRequest checks if a subject has a relation on any of multiple objects.
 // Each RelationCheck has its own snapshot window for independent narrowing.
 type CheckUnionRequest struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	SubjectType string                 `protobuf:"bytes,1,opt,name=subject_type,json=subjectType,proto3" json:"subject_type,omitempty"`
-	SubjectId   uint32                 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// subject_type_id is the schema TypeID for the subject type.
+	SubjectTypeId uint32 `protobuf:"varint,1,opt,name=subject_type_id,json=subjectTypeId,proto3" json:"subject_type_id,omitempty"`
+	SubjectId     uint32 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
 	// Checks to perform, each with its own object type, IDs, relation, and window.
 	Checks []*RelationCheck `protobuf:"bytes,3,rep,name=checks,proto3" json:"checks,omitempty"`
 	// visited contains the nodes already visited in this query traversal.
@@ -408,11 +416,11 @@ func (*CheckUnionRequest) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *CheckUnionRequest) GetSubjectType() string {
+func (x *CheckUnionRequest) GetSubjectTypeId() uint32 {
 	if x != nil {
-		return x.SubjectType
+		return x.SubjectTypeId
 	}
-	return ""
+	return 0
 }
 
 func (x *CheckUnionRequest) GetSubjectId() uint32 {
@@ -439,9 +447,11 @@ func (x *CheckUnionRequest) GetVisited() []*VisitedNode {
 // DependentSet identifies objects that were relevant to a check result.
 // Used for provenance tracking in snapshot window narrowing.
 type DependentSet struct {
-	state      protoimpl.MessageState `protogen:"open.v1"`
-	ObjectType string                 `protobuf:"bytes,1,opt,name=object_type,json=objectType,proto3" json:"object_type,omitempty"`
-	Relation   string                 `protobuf:"bytes,2,opt,name=relation,proto3" json:"relation,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// object_type_id is the schema TypeID for the object type.
+	ObjectTypeId uint32 `protobuf:"varint,1,opt,name=object_type_id,json=objectTypeId,proto3" json:"object_type_id,omitempty"`
+	// relation_id is the schema RelationID for the relation on object_type.
+	RelationId uint32 `protobuf:"varint,2,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	// Serialized roaring bitmap of object IDs that were relevant.
 	// If empty, means "all objects from the corresponding input check" (optimization).
 	ObjectIds     []byte `protobuf:"bytes,3,opt,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
@@ -479,18 +489,18 @@ func (*DependentSet) Descriptor() ([]byte, []int) {
 	return file_graph_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *DependentSet) GetObjectType() string {
+func (x *DependentSet) GetObjectTypeId() uint32 {
 	if x != nil {
-		return x.ObjectType
+		return x.ObjectTypeId
 	}
-	return ""
+	return 0
 }
 
-func (x *DependentSet) GetRelation() string {
+func (x *DependentSet) GetRelationId() uint32 {
 	if x != nil {
-		return x.Relation
+		return x.RelationId
 	}
-	return ""
+	return 0
 }
 
 func (x *DependentSet) GetObjectIds() []byte {
@@ -575,42 +585,42 @@ const file_graph_proto_rawDesc = "" +
 	"\vgraph.proto\x12\ffalcon.graph\"4\n" +
 	"\x0eSnapshotWindow\x12\x10\n" +
 	"\x03min\x18\x01 \x01(\x04R\x03min\x12\x10\n" +
-	"\x03max\x18\x02 \x01(\x04R\x03max\"g\n" +
-	"\vVisitedNode\x12\x1f\n" +
-	"\vobject_type\x18\x01 \x01(\tR\n" +
-	"objectType\x12\x1b\n" +
-	"\tobject_id\x18\x02 \x01(\rR\bobjectId\x12\x1a\n" +
-	"\brelation\x18\x03 \x01(\tR\brelation\"\x95\x02\n" +
-	"\fCheckRequest\x12!\n" +
-	"\fsubject_type\x18\x01 \x01(\tR\vsubjectType\x12\x1d\n" +
+	"\x03max\x18\x02 \x01(\x04R\x03max\"q\n" +
+	"\vVisitedNode\x12$\n" +
+	"\x0eobject_type_id\x18\x01 \x01(\rR\fobjectTypeId\x12\x1b\n" +
+	"\tobject_id\x18\x02 \x01(\rR\bobjectId\x12\x1f\n" +
+	"\vrelation_id\x18\x03 \x01(\rR\n" +
+	"relationId\"\xa4\x02\n" +
+	"\fCheckRequest\x12&\n" +
+	"\x0fsubject_type_id\x18\x01 \x01(\rR\rsubjectTypeId\x12\x1d\n" +
 	"\n" +
-	"subject_id\x18\x02 \x01(\rR\tsubjectId\x12\x1f\n" +
-	"\vobject_type\x18\x03 \x01(\tR\n" +
-	"objectType\x12\x1b\n" +
-	"\tobject_id\x18\x04 \x01(\rR\bobjectId\x12\x1a\n" +
-	"\brelation\x18\x05 \x01(\tR\brelation\x124\n" +
+	"subject_id\x18\x02 \x01(\rR\tsubjectId\x12$\n" +
+	"\x0eobject_type_id\x18\x03 \x01(\rR\fobjectTypeId\x12\x1b\n" +
+	"\tobject_id\x18\x04 \x01(\rR\bobjectId\x12\x1f\n" +
+	"\vrelation_id\x18\x05 \x01(\rR\n" +
+	"relationId\x124\n" +
 	"\x06window\x18\x06 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\x123\n" +
 	"\avisited\x18\a \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"_\n" +
 	"\rCheckResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x124\n" +
-	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"\xa1\x01\n" +
-	"\rRelationCheck\x12\x1f\n" +
-	"\vobject_type\x18\x01 \x01(\tR\n" +
-	"objectType\x12\x1d\n" +
+	"\x06window\x18\x02 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"\xab\x01\n" +
+	"\rRelationCheck\x12$\n" +
+	"\x0eobject_type_id\x18\x01 \x01(\rR\fobjectTypeId\x12\x1d\n" +
 	"\n" +
-	"object_ids\x18\x02 \x01(\fR\tobjectIds\x12\x1a\n" +
-	"\brelation\x18\x03 \x01(\tR\brelation\x124\n" +
-	"\x06window\x18\x04 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"\xbf\x01\n" +
-	"\x11CheckUnionRequest\x12!\n" +
-	"\fsubject_type\x18\x01 \x01(\tR\vsubjectType\x12\x1d\n" +
+	"object_ids\x18\x02 \x01(\fR\tobjectIds\x12\x1f\n" +
+	"\vrelation_id\x18\x03 \x01(\rR\n" +
+	"relationId\x124\n" +
+	"\x06window\x18\x04 \x01(\v2\x1c.falcon.graph.SnapshotWindowR\x06window\"\xc4\x01\n" +
+	"\x11CheckUnionRequest\x12&\n" +
+	"\x0fsubject_type_id\x18\x01 \x01(\rR\rsubjectTypeId\x12\x1d\n" +
 	"\n" +
 	"subject_id\x18\x02 \x01(\rR\tsubjectId\x123\n" +
 	"\x06checks\x18\x03 \x03(\v2\x1b.falcon.graph.RelationCheckR\x06checks\x123\n" +
-	"\avisited\x18\x04 \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"j\n" +
-	"\fDependentSet\x12\x1f\n" +
-	"\vobject_type\x18\x01 \x01(\tR\n" +
-	"objectType\x12\x1a\n" +
-	"\brelation\x18\x02 \x01(\tR\brelation\x12\x1d\n" +
+	"\avisited\x18\x04 \x03(\v2\x19.falcon.graph.VisitedNodeR\avisited\"t\n" +
+	"\fDependentSet\x12$\n" +
+	"\x0eobject_type_id\x18\x01 \x01(\rR\fobjectTypeId\x12\x1f\n" +
+	"\vrelation_id\x18\x02 \x01(\rR\n" +
+	"relationId\x12\x1d\n" +
 	"\n" +
 	"object_ids\x18\x03 \x01(\fR\tobjectIds\"\xa7\x01\n" +
 	"\x12CheckUnionResponse\x12\x18\n" +
