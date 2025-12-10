@@ -189,9 +189,6 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 
 	// First, find the result at the latest state <= maxTime
 	result, resultTime, historyIdx := v.findStateAtMax(id, maxTime)
-	if resultTime == 0 {
-		return false, 0 // No state available
-	}
 
 	// Now continue walking back to find the oldest time with the same answer.
 	// Our causal dependency in this case depends not on the entire set, but on this specific subject.

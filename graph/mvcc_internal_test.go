@@ -691,3 +691,105 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 		}
 	})
 }
+
+// TestVersionedSet_ContainsWithin_TimeZero tests that data added at time 0 is correctly found.
+// This is important for hydration scenarios where data is loaded at the initial time.
+// Regression test for bug where resultTime==0 was incorrectly treated as "no state available".
+func TestVersionedSet_ContainsWithin_TimeZero(t *testing.T) {
+	t.Run("data_added_at_time_zero_is_found", func(t *testing.T) {
+		vs := newVersionedSet(0)
+		vs.Add(1, 0)
+		vs.Add(2, 0)
+		vs.Add(3, 0)
+
+		// Query at time 0 - should find the data
+		found, stateTime := vs.ContainsWithin(1, 0)
+		if !found {
+			t.Error("expected ID 1 to be found at time 0")
+		}
+		if stateTime != 0 {
+			t.Errorf("expected stateTime 0, got %d", stateTime)
+		}
+
+		// Query at time 100 - should still find the data (added at 0, still present)
+		found, stateTime = vs.ContainsWithin(2, 100)
+		if !found {
+			t.Error("expected ID 2 to be found at time 100")
+		}
+		if stateTime != 0 {
+			t.Errorf("expected stateTime 0 (oldest time answer is valid), got %d", stateTime)
+		}
+
+		// Query for non-existent ID - should not be found
+		found, stateTime = vs.ContainsWithin(999, 100)
+		if found {
+			t.Error("expected ID 999 to not be found")
+		}
+	})
+
+	t.Run("multiple_ids_added_at_time_zero", func(t *testing.T) {
+		vs := newVersionedSet(0)
+		
+		// Simulate hydration: many IDs added at time 0
+		for i := schema.ID(1); i <= 100; i++ {
+			vs.Add(i, 0)
+		}
+
+		// Verify all IDs are found
+		for i := schema.ID(1); i <= 100; i++ {
+			found, stateTime := vs.ContainsWithin(i, 1000)
+			if !found {
+				t.Errorf("expected ID %d to be found", i)
+			}
+			if stateTime != 0 {
+				t.Errorf("expected stateTime 0 for ID %d, got %d", i, stateTime)
+			}
+		}
+
+		// Verify IDs outside range are not found
+		found, _ := vs.ContainsWithin(101, 1000)
+		if found {
+			t.Error("expected ID 101 to not be found")
+		}
+	})
+
+	t.Run("time_zero_with_later_changes", func(t *testing.T) {
+		vs := newVersionedSet(0)
+		
+		// Add at time 0
+		vs.Add(1, 0)
+		
+		// Remove at time 10
+		vs.Remove(1, 10)
+		
+		// Add back at time 20
+		vs.Add(1, 20)
+
+		// Query at time 0 - should be found (original add)
+		found, stateTime := vs.ContainsWithin(1, 0)
+		if !found {
+			t.Error("expected ID 1 to be found at time 0")
+		}
+		if stateTime != 0 {
+			t.Errorf("expected stateTime 0, got %d", stateTime)
+		}
+
+		// Query at time 5 - should be found (between add and remove)
+		found, stateTime = vs.ContainsWithin(1, 5)
+		if !found {
+			t.Error("expected ID 1 to be found at time 5")
+		}
+
+		// Query at time 15 - should NOT be found (after remove, before re-add)
+		found, stateTime = vs.ContainsWithin(1, 15)
+		if found {
+			t.Error("expected ID 1 to NOT be found at time 15")
+		}
+
+		// Query at time 25 - should be found (after re-add)
+		found, stateTime = vs.ContainsWithin(1, 25)
+		if !found {
+			t.Error("expected ID 1 to be found at time 25")
+		}
+	})
+}
