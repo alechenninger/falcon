@@ -148,13 +148,19 @@ func snapshotWindowToProto(w SnapshotWindow) *graphpb.SnapshotWindow {
 
 // snapshotWindowFromProto converts a proto SnapshotWindow to the Go type.
 // Handles the special case of MaxSnapshotWindow (min=0, max=MaxUint64).
+// If the window is nil or has zero values, defaults to MaxSnapshotWindow.
 func snapshotWindowFromProto(w *graphpb.SnapshotWindow) SnapshotWindow {
 	if w == nil {
-		return SnapshotWindow{}
+		return MaxSnapshotWindow
 	}
 	// Detect MaxSnapshotWindow: min=0 and max=MaxUint64
 	// Can't use NewSnapshotWindow for this because delta would overflow
 	if w.Min == 0 && w.Max == math.MaxUint64 {
+		return MaxSnapshotWindow
+	}
+	// Zero window (min=0, max=0) also means "use MaxSnapshotWindow"
+	// since proto3 doesn't distinguish between "not set" and "zero"
+	if w.Min == 0 && w.Max == 0 {
 		return MaxSnapshotWindow
 	}
 	return NewSnapshotWindow(store.StoreTime(w.Min), store.StoreTime(w.Max))

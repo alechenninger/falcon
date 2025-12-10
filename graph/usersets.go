@@ -59,6 +59,15 @@ func (u *MultiversionUsersets) ReplicatedTime() store.StoreTime {
 	return u.replicatedTime.Load()
 }
 
+// SetReplicatedTime sets the replicated time.
+// This is used after hydration to indicate the snapshot time of the loaded data.
+// Normally replicatedTime is advanced by the change stream, but for static/test
+// scenarios we need to set it manually after loading a snapshot.
+// TODO: this is temporary; remove this after we have a proper hydration protocol.
+func (u *MultiversionUsersets) SetReplicatedTime(t store.StoreTime) {
+	u.replicatedTime.Store(t)
+}
+
 // constrainWindow narrows the window's Max to the replicated time.
 // This ensures callers passing MaxSnapshotWindow get a realistic window back.
 func (u *MultiversionUsersets) constrainWindow(window SnapshotWindow) SnapshotWindow {
@@ -215,10 +224,6 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 	}
 
 	found, actualTime := vs.ContainsWithin(subjectID, window.Max())
-	if actualTime == 0 {
-		// No history available within window
-		return false, NewSnapshotWindow(0, window.Max())
-	}
 
 	// Return window with min = oldest time the result is valid
 	return found, NewSnapshotWindow(actualTime, window.Max())
@@ -252,9 +257,6 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 	}
 
 	found, actualTime := vs.ContainsWithin(subjectID, window.Max())
-	if actualTime == 0 {
-		return false, NewSnapshotWindow(0, window.Max())
-	}
 
 	return found, NewSnapshotWindow(actualTime, window.Max())
 }

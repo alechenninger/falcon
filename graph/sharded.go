@@ -413,6 +413,13 @@ func (g *ShardedGraph) ReplicatedTime() store.StoreTime {
 	return g.usersets.ReplicatedTime()
 }
 
+// TODO: this is temporary; remove this after we have a proper hydration protocol.
+// SetReplicatedTime sets the replicated time after hydration.
+// Used for static/test scenarios where data is loaded without a change stream.
+func (g *ShardedGraph) SetReplicatedTime(t store.StoreTime) {
+	g.usersets.SetReplicatedTime(t)
+}
+
 // assertWindowWithinReplicated panics if window.Min() > replicatedTime.
 // This ensures we never try to read data that hasn't been replicated yet.
 func (g *ShardedGraph) assertWindowWithinReplicated(window SnapshotWindow) {
