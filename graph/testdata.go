@@ -32,11 +32,11 @@ type TestDataConfig struct {
 	AccessTuplesPerTenant int
 }
 
-// DefaultTestDataConfig returns a config that generates ~150M tuples.
+// DefaultTestDataConfig returns a config that generates ~40M tuples.
 func DefaultTestDataConfig() TestDataConfig {
 	return TestDataConfig{
-		NumTenants:            20,
-		FolderDepth:           6,
+		NumTenants:            5,
+		FolderDepth:           5,
 		FoldersPerLevel:       20,
 		GroupsPerTenant:       100,
 		UsersPerGroup:         10000,

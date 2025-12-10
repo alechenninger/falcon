@@ -132,7 +132,7 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to start graph: %w", err)
 		}
-	case <-time.After(time.Minute):
+	case <-time.After(10 * time.Minute):
 		return nil, fmt.Errorf("timeout waiting for hydration")
 	}
 

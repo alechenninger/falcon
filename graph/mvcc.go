@@ -60,6 +60,17 @@ func (v *versionedSet) Add(id schema.ID, t store.StoreTime) {
 	v.recordUndo(t, []schema.ID{id}, nil)
 }
 
+// AddBulk adds an ID to the set without recording undo history.
+// This is used during hydration when loading a snapshot - there's no need
+// to time-travel before the snapshot, so we skip the undo chain overhead.
+// The caller must hold no lock; this acquires the write lock.
+// TODO: rethink this when we have a proper hydration protocol.
+func (v *versionedSet) AddBulk(id schema.ID) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.head.Add(uint32(id))
+}
+
 // Remove removes an ID from the set at the given time.
 // If the ID doesn't exist, this is a no-op.
 func (v *versionedSet) Remove(id schema.ID, t store.StoreTime) {

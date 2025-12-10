@@ -12,6 +12,7 @@
 //	--num-shards    Total number of shards in the cluster (default 2)
 //	--small         Use small test data config (for quick testing)
 //	--verbose, -v   Enable verbose (debug) logging
+//	--pprof         Address for pprof HTTP server (e.g., ":6060")
 package main
 
 import (
@@ -19,6 +20,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof" // Register pprof handlers
 	"os"
 
 	"github.com/alechenninger/falcon/graph"
@@ -34,9 +37,20 @@ func main() {
 		small     = flag.Bool("small", false, "Use small test data config (~238 tuples)")
 		medium    = flag.Bool("medium", false, "Use medium test data config (~20K tuples)")
 		verbose   = flag.Bool("verbose", false, "Enable verbose (debug) logging")
+		pprof     = flag.String("pprof", "", "Address for pprof HTTP server (e.g., :6060)")
 	)
 	flag.Bool("v", false, "Enable verbose (debug) logging (shorthand)")
 	flag.Parse()
+
+	// Start pprof server if requested
+	if *pprof != "" {
+		go func() {
+			log.Printf("Starting pprof server on %s", *pprof)
+			if err := http.ListenAndServe(*pprof, nil); err != nil {
+				log.Printf("pprof server error: %v", err)
+			}
+		}()
+	}
 
 	// Handle -v shorthand
 	flag.Visit(func(f *flag.Flag) {

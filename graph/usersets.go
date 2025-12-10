@@ -94,6 +94,8 @@ func (u *MultiversionUsersets) constrainWindow(window SnapshotWindow) SnapshotWi
 
 // Hydrate loads tuples from the given iterator into memory.
 // This should be called on startup before subscribing to changes.
+// Hydration uses bulk operations that skip undo history since there's
+// no need to time-travel before the initial snapshot.
 func (u *MultiversionUsersets) Hydrate(iter store.TupleIterator) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -113,7 +115,8 @@ func (u *MultiversionUsersets) Hydrate(iter store.TupleIterator) error {
 			vs = newVersionedSet(0)
 			u.tuples[key] = vs
 		}
-		vs.Add(t.SubjectID, 0)
+		// Use AddBulk to skip undo history - no need to time-travel before snapshot
+		vs.AddBulk(t.SubjectID)
 	}
 
 	return iter.Err()
