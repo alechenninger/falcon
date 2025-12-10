@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -142,6 +143,17 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 	shardedGraph.SetReplicatedTime(currentTime)
 	log.Printf("[%s] Hydration complete in %v (replicatedTime=%d)", cfg.ShardID, time.Since(startHydrate), currentTime)
 
+	// Clear the static store to free memory - tuples are now in the graph
+	var memBefore runtime.MemStats
+	runtime.ReadMemStats(&memBefore)
+	staticStore.Clear()
+	runtime.GC()
+	runtime.GC() // Run twice to ensure finalizers complete
+	var memAfter runtime.MemStats
+	runtime.ReadMemStats(&memAfter)
+	freedMB := float64(memBefore.HeapAlloc-memAfter.HeapAlloc) / (1024 * 1024)
+	log.Printf("[%s] Cleared static store, freed %.1f MB", cfg.ShardID, freedMB)
+
 	// Connect to peer shards
 	var conns []*grpc.ClientConn
 	for peerID, addr := range cfg.Peers {
@@ -265,6 +277,12 @@ func (s *staticStore) LoadAll(ctx context.Context) (store.TupleIterator, error) 
 // Close is a no-op.
 func (s *staticStore) Close() error {
 	return nil
+}
+
+// Clear releases the tuples slice to free memory after hydration.
+// The store remains valid for CurrentTime() calls but LoadAll() will return empty.
+func (s *staticStore) Clear() {
+	s.tuples = nil
 }
 
 // Subscribe returns channels that complete immediately (no live updates).

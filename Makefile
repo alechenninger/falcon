@@ -54,11 +54,11 @@ clean:
 
 # Run shard 0 (small config for quick testing)
 run-shard-0: falcon
-	./bin/falcon --shard-id=shard-0 --listen=:50051 --num-shards=2 --peers=shard-1=localhost:50052 -v
+	./bin/falcon --shard-id=shard-0 --listen=:50051 --num-shards=2 --peers=shard-1=localhost:50052 --small -v
 
 # Run shard 1 (small config for quick testing)
 run-shard-1: falcon
-	./bin/falcon --shard-id=shard-1 --listen=:50052 --num-shards=2 --peers=shard-0=localhost:50051 -v
+	./bin/falcon --shard-id=shard-1 --listen=:50052 --num-shards=2 --peers=shard-0=localhost:50051 --small -v
 
 # Show help
 help:
