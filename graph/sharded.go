@@ -271,6 +271,9 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 				tightestWindow = resultWindow
 				first = false
 			} else {
+				// TODO: We would need to defer intersection to avoid creating an invalid window
+				// when there may be a true result coming.
+				// If all false, then we need to wait & retry to avoid invalid window.
 				tightestWindow = tightestWindow.Intersect(resultWindow)
 			}
 		}

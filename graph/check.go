@@ -167,6 +167,9 @@ func checkDirectAndUserset(
 
 	// Check if subject is in the union of all userset subjects
 	visitedSlice := visitedMapToSlice(visited)
+
+	// TODO: in the negative case, this window needs to narrow with the direct window also I think
+
 	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
 	return result.Found, result.Window, err
 }
