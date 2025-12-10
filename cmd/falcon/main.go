@@ -11,6 +11,7 @@
 //	--peers         Comma-separated list of peer shardID=addr pairs
 //	--num-shards    Total number of shards in the cluster (default 2)
 //	--small         Use small test data config (for quick testing)
+//	--verbose, -v   Enable verbose (debug) logging
 package main
 
 import (
@@ -32,8 +33,17 @@ func main() {
 		numShards = flag.Int("num-shards", 2, "Total number of shards in the cluster")
 		small     = flag.Bool("small", false, "Use small test data config (~238 tuples)")
 		medium    = flag.Bool("medium", false, "Use medium test data config (~20K tuples)")
+		verbose   = flag.Bool("verbose", false, "Enable verbose (debug) logging")
 	)
+	flag.Bool("v", false, "Enable verbose (debug) logging (shorthand)")
 	flag.Parse()
+
+	// Handle -v shorthand
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "v" {
+			*verbose = true
+		}
+	})
 
 	if *shardID == "" {
 		fmt.Fprintln(os.Stderr, "error: --shard-id is required")
@@ -60,6 +70,7 @@ func main() {
 		Peers:          peerMap,
 		NumShards:      *numShards,
 		TestDataConfig: testDataCfg,
+		Verbose:        *verbose,
 	}
 
 	log.SetFlags(log.Ltime | log.Lmicroseconds)

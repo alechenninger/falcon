@@ -163,15 +163,25 @@ func (g *ShardedGraph) Check(ctx context.Context,
 	relation schema.RelationName,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
+	ctx, probe := g.shardedObserver.CheckStarted(ctx, subjectType, subjectID, objectType, objectID, relation)
+	defer probe.End()
+
 	targetShard := g.router(objectType, objectID)
 
 	if targetShard == g.localShardID {
 		// Local check - validate window is within replicated time
+		probe.LocalCheck()
 		g.assertWindowWithinReplicated(window)
 
-		return Check(ctx, g, g.usersets, g.checkObserver,
+		found, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 			subjectType, subjectID, objectType, objectID, relation,
 			window, visited)
+		if err != nil {
+			probe.Error(err)
+		} else {
+			probe.Result(found, resultWindow)
+		}
+		return found, resultWindow, err
 	}
 
 	// Remote check - delegate to the appropriate shard
@@ -179,12 +189,26 @@ func (g *ShardedGraph) Check(ctx context.Context,
 	if !ok {
 		// Unknown shard - this shouldn't happen with a properly configured router
 		// For now, fall back to local (in production this would be an error)
-		return Check(ctx, g, g.usersets, g.checkObserver,
+		probe.UnknownShard(targetShard)
+		found, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 			subjectType, subjectID, objectType, objectID, relation,
 			window, visited)
+		if err != nil {
+			probe.Error(err)
+		} else {
+			probe.Result(found, resultWindow)
+		}
+		return found, resultWindow, err
 	}
 
-	return remoteShard.Check(ctx, subjectType, subjectID, objectType, objectID, relation, window, visited)
+	probe.RemoteCheck(targetShard)
+	found, resultWindow, err := remoteShard.Check(ctx, subjectType, subjectID, objectType, objectID, relation, window, visited)
+	if err != nil {
+		probe.Error(err)
+	} else {
+		probe.Result(found, resultWindow)
+	}
+	return found, resultWindow, err
 }
 
 // checkUnionResult holds the result of a remote CheckUnion call.

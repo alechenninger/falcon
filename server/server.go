@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/alechenninger/falcon/graph"
 	graphpb "github.com/alechenninger/falcon/graph/proto"
+	"github.com/alechenninger/falcon/probes/logging"
 	"github.com/alechenninger/falcon/store"
 )
 
@@ -39,6 +41,9 @@ type Config struct {
 
 	// TestDataConfig configures the generated test data.
 	TestDataConfig graph.TestDataConfig
+
+	// Verbose enables debug-level logging.
+	Verbose bool
 }
 
 // ParsePeers parses a comma-separated list of "shardID=addr" pairs.
@@ -89,6 +94,15 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 
 	// Create the sharded graph (initially without remote shards - we'll add them after)
 	sch := graph.TestDataSchema()
+
+	// Create slog logger with shard ID and appropriate log level
+	logLevel := slog.LevelInfo
+	if cfg.Verbose {
+		logLevel = slog.LevelDebug
+	}
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	logger := slog.New(handler).With("shard", cfg.ShardID)
+
 	shardedGraph := graph.NewShardedGraph(
 		cfg.ShardID,
 		sch,
@@ -96,7 +110,10 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		nil, // Remote shards added later
 		staticStore,
 		staticStore,
-	)
+	).
+		WithUsersetsObserver(logging.NewUsersetsObserver(logger)).
+		WithGraphObserver(logging.NewShardedGraphObserver(logger)).
+		WithCheckObserver(logging.NewCheckObserver(logger))
 
 	// Start the graph (hydrate from static store)
 	log.Printf("[%s] Hydrating usersets...", cfg.ShardID)

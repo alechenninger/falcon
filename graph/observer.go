@@ -128,9 +128,39 @@ func (NoOpApplyChangeProbe) End() {}
 // Implementations should embed NoOpShardedGraphObserver for forward compatibility
 // with new methods added to this interface.
 type ShardedGraphObserver interface {
+	// CheckStarted is called when Check begins.
+	// Returns a potentially modified context and a probe to track the operation lifecycle.
+	CheckStarted(ctx context.Context,
+		subjectType schema.TypeName, subjectID schema.ID,
+		objectType schema.TypeName, objectID schema.ID,
+		relation schema.RelationName,
+	) (context.Context, ShardedCheckProbe)
+
 	// CheckUnionStarted is called when CheckUnion begins.
 	// Returns a potentially modified context and a probe to track the operation lifecycle.
 	CheckUnionStarted(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID) (context.Context, CheckUnionProbe)
+}
+
+// ShardedCheckProbe tracks a ShardedGraph.Check invocation lifecycle.
+// Implementations should embed NoOpShardedCheckProbe for forward compatibility.
+type ShardedCheckProbe interface {
+	// LocalCheck is called when routing to local shard.
+	LocalCheck()
+
+	// RemoteCheck is called when routing to a remote shard.
+	RemoteCheck(shardID ShardID)
+
+	// UnknownShard is called when a shard ID is not found (fallback to local).
+	UnknownShard(shardID ShardID)
+
+	// Result is called with the check result.
+	Result(found bool, window SnapshotWindow)
+
+	// Error is called when an error occurs.
+	Error(err error)
+
+	// End signals the method is complete (for timing). Called via defer.
+	End()
 }
 
 // CheckUnionProbe tracks a CheckUnion invocation lifecycle.
@@ -165,10 +195,30 @@ type CheckUnionProbe interface {
 // Embed this in custom observers for forward compatibility with new methods.
 type NoOpShardedGraphObserver struct{}
 
+// CheckStarted returns the context unchanged and a no-op probe.
+func (NoOpShardedGraphObserver) CheckStarted(ctx context.Context,
+	_ schema.TypeName, _ schema.ID,
+	_ schema.TypeName, _ schema.ID,
+	_ schema.RelationName,
+) (context.Context, ShardedCheckProbe) {
+	return ctx, NoOpShardedCheckProbe{}
+}
+
 // CheckUnionStarted returns the context unchanged and a no-op probe.
 func (NoOpShardedGraphObserver) CheckUnionStarted(ctx context.Context, _ schema.TypeName, _ schema.ID) (context.Context, CheckUnionProbe) {
 	return ctx, NoOpCheckUnionProbe{}
 }
+
+// NoOpShardedCheckProbe is a no-op implementation of ShardedCheckProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpShardedCheckProbe struct{}
+
+func (NoOpShardedCheckProbe) LocalCheck()                 {}
+func (NoOpShardedCheckProbe) RemoteCheck(ShardID)         {}
+func (NoOpShardedCheckProbe) UnknownShard(ShardID)        {}
+func (NoOpShardedCheckProbe) Result(bool, SnapshotWindow) {}
+func (NoOpShardedCheckProbe) Error(error)                 {}
+func (NoOpShardedCheckProbe) End()                        {}
 
 // NoOpCheckUnionProbe is a no-op implementation of CheckUnionProbe.
 // Embed this in custom probes for forward compatibility with new methods.
