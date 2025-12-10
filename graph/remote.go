@@ -158,6 +158,7 @@ func snapshotWindowFromProto(w *graphpb.SnapshotWindow) SnapshotWindow {
 	if w.Min == 0 && w.Max == math.MaxUint64 {
 		return MaxSnapshotWindow
 	}
+	// TODO: reconsider this
 	// Zero window (min=0, max=0) also means "use MaxSnapshotWindow"
 	// since proto3 doesn't distinguish between "not set" and "zero"
 	if w.Min == 0 && w.Max == 0 {
