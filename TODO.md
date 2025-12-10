@@ -46,6 +46,7 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - Empty checks should probably return error rather than undefined window OR we should ALSO include the "outter" window in the signature only for this case
 - I don't like the "With...." pattern when constructing structs.
 - The DependentSet return is probably an optimization most of the time, but if it didn't change the window and was a huge result set, that would be bad. Fortunately, we can fall back to a narrower window without including dependent results if we detect the sets would be too large, even compressed, to transmit over the network. This would probably be quite an expensive check as it is, given it would mean a huge number of sets were checked to be a meaningfully large bitmap (e.g. 10k+?)
+- Also re dependent set stuff: is figuring out all these windows pointless if this is the "end" of the query? Not if we ever want to return consistency tokens for "advanced" use cases.
 - How would this design deal with partial evaluation of conditionals? I guess it counts as dependent for the sake of causality.
 
 ## Thoughts / Maybe bad ideas

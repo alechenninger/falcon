@@ -66,18 +66,31 @@ func checkRelation(
 	defer func() { visited[key] = false }()
 
 	// Evaluate each userset in the union
+	// Track the tightest window across all "not found" results
+	resultMin := window.Min()
+	resultMax := window.Max()
+
 	for _, us := range rel.Usersets {
 		ok, newWindow, err := checkUserset(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel, us, visited, window)
 		if err != nil {
 			return false, window, err
 		}
-		window = newWindow
 		if ok {
-			return true, window, nil
+			return true, newWindow, nil
+		}
+		// For "not found", track tightest window (highest min)
+		if newWindow.Min() > resultMin {
+			resultMin = newWindow.Min()
+		}
+		if newWindow.Max() < resultMax {
+			resultMax = newWindow.Max()
 		}
 	}
 
-	return false, window, nil
+	// Like all dependent merges, if the new window is invalid,
+	// we need to wait & retry or abort.
+
+	return false, NewSnapshotWindow(resultMin, resultMax), nil
 }
 
 // checkUserset evaluates a single userset definition.
@@ -129,14 +142,15 @@ func checkDirectAndUserset(
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
 	// Check direct membership first
-	found, _, newWindow := usersets.ContainsDirectWithin(objectType, objectID, relation, subjectType, subjectID, window)
+	found, directWindow := usersets.ContainsDirectWithin(objectType, objectID, relation, subjectType, subjectID, window)
 	if found {
-		return true, newWindow, nil
+		return true, directWindow, nil
 	}
 
 	// Build checks for userset subjects with independent windows per type
 	// Each type reads data from the original window, getting its own narrowed window
 	var checks []RelationCheck
+
 	for _, ref := range targetTypes {
 		// TODO: we can know what the type of set is in this set,
 		// and if it's not the same as the subjectType we can skip the check
@@ -146,7 +160,7 @@ func checkDirectAndUserset(
 		}
 
 		// Read data for this type from original window - each type gets independent narrowing
-		bitmap, _, typeWindow := usersets.GetSubjectBitmapWithin(
+		bitmap, typeWindow := usersets.GetSubjectBitmapWithin(
 			objectType, objectID, relation, ref.Type, ref.Relation, window)
 		if bitmap == nil || bitmap.IsEmpty() {
 			continue
@@ -161,17 +175,61 @@ func checkDirectAndUserset(
 	}
 
 	if len(checks) == 0 {
-		// Use newWindow; even though false, this "false" result is based on this window.
-		return false, newWindow, nil
+		// Use directWindow; even though false, this "false" result is based on this window.
+		return false, directWindow, nil
 	}
 
 	// Check if subject is in the union of all userset subjects
 	visitedSlice := visitedMapToSlice(visited)
 
-	// TODO: in the negative case, this window needs to narrow with the direct window also I think
-
 	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
-	return result.Found, result.Window, err
+	if err != nil {
+		return false, window, err
+	}
+
+	// Use DependentSets to determine which specific subjects mattered,
+	// then look up when those subjects were added to our local usersets.
+	resultMin := result.Window.Min()
+
+	for _, dep := range result.DependentSets {
+		// Find the check that corresponds to this dependent set
+		for _, chk := range checks {
+			if chk.ObjectType == dep.ObjectType && chk.Relation == dep.Relation {
+				// dep.ObjectIDs is nil for "not found" (all from input),
+				// or a specific bitmap for "found"
+				objectsToCheck := dep.ObjectIDs
+				if objectsToCheck == nil {
+					objectsToCheck = chk.ObjectIDs
+				}
+
+				// Look up when each of these subjects was added to our local userset
+				iter := objectsToCheck.Iterator()
+				for iter.HasNext() {
+					objID := schema.ID(iter.Next())
+					_, tupleWindow := usersets.ContainsUsersetSubjectWithin(
+						objectType, objectID, relation,
+						dep.ObjectType, objID, dep.Relation,
+						window)
+					if tupleWindow.Min() > resultMin {
+						resultMin = tupleWindow.Min()
+					}
+				}
+				break
+			}
+		}
+	}
+
+	// Also consider direct check window if the answer is negative
+	// With negative unions, all sets are interdependent
+	// On positive, we only need a single match, so just use the result min
+
+	if !result.Found && directWindow.Min() > resultMin {
+		resultMin = directWindow.Min()
+	}
+
+	// TODO: if the window is invalid, we would need to wait & retry or abort
+
+	return result.Found, NewSnapshotWindow(resultMin, result.Window.Max()), nil
 }
 
 // checkArrow evaluates a tuple-to-userset (arrow) operation.
@@ -203,6 +261,7 @@ func checkArrow(
 	// Build checks for each target type with independent windows
 	// Each type reads data from the original window, getting its own narrowed window
 	var checks []RelationCheck
+
 	for _, ref := range targetTypes {
 		// TODO: we can know what the type of set is in this set,
 		// and if it's not the same as the subjectType we can skip the check
@@ -222,7 +281,7 @@ func checkArrow(
 		}
 
 		// Read data for this type from original window - each type gets independent narrowing
-		bitmap, _, typeWindow := usersets.GetSubjectBitmapWithin(
+		bitmap, typeWindow := usersets.GetSubjectBitmapWithin(
 			objectType, objectID, arrow.TuplesetRelation, ref.Type, "", window)
 		if bitmap == nil || bitmap.IsEmpty() {
 			continue
@@ -237,13 +296,51 @@ func checkArrow(
 	}
 
 	if len(checks) == 0 {
+		// No targets found - return with initial window constrained to replicated time
 		return false, window, nil
 	}
 
 	// Check if subject has relation on any of the target objects
 	visitedSlice := visitedMapToSlice(visited)
 	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
-	return result.Found, result.Window, err
+	if err != nil {
+		return false, window, err
+	}
+
+	// Use DependentSets to determine which specific targets mattered,
+	// then look up when those tuples were added to our local tupleset.
+	resultMin := result.Window.Min()
+
+	for _, dep := range result.DependentSets {
+		// Find the check that corresponds to this dependent set
+		for _, chk := range checks {
+			if chk.ObjectType == dep.ObjectType && chk.Relation == dep.Relation {
+				// dep.ObjectIDs is nil for "not found" (all from input),
+				// or a specific bitmap for "found"
+				objectsToCheck := dep.ObjectIDs
+				if objectsToCheck == nil {
+					objectsToCheck = chk.ObjectIDs
+				}
+
+				// Look up when each of these targets was added to our local tupleset
+				// For arrows, these are direct subjects (not usersets)
+				iter := objectsToCheck.Iterator()
+				for iter.HasNext() {
+					targetID := schema.ID(iter.Next())
+					_, tupleWindow := usersets.ContainsDirectWithin(
+						objectType, objectID, arrow.TuplesetRelation,
+						dep.ObjectType, targetID,
+						window)
+					if tupleWindow.Min() > resultMin {
+						resultMin = tupleWindow.Min()
+					}
+				}
+				break
+			}
+		}
+	}
+
+	return result.Found, NewSnapshotWindow(resultMin, result.Window.Max()), nil
 }
 
 // visitedMapToSlice converts visited map to slice for interface calls.

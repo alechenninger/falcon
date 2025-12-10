@@ -171,6 +171,19 @@ func (v *versionedSet) OldestTime() store.StoreTime {
 // the same answer, allowing for maximum snapshot window width.
 // Returns (false, 0) if no state is available within the time bound.
 func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bool, store.StoreTime) {
+	// TODO: what should we do with truncated history, or "beginning of time"?
+	// if a subject has never been in the set, do we return false, 0?
+	// e.g. a folder -> group members is added at time 1
+	// a user is added at time 2
+	// we check a different user. is that causally consistent from 0?
+	// If we truncate history, we don't know how far we can go back and still know
+	// about a particular subject. We can only save when the userset was first created.
+	// (before that we know the set was effectively empty)
+	// But for this to be useful, we'd need to persist this.
+	// Maybe we don't bother. It only matters when the first tuple is ever added.
+	// Maybe we could track the last point at which we know the set goes from empty to non-empty,
+	// and non-empty to empty.
+
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 

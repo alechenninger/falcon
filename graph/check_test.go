@@ -924,3 +924,210 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 		t.Error("expected serviceAccount:1 to NOT be viewer after removal")
 	}
 }
+
+// TestCheck_UnionWindowNarrowing_AllFalse tests that when multiple usersets in a union
+// all return false, the result window is the intersection (tightest) of all windows.
+func TestCheck_UnionWindowNarrowing_AllFalse(t *testing.T) {
+	// Schema with a relation that has multiple userset types (direct + group member)
+	s := testSchema()
+	g := graph.NewTestGraph(s)
+	defer g.Close()
+
+	const (
+		alice  = 1
+		bob    = 2
+		doc100 = 100
+		group1 = 10
+	)
+
+	// Add bob as direct viewer (time 1)
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	time1 := g.ReplicatedTime()
+
+	// Add bob to group1 (time 2)
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Add group1 as viewer of doc100 (time 3)
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	time3 := g.ReplicatedTime()
+
+	// Check alice (who is NOT in any relation) - should be false
+	// The window should be narrowed from all the "false" checks
+	window := graph.MaxSnapshotWindow
+	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if ok {
+		t.Error("expected alice to NOT be viewer")
+	}
+
+	// The window max should be constrained to replicated time
+	if resultWindow.Max() != time3 {
+		t.Errorf("expected window.Max = %d (replicated time), got %d", time3, resultWindow.Max())
+	}
+	// The window min should be raised to the highest min across all checks
+	// Both direct check (time 1) and userset check (time 3) contribute
+	// The highest min should be time3 (from the userset relation access)
+	if resultWindow.Min() < time1 {
+		t.Errorf("expected window.Min >= %d, got %d", time1, resultWindow.Min())
+	}
+}
+
+// TestCheck_UnionWindowNarrowing_FirstTrue tests that when the first userset in
+// a union returns true, we use that window (not affected by subsequent checks).
+func TestCheck_UnionWindowNarrowing_FirstTrue(t *testing.T) {
+	s := testSchema()
+	g := graph.NewTestGraph(s)
+	defer g.Close()
+
+	const (
+		alice  = 1
+		doc100 = 100
+		group1 = 10
+	)
+
+	// Add alice as direct viewer (time 1)
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	time1 := g.ReplicatedTime()
+
+	// Add more data that would affect window if checked (time 2, 3)
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	time3 := g.ReplicatedTime()
+
+	// Check alice - should find via direct (first userset)
+	window := graph.MaxSnapshotWindow
+	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer")
+	}
+
+	// The window should be from the direct check only [1, 3]
+	// Min = 1 (when direct tuple was added), Max = replicated time
+	expectedWindow := graph.NewSnapshotWindow(time1, time3)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
+	}
+}
+
+// TestCheck_UnionWindowNarrowing_LaterTrue tests that when a later userset returns true,
+// we use that window and don't include windows from prior "false" checks.
+func TestCheck_UnionWindowNarrowing_LaterTrue(t *testing.T) {
+	s := testSchema()
+	g := graph.NewTestGraph(s)
+	defer g.Close()
+
+	const (
+		alice  = 1
+		bob    = 2
+		doc100 = 100
+		group1 = 10
+	)
+
+	// Add bob as direct viewer (time 1) - alice is NOT direct
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", bob, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Add alice to group1 (time 2)
+	if err := g.WriteTuple(ctx, "group", group1, "member", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+
+	// Add group1 as viewer of doc100 (time 3)
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "group", group1, "member"); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	time3 := g.ReplicatedTime()
+
+	// Check alice - should NOT find via direct, but SHOULD find via group
+	window := graph.MaxSnapshotWindow
+	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer via group")
+	}
+
+	// The window should reflect when the group membership was valid
+	// Min should be at least time3 (when userset relation was added - the highest min)
+	if resultWindow.Min() < time3 {
+		t.Errorf("expected window.Min >= %d (userset relation time), got %d", time3, resultWindow.Min())
+	}
+	if resultWindow.Max() != time3 {
+		t.Errorf("expected window.Max = %d (replicated time), got %d", time3, resultWindow.Max())
+	}
+}
+
+// TestCheck_WindowNarrowing_MVCCTimeTravel tests that window narrowing correctly
+// handles MVCC time-travel scenarios where data is added then removed.
+func TestCheck_WindowNarrowing_MVCCTimeTravel(t *testing.T) {
+	s := testSchema()
+	g := graph.NewTestGraph(s)
+	defer g.Close()
+
+	const (
+		alice  = 1
+		doc100 = 100
+	)
+
+	// Add alice as viewer (time 1)
+	if err := g.WriteTuple(ctx, "document", doc100, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("WriteTuple failed: %v", err)
+	}
+	time1 := g.ReplicatedTime()
+
+	// Remove alice as viewer (time 2)
+	if err := g.DeleteTuple(ctx, "document", doc100, "viewer", "user", alice, ""); err != nil {
+		t.Fatalf("DeleteTuple failed: %v", err)
+	}
+	time2 := g.ReplicatedTime()
+
+	// At current time (time 2), alice is NOT a viewer
+	window := graph.MaxSnapshotWindow
+	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
+	if err != nil {
+		t.Fatalf("CheckAt failed: %v", err)
+	}
+	if ok {
+		t.Error("expected alice to NOT be viewer at current time")
+	}
+
+	// The window min for "not found" should be >= time2 (when removed)
+	// because at time1, alice WAS a viewer
+	if resultWindow.Min() < time2 {
+		t.Errorf("expected window.Min >= %d (removal time), got %d", time2, resultWindow.Min())
+	}
+
+	// Time-travel to time1 - alice SHOULD be a viewer
+	windowAtTime1 := graph.NewSnapshotWindow(0, time1)
+	ok, resultWindow, err = g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &windowAtTime1)
+	if err != nil {
+		t.Fatalf("CheckAt at time1 failed: %v", err)
+	}
+	if !ok {
+		t.Error("expected alice to be viewer at time1")
+	}
+	// Window should be [1, 1]
+	expectedWindow := graph.NewSnapshotWindow(time1, time1)
+	if resultWindow != expectedWindow {
+		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
+	}
+}

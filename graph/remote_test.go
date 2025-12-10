@@ -105,7 +105,8 @@ func TestRemoteGraph_Check(t *testing.T) {
 	if ok {
 		t.Error("expected user2 to NOT be viewer of doc100")
 	}
-	// Window should be [1, 1]: we accessed the versioned set at time 1 (even though user2 wasn't in it)
+	// TODO: Window COULD be [1, 1], if we kept history past truncation
+	// See TODO in MultiversionUsersets.ContainsWithin
 	expectedNotFound := graph.NewSnapshotWindow(1, 1)
 	if resultWindow != expectedNotFound {
 		t.Errorf("expected window %v, got %v", expectedNotFound, resultWindow)
@@ -172,7 +173,11 @@ func TestRemoteGraph_CheckUnion(t *testing.T) {
 	if result.Found {
 		t.Error("expected CheckUnion to NOT find user2 as viewer")
 	}
-	// Window should be [1, 1]: we accessed the versioned set at time 1 (even though user2 wasn't in it)
+
+	// TODO: Window COULD be [0, 1]. going back as far as 0, we get the same answer
+	// However, we would have to track the first time a tuple was added to the set,
+	// and know that it's not just that history was trunacated,
+	// in which case we have complete history and can go all the way back to 0.
 	expectedNotFound := graph.NewSnapshotWindow(1, 1)
 	if result.Window != expectedNotFound {
 		t.Errorf("expected window %v, got %v", expectedNotFound, result.Window)
@@ -274,7 +279,9 @@ func TestRemoteGraph_CheckWithUserset(t *testing.T) {
 	if ok {
 		t.Error("expected bob to NOT be viewer of doc100")
 	}
-	// Window should be [2, 2]: we accessed the userset at time 2 (even though bob wasn't in group)
+	// TODO: Window COULD be [0, 2], see TODO in MultiversionUsersets.ContainsWithin
+	// It's 2, 2 because a negative result depends on the state of all usersets
+	// And newly added usersets don't know when they didn't exist.
 	expectedNotFound := graph.NewSnapshotWindow(2, 2)
 	if resultWindow != expectedNotFound {
 		t.Errorf("expected window %v, got %v", expectedNotFound, resultWindow)

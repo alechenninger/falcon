@@ -187,13 +187,14 @@ func (u *MultiversionUsersets) applyRemove(objectType schema.TypeName, objectID 
 }
 
 // ContainsDirectWithin checks if the subject is directly in the relation within the window.
-// Returns (found, stateTime, narrowedWindow).
+// Only constrains result by window.Max(); result min is the actual store time of accessed data.
+// Returns (found, narrowedWindow) where window.Min() == oldest time the answer is valid.
 func (u *MultiversionUsersets) ContainsDirectWithin(
 	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
 	subjectType schema.TypeName, subjectID schema.ID,
 	window SnapshotWindow,
-) (bool, store.StoreTime, SnapshotWindow) {
-	// Constrain window to replicated time
+) (bool, SnapshotWindow) {
+	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
 	u.mu.RLock()
@@ -209,28 +210,29 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 
 	vs, ok := u.tuples[key]
 	if !ok {
-		return false, 0, window
+		// Not found - window max is still correct, min is 0 (always not found)
+		return false, NewSnapshotWindow(0, window.Max())
 	}
 
 	found, actualTime := vs.ContainsWithin(subjectID, window.Max())
 	if actualTime == 0 {
-		return false, 0, window
+		// No history available within window
+		return false, NewSnapshotWindow(0, window.Max())
 	}
 
-	// Narrow window
-	newWindow := window.NarrowMin(actualTime)
-	return found, actualTime, newWindow
+	// Return window with min = oldest time the result is valid
+	return found, NewSnapshotWindow(actualTime, window.Max())
 }
 
-// GetSubjectBitmapWithin gets the subject bitmap for the given tuple key within the snapshot window.
-// Returns the bitmap (possibly cloned), the state time, and the narrowed window.
-// Returns nil bitmap if no tuples exist.
-func (u *MultiversionUsersets) GetSubjectBitmapWithin(
+// ContainsUsersetSubjectWithin checks if a specific userset subject is in the relation.
+// Unlike ContainsDirectWithin, this is for userset subjects (with a non-empty subjectRelation).
+// Returns (found, narrowedWindow) where window.Min() == oldest time the answer is valid.
+func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	subjectType schema.TypeName, subjectRelation schema.RelationName,
+	subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName,
 	window SnapshotWindow,
-) (*roaring.Bitmap, store.StoreTime, SnapshotWindow) {
-	// Constrain window to replicated time
+) (bool, SnapshotWindow) {
+	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
 	u.mu.RLock()
@@ -246,86 +248,58 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 
 	vs, ok := u.tuples[key]
 	if !ok {
-		return nil, 0, window
+		return false, NewSnapshotWindow(0, window.Max())
 	}
 
-	// If head is within bounds, use it directly
-	if vs.HeadTime() <= window.Max() {
-		newWindow := window.NarrowMin(vs.HeadTime())
-		return vs.Head(), vs.HeadTime(), newWindow
+	found, actualTime := vs.ContainsWithin(subjectID, window.Max())
+	if actualTime == 0 {
+		return false, NewSnapshotWindow(0, window.Max())
 	}
 
-	// Need historical snapshot
-	bitmap, actualTime := vs.SnapshotWithin(window.Max())
-	if bitmap == nil {
-		return nil, 0, window
-	}
-
-	newWindow := window.NarrowMin(actualTime)
-	return bitmap, actualTime, newWindow
+	return found, NewSnapshotWindow(actualTime, window.Max())
 }
 
-// ForEachUsersetSubjectWithin iterates over userset subjects within the given snapshot window.
-// For each (subjectType, subjectRelation, subjectID) tuple, fn is called with the current window.
-// fn returns (stop, newWindow). If stop is true, iteration ends early.
-// Returns (anyTrue, finalWindow).
-//
-// targetTypes specifies the allowed subject types from the Direct userset.
-func (u *MultiversionUsersets) ForEachUsersetSubjectWithin(
+// GetSubjectBitmapWithin gets the subject bitmap for the given tuple key within the snapshot window.
+// Only constrains result by window.Max(); result min is the actual store time of accessed data.
+// Returns the bitmap (possibly cloned) and narrowed window where window.Min() == store time.
+// Returns nil bitmap if no tuples exist.
+func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	targetTypes []schema.SubjectRef, window SnapshotWindow,
-	fn func(schema.TypeName, schema.RelationName, schema.ID, SnapshotWindow) (bool, SnapshotWindow),
-) (bool, SnapshotWindow) {
-	// Constrain window to replicated time
+	subjectType schema.TypeName, subjectRelation schema.RelationName,
+	window SnapshotWindow,
+) (*roaring.Bitmap, SnapshotWindow) {
+	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	for _, ref := range targetTypes {
-		if ref.Relation == "" {
-			continue // Skip direct subjects
-		}
-
-		key := usersetKey{
-			ObjectType:      objectType,
-			ObjectID:        objectID,
-			Relation:        relation,
-			SubjectType:     ref.Type,
-			SubjectRelation: ref.Relation,
-		}
-
-		vs, ok := u.tuples[key]
-		if !ok {
-			continue
-		}
-
-		var bitmap *roaring.Bitmap
-		if vs.HeadTime() <= window.Max() {
-			bitmap = vs.Head()
-			window = window.NarrowMin(vs.HeadTime())
-		} else {
-			var t store.StoreTime
-			bitmap, t = vs.SnapshotWithin(window.Max())
-			if bitmap == nil {
-				continue
-			}
-			window = window.NarrowMin(t)
-		}
-
-		// Iterate over subject IDs
-		iter := bitmap.Iterator()
-		for iter.HasNext() {
-			subjectID := schema.ID(iter.Next())
-			stop, newWindow := fn(ref.Type, ref.Relation, subjectID, window)
-			window = newWindow
-			if stop {
-				return true, window
-			}
-		}
+	key := usersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
 	}
 
-	return false, window
+	vs, ok := u.tuples[key]
+	if !ok {
+		// Not found - return window with min=0 (always empty)
+		return nil, NewSnapshotWindow(0, window.Max())
+	}
+
+	// If head is within bounds, use it directly
+	if vs.HeadTime() <= window.Max() {
+		return vs.Head(), NewSnapshotWindow(vs.HeadTime(), window.Max())
+	}
+
+	// Need historical snapshot
+	bitmap, actualTime := vs.SnapshotWithin(window.Max())
+	if bitmap == nil {
+		return nil, NewSnapshotWindow(0, window.Max())
+	}
+
+	return bitmap, NewSnapshotWindow(actualTime, window.Max())
 }
 
 // ValidateTuple checks that the object type, relation, and subject reference

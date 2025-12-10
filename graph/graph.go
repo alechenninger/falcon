@@ -141,6 +141,7 @@ func (g *LocalGraph) Check(ctx context.Context,
 	relation schema.RelationName,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
+	g.assertWindowWithinReplicated(window)
 	return check(ctx, g, g.usersets,
 		subjectType, subjectID, objectType, objectID, relation,
 		window, visited)
@@ -154,6 +155,11 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 ) (CheckResult, error) {
 	if len(checks) == 0 {
 		return CheckResult{}, nil
+	}
+
+	// Validate all windows are within replicated time
+	for _, chk := range checks {
+		g.assertWindowWithinReplicated(chk.Window)
 	}
 
 	var tightestWindow SnapshotWindow
@@ -228,6 +234,15 @@ func (g *LocalGraph) ValidateTuple(objectType schema.TypeName, relation schema.R
 // ReplicatedTime returns the current replicated time.
 func (g *LocalGraph) ReplicatedTime() store.StoreTime {
 	return g.usersets.ReplicatedTime()
+}
+
+// assertWindowWithinReplicated panics if window.Min() > replicatedTime.
+// This ensures we never try to read data that hasn't been replicated yet.
+func (g *LocalGraph) assertWindowWithinReplicated(window SnapshotWindow) {
+	replicatedTime := g.usersets.ReplicatedTime()
+	if window.Min() > replicatedTime {
+		panic("check received min > replicated time - caller ahead of this replica")
+	}
 }
 
 // Compile-time interface checks

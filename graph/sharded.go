@@ -144,7 +144,9 @@ func (g *ShardedGraph) Check(ctx context.Context,
 	targetShard := g.router(objectType, objectID)
 
 	if targetShard == g.localShardID {
-		// Local check - use our usersets but pass self as graph for recursion
+		// Local check - validate window is within replicated time
+		g.assertWindowWithinReplicated(window)
+		// Use our usersets but pass self as graph for recursion
 		return check(ctx, g, g.usersets,
 			subjectType, subjectID, objectType, objectID, relation,
 			window, visited)
@@ -239,6 +241,11 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 
 	var tightestWindow SnapshotWindow
 	first := true
+
+	// Validate windows for local checks are within replicated time
+	for _, chk := range localChecks {
+		g.assertWindowWithinReplicated(chk.Window)
+	}
 
 	// Process local checks first (fast path - no network)
 	for _, chk := range localChecks {
@@ -404,6 +411,15 @@ func (g *ShardedGraph) ValidateTuple(objectType schema.TypeName, relation schema
 // ReplicatedTime returns the current replicated time.
 func (g *ShardedGraph) ReplicatedTime() store.StoreTime {
 	return g.usersets.ReplicatedTime()
+}
+
+// assertWindowWithinReplicated panics if window.Min() > replicatedTime.
+// This ensures we never try to read data that hasn't been replicated yet.
+func (g *ShardedGraph) assertWindowWithinReplicated(window SnapshotWindow) {
+	replicatedTime := g.usersets.ReplicatedTime()
+	if window.Min() > replicatedTime {
+		panic("check received min > replicated time - caller ahead of this replica")
+	}
 }
 
 // SetRemoteShard adds or updates a remote shard reference.
