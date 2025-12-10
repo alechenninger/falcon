@@ -171,6 +171,14 @@ func (v *versionedSet) OldestTime() store.StoreTime {
 // the same answer, allowing for maximum snapshot window width.
 // Returns (false, 0) if no state is available within the time bound.
 func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bool, store.StoreTime) {
+	return v.ContainsWithinObserved(id, maxTime, NoOpMVCCObserver{})
+}
+
+// ContainsWithinObserved is like ContainsWithin but with observability hooks.
+func (v *versionedSet) ContainsWithinObserved(id schema.ID, maxTime store.StoreTime, obs MVCCObserver) (bool, store.StoreTime) {
+	probe := obs.ContainsWithinStarted(id, maxTime)
+	defer probe.End()
+
 	// TODO: what should we do with truncated history, or "beginning of time"?
 	// if a subject has never been in the set, do we return false, 0?
 	// e.g. a folder -> group members is added at time 1
@@ -189,6 +197,11 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 
 	// First, find the result at the latest state <= maxTime
 	result, resultTime, historyIdx := v.findStateAtMax(id, maxTime)
+
+	// Track if we used head state directly
+	if historyIdx == len(v.history) && resultTime == v.headTime {
+		probe.HeadUsed()
+	}
 
 	// Now continue walking back to find the oldest time with the same answer.
 	// Our causal dependency in this case depends not on the entire set, but on this specific subject.
@@ -244,9 +257,12 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 		startIdx = len(v.history) - 1
 	}
 
+	historyDepth := 0
 	for i := startIdx; i >= 0; i-- {
 		undo := &v.history[i]
 		entryTime := currentTime.Less(undo.timeDelta)
+		historyDepth++
+		probe.UndoApplied(uint32(undo.timeDelta))
 
 		// Check if this entry changed the state for our ID
 		if slices.Contains(undo.added, id) && result {
@@ -262,6 +278,8 @@ func (v *versionedSet) ContainsWithin(id schema.ID, maxTime store.StoreTime) (bo
 		currentTime = entryTime
 	}
 
+	probe.HistoryDepth(historyDepth)
+	probe.Result(result, oldestTime)
 	return result, oldestTime
 }
 
@@ -315,6 +333,14 @@ func (v *versionedSet) findStateAtMax(id schema.ID, maxTime store.StoreTime) (bo
 // Returns (snapshot, stateTime) where stateTime is the time of the state used,
 // or (nil, 0) if no state is available within the time bound.
 func (v *versionedSet) SnapshotWithin(maxTime store.StoreTime) (*roaring.Bitmap, store.StoreTime) {
+	return v.SnapshotWithinObserved(maxTime, NoOpMVCCObserver{})
+}
+
+// SnapshotWithinObserved is like SnapshotWithin but with observability hooks.
+func (v *versionedSet) SnapshotWithinObserved(maxTime store.StoreTime, obs MVCCObserver) (*roaring.Bitmap, store.StoreTime) {
+	probe := obs.SnapshotWithinStarted(maxTime)
+	defer probe.End()
+
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -323,11 +349,16 @@ func (v *versionedSet) SnapshotWithin(maxTime store.StoreTime) (*roaring.Bitmap,
 
 	// If head is within bounds, use it
 	if v.headTime <= maxTime {
+		probe.HeadUsed()
+		probe.HistoryDepth(0)
+		probe.Result(true, v.headTime)
 		return v.head.Clone(), v.headTime
 	}
 
 	// headTime > maxTime, need to find an older state
 	if v.headUndo == nil {
+		probe.HistoryDepth(0)
+		probe.Result(false, 0)
 		return nil, 0 // No history available
 	}
 
@@ -344,10 +375,15 @@ func (v *versionedSet) SnapshotWithin(maxTime store.StoreTime) (*roaring.Bitmap,
 
 	// Walk history in reverse to find state <= maxTime
 	currentTime := v.headTime
+	historyDepth := 0
 	for i := len(v.history) - 1; i >= 0; i-- {
 		undo := &v.history[i]
 		currentTime = currentTime.Less(undo.timeDelta)
+		historyDepth++
+		probe.UndoApplied(uint32(undo.timeDelta))
 		if currentTime <= maxTime {
+			probe.HistoryDepth(historyDepth)
+			probe.Result(true, currentTime)
 			return result, currentTime
 		}
 		// Continue undoing
@@ -360,5 +396,7 @@ func (v *versionedSet) SnapshotWithin(maxTime store.StoreTime) (*roaring.Bitmap,
 	}
 
 	// Walked entire history without finding a usable state
+	probe.HistoryDepth(historyDepth)
+	probe.Result(false, 0)
 	return nil, 0
 }

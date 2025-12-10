@@ -83,32 +83,68 @@ type GraphService interface {
 // LocalGraph is a single-node Graph implementation.
 // It owns the MultiversionUsersets data and handles all checks locally.
 type LocalGraph struct {
-	usersets *MultiversionUsersets
-	stream   store.ChangeStream
-	st       store.Store
-	observer UsersetsObserver
+	usersets      *MultiversionUsersets
+	stream        store.ChangeStream
+	st            store.Store
+	observer      UsersetsObserver
+	checkObserver CheckObserver
+	localObserver LocalGraphObserver
 }
 
 // NewLocalGraph creates a new LocalGraph.
 func NewLocalGraph(s *schema.Schema, stream store.ChangeStream, st store.Store) *LocalGraph {
 	return &LocalGraph{
-		usersets: NewMultiversionUsersets(s),
-		stream:   stream,
-		st:       st,
-		observer: NoOpUsersetsObserver{},
+		usersets:      NewMultiversionUsersets(s),
+		stream:        stream,
+		st:            st,
+		observer:      NoOpUsersetsObserver{},
+		checkObserver: NoOpCheckObserver{},
+		localObserver: NoOpLocalGraphObserver{},
 	}
 }
 
-// WithObserver returns a copy with the given observer for instrumentation.
-func (g *LocalGraph) WithObserver(obs UsersetsObserver) *LocalGraph {
+// WithUsersetsObserver returns a copy with the given UsersetsObserver for instrumentation.
+func (g *LocalGraph) WithUsersetsObserver(obs UsersetsObserver) *LocalGraph {
 	if obs == nil {
 		obs = NoOpUsersetsObserver{}
 	}
 	return &LocalGraph{
-		usersets: g.usersets,
-		stream:   g.stream,
-		st:       g.st,
-		observer: obs,
+		usersets:      g.usersets,
+		stream:        g.stream,
+		st:            g.st,
+		observer:      obs,
+		checkObserver: g.checkObserver,
+		localObserver: g.localObserver,
+	}
+}
+
+// WithCheckObserver returns a copy with the given CheckObserver for instrumentation.
+func (g *LocalGraph) WithCheckObserver(obs CheckObserver) *LocalGraph {
+	if obs == nil {
+		obs = NoOpCheckObserver{}
+	}
+	return &LocalGraph{
+		usersets:      g.usersets,
+		stream:        g.stream,
+		st:            g.st,
+		observer:      g.observer,
+		checkObserver: obs,
+		localObserver: g.localObserver,
+	}
+}
+
+// WithGraphObserver returns a copy with the given LocalGraphObserver for instrumentation.
+func (g *LocalGraph) WithGraphObserver(obs LocalGraphObserver) *LocalGraph {
+	if obs == nil {
+		obs = NoOpLocalGraphObserver{}
+	}
+	return &LocalGraph{
+		usersets:      g.usersets,
+		stream:        g.stream,
+		st:            g.st,
+		observer:      g.observer,
+		checkObserver: g.checkObserver,
+		localObserver: obs,
 	}
 }
 
@@ -142,9 +178,23 @@ func (g *LocalGraph) Check(ctx context.Context,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
 	g.assertWindowWithinReplicated(window)
-	return check(ctx, g, g.usersets,
+
+	// LocalGraphObserver for public API level
+	ctx, localProbe := g.localObserver.CheckStarted(ctx, subjectType, subjectID, objectType, objectID, relation)
+	defer localProbe.End()
+
+	// Pass CheckObserver to check() - it creates its own probe internally
+	found, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 		subjectType, subjectID, objectType, objectID, relation,
 		window, visited)
+
+	if err != nil {
+		localProbe.Error(err)
+	} else {
+		localProbe.Result(found, resultWindow)
+	}
+
+	return found, resultWindow, err
 }
 
 // CheckUnion checks if subject is in the union of all the given usersets.
@@ -153,6 +203,10 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 	checks []RelationCheck,
 	visited []VisitedKey,
 ) (CheckResult, error) {
+	// LocalGraphObserver for public API level
+	ctx, localProbe := g.localObserver.CheckUnionStarted(ctx, subjectType, subjectID, len(checks))
+	defer localProbe.End()
+
 	if len(checks) == 0 {
 		return CheckResult{}, nil
 	}
@@ -173,17 +227,20 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
 			objectID := schema.ID(iter.Next())
-			ok, resultWindow, err := check(ctx, g, g.usersets,
+
+			ok, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
 				chk.Window, visited)
 			if err != nil {
+				localProbe.Error(err)
 				return CheckResult{Window: chk.Window}, err
 			}
+
 			if ok {
 				// Found: return single matching object
 				matchBitmap := roaring.New()
 				matchBitmap.Add(uint32(objectID))
-				return CheckResult{
+				result := CheckResult{
 					Found: true,
 					DependentSets: []DependentSet{{
 						ObjectType: chk.ObjectType,
@@ -191,7 +248,9 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 						ObjectIDs:  matchBitmap,
 					}},
 					Window: resultWindow,
-				}, nil
+				}
+				localProbe.Result(result)
+				return result, nil
 			}
 			// Track tightest window for "not found" case
 			if first {
@@ -205,7 +264,9 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 
 	if first {
 		// No checks were performed (all empty)
-		return CheckResult{}, nil
+		result := CheckResult{}
+		localProbe.Result(result)
+		return result, nil
 	}
 
 	// Not found: all input checks were relevant (nil ObjectIDs = reference to input)
@@ -219,11 +280,13 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 			})
 		}
 	}
-	return CheckResult{
+	result := CheckResult{
 		Found:         false,
 		DependentSets: dependentSets,
 		Window:        tightestWindow,
-	}, nil
+	}
+	localProbe.Result(result)
+	return result, nil
 }
 
 // ValidateTuple checks if a tuple is valid according to the schema.

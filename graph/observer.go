@@ -8,6 +8,15 @@ import (
 	"github.com/alechenninger/falcon/store"
 )
 
+// UsersetKey identifies a userset for observation purposes.
+type UsersetKey struct {
+	ObjectType      schema.TypeName
+	ObjectID        schema.ID
+	Relation        schema.RelationName
+	SubjectType     schema.TypeName
+	SubjectRelation schema.RelationName
+}
+
 // UsersetsObserver is called at key points during MultiversionUsersets operations.
 // Implementations should embed NoOpUsersetsObserver for forward compatibility
 // with new methods added to this interface.
@@ -19,6 +28,38 @@ type UsersetsObserver interface {
 	// ApplyChangeStarted is called when a change begins processing.
 	// Returns a potentially modified context and a probe to track the operation.
 	ApplyChangeStarted(ctx context.Context, change store.Change) (context.Context, ApplyChangeProbe)
+
+	// GetSubjectBitmapStarted is called when GetSubjectBitmapWithin begins.
+	GetSubjectBitmapStarted(key UsersetKey, window SnapshotWindow) BitmapReadProbe
+
+	// ContainsDirectStarted is called when ContainsDirectWithin begins.
+	ContainsDirectStarted(key UsersetKey, subjectID schema.ID, window SnapshotWindow) ContainsReadProbe
+
+	// ContainsUsersetSubjectStarted is called when ContainsUsersetSubjectWithin begins.
+	ContainsUsersetSubjectStarted(key UsersetKey, subjectID schema.ID, window SnapshotWindow) ContainsReadProbe
+}
+
+// BitmapReadProbe tracks a GetSubjectBitmapWithin operation.
+// Implementations should embed NoOpBitmapReadProbe for forward compatibility.
+type BitmapReadProbe interface {
+	// Result is called when the bitmap is found.
+	Result(size int, window SnapshotWindow)
+
+	// NotFound is called when no bitmap exists for the key.
+	NotFound()
+
+	// End signals the operation is complete (for timing). Called via defer.
+	End()
+}
+
+// ContainsReadProbe tracks a ContainsDirectWithin or ContainsUsersetSubjectWithin operation.
+// Implementations should embed NoOpContainsReadProbe for forward compatibility.
+type ContainsReadProbe interface {
+	// Result is called with the operation result.
+	Result(found bool, window SnapshotWindow)
+
+	// End signals the operation is complete (for timing). Called via defer.
+	End()
 }
 
 // ApplyChangeProbe tracks a single applyChange invocation.
@@ -42,6 +83,36 @@ func (NoOpUsersetsObserver) SubscribeReady(context.Context) {}
 func (NoOpUsersetsObserver) ApplyChangeStarted(ctx context.Context, _ store.Change) (context.Context, ApplyChangeProbe) {
 	return ctx, NoOpApplyChangeProbe{}
 }
+
+// GetSubjectBitmapStarted returns a no-op probe.
+func (NoOpUsersetsObserver) GetSubjectBitmapStarted(_ UsersetKey, _ SnapshotWindow) BitmapReadProbe {
+	return NoOpBitmapReadProbe{}
+}
+
+// ContainsDirectStarted returns a no-op probe.
+func (NoOpUsersetsObserver) ContainsDirectStarted(_ UsersetKey, _ schema.ID, _ SnapshotWindow) ContainsReadProbe {
+	return NoOpContainsReadProbe{}
+}
+
+// ContainsUsersetSubjectStarted returns a no-op probe.
+func (NoOpUsersetsObserver) ContainsUsersetSubjectStarted(_ UsersetKey, _ schema.ID, _ SnapshotWindow) ContainsReadProbe {
+	return NoOpContainsReadProbe{}
+}
+
+// NoOpBitmapReadProbe is a no-op implementation of BitmapReadProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpBitmapReadProbe struct{}
+
+func (NoOpBitmapReadProbe) Result(int, SnapshotWindow) {}
+func (NoOpBitmapReadProbe) NotFound()                  {}
+func (NoOpBitmapReadProbe) End()                       {}
+
+// NoOpContainsReadProbe is a no-op implementation of ContainsReadProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpContainsReadProbe struct{}
+
+func (NoOpContainsReadProbe) Result(bool, SnapshotWindow) {}
+func (NoOpContainsReadProbe) End()                        {}
 
 // NoOpApplyChangeProbe is a no-op implementation of ApplyChangeProbe.
 // Embed this in custom probes for forward compatibility with new methods.
@@ -195,3 +266,255 @@ func (p *signalingProbe) Applied(t store.StoreTime) {
 	p.observer.cond.Broadcast()
 	p.observer.mu.Unlock()
 }
+
+// -----------------------------------------------------------------------------
+// CheckObserver - instruments the recursive check algorithm (check.go)
+// -----------------------------------------------------------------------------
+
+// CheckObserver is called at key points during check algorithm execution.
+// Implementations should embed NoOpCheckObserver for forward compatibility
+// with new methods added to this interface.
+type CheckObserver interface {
+	// CheckStarted is called when a top-level check begins.
+	// Returns a potentially modified context and a probe to track the operation.
+	CheckStarted(ctx context.Context,
+		subjectType schema.TypeName, subjectID schema.ID,
+		objectType schema.TypeName, objectID schema.ID,
+		relation schema.RelationName,
+	) (context.Context, CheckProbe)
+}
+
+// CheckProbe tracks a single check invocation through the recursive algorithm.
+// Implementations should embed NoOpCheckProbe for forward compatibility.
+type CheckProbe interface {
+	// RelationEntered is called when entering a relation check.
+	RelationEntered(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName)
+
+	// CycleDetected is called when a cycle is detected and we return false.
+	CycleDetected(key VisitedKey)
+
+	// UsersetChecking is called before checking each userset variant in a union.
+	UsersetChecking(userset *schema.Userset)
+
+	// DirectLookup is called when checking direct membership.
+	DirectLookup(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName)
+
+	// DirectLookupResult is called when a direct lookup completes.
+	DirectLookupResult(found bool, window SnapshotWindow)
+
+	// ArrowTraversal is called when following an arrow (computed userset).
+	ArrowTraversal(tuplesetRelation, computedRelation schema.RelationName)
+
+	// RecursiveCheck is called when making a recursive check call.
+	RecursiveCheck(subjectType schema.TypeName, subjectID schema.ID,
+		objectType schema.TypeName, objectID schema.ID,
+		relation schema.RelationName, depth int)
+
+	// UnionBranchFound is called when a union branch matches.
+	UnionBranchFound(branchIndex int)
+
+	// Result is called with the final check result.
+	Result(found bool, window SnapshotWindow)
+
+	// Error is called when an error occurs.
+	Error(err error)
+
+	// End signals the check is complete (for timing). Called via defer.
+	End()
+}
+
+// NoOpCheckObserver is a no-op implementation of CheckObserver.
+// Embed this in custom observers for forward compatibility with new methods.
+type NoOpCheckObserver struct{}
+
+// CheckStarted returns the context unchanged and a no-op probe.
+func (NoOpCheckObserver) CheckStarted(ctx context.Context,
+	_ schema.TypeName, _ schema.ID,
+	_ schema.TypeName, _ schema.ID,
+	_ schema.RelationName,
+) (context.Context, CheckProbe) {
+	return ctx, NoOpCheckProbe{}
+}
+
+// NoOpCheckProbe is a no-op implementation of CheckProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpCheckProbe struct{}
+
+func (NoOpCheckProbe) RelationEntered(schema.TypeName, schema.ID, schema.RelationName) {}
+func (NoOpCheckProbe) CycleDetected(VisitedKey)                                        {}
+func (NoOpCheckProbe) UsersetChecking(*schema.Userset)                                 {}
+func (NoOpCheckProbe) DirectLookup(schema.TypeName, schema.ID, schema.RelationName, schema.TypeName) {
+}
+func (NoOpCheckProbe) DirectLookupResult(bool, SnapshotWindow)                 {}
+func (NoOpCheckProbe) ArrowTraversal(schema.RelationName, schema.RelationName) {}
+func (NoOpCheckProbe) RecursiveCheck(schema.TypeName, schema.ID, schema.TypeName, schema.ID, schema.RelationName, int) {
+}
+func (NoOpCheckProbe) UnionBranchFound(int)        {}
+func (NoOpCheckProbe) Result(bool, SnapshotWindow) {}
+func (NoOpCheckProbe) Error(error)                 {}
+func (NoOpCheckProbe) End()                        {}
+
+// -----------------------------------------------------------------------------
+// LocalGraphObserver - instruments LocalGraph operations (graph.go)
+// -----------------------------------------------------------------------------
+
+// LocalGraphObserver is called at key points during LocalGraph operations.
+// Implementations should embed NoOpLocalGraphObserver for forward compatibility
+// with new methods added to this interface.
+type LocalGraphObserver interface {
+	// CheckStarted is called when LocalGraph.Check begins.
+	CheckStarted(ctx context.Context,
+		subjectType schema.TypeName, subjectID schema.ID,
+		objectType schema.TypeName, objectID schema.ID,
+		relation schema.RelationName,
+	) (context.Context, LocalCheckProbe)
+
+	// CheckUnionStarted is called when LocalGraph.CheckUnion begins.
+	CheckUnionStarted(ctx context.Context,
+		subjectType schema.TypeName, subjectID schema.ID,
+		numChecks int,
+	) (context.Context, LocalCheckUnionProbe)
+}
+
+// LocalCheckProbe tracks a single LocalGraph.Check invocation.
+// Implementations should embed NoOpLocalCheckProbe for forward compatibility.
+type LocalCheckProbe interface {
+	// Result is called with the check result.
+	Result(found bool, window SnapshotWindow)
+
+	// Error is called when an error occurs.
+	Error(err error)
+
+	// End signals the check is complete (for timing). Called via defer.
+	End()
+}
+
+// LocalCheckUnionProbe tracks a single LocalGraph.CheckUnion invocation.
+// Implementations should embed NoOpLocalCheckUnionProbe for forward compatibility.
+type LocalCheckUnionProbe interface {
+	// BitmapLookup is called when looking up subjects in a userset.
+	BitmapLookup(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
+		subjectType schema.TypeName, subjectRelation schema.RelationName)
+
+	// BitmapLookupResult is called when a bitmap lookup completes.
+	BitmapLookupResult(size int, window SnapshotWindow)
+
+	// ContainsCheck is called when checking if a subject is in a set.
+	ContainsCheck(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
+		subjectType schema.TypeName, subjectID schema.ID)
+
+	// ContainsCheckResult is called when a contains check completes.
+	ContainsCheckResult(found bool, window SnapshotWindow)
+
+	// Result is called with the final CheckUnion result.
+	Result(result CheckResult)
+
+	// Error is called when an error occurs.
+	Error(err error)
+
+	// End signals the check is complete (for timing). Called via defer.
+	End()
+}
+
+// NoOpLocalGraphObserver is a no-op implementation of LocalGraphObserver.
+// Embed this in custom observers for forward compatibility with new methods.
+type NoOpLocalGraphObserver struct{}
+
+// CheckStarted returns the context unchanged and a no-op probe.
+func (NoOpLocalGraphObserver) CheckStarted(ctx context.Context,
+	_ schema.TypeName, _ schema.ID,
+	_ schema.TypeName, _ schema.ID,
+	_ schema.RelationName,
+) (context.Context, LocalCheckProbe) {
+	return ctx, NoOpLocalCheckProbe{}
+}
+
+// CheckUnionStarted returns the context unchanged and a no-op probe.
+func (NoOpLocalGraphObserver) CheckUnionStarted(ctx context.Context,
+	_ schema.TypeName, _ schema.ID,
+	_ int,
+) (context.Context, LocalCheckUnionProbe) {
+	return ctx, NoOpLocalCheckUnionProbe{}
+}
+
+// NoOpLocalCheckProbe is a no-op implementation of LocalCheckProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpLocalCheckProbe struct{}
+
+func (NoOpLocalCheckProbe) Result(bool, SnapshotWindow) {}
+func (NoOpLocalCheckProbe) Error(error)                 {}
+func (NoOpLocalCheckProbe) End()                        {}
+
+// NoOpLocalCheckUnionProbe is a no-op implementation of LocalCheckUnionProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpLocalCheckUnionProbe struct{}
+
+func (NoOpLocalCheckUnionProbe) BitmapLookup(schema.TypeName, schema.ID, schema.RelationName, schema.TypeName, schema.RelationName) {
+}
+func (NoOpLocalCheckUnionProbe) BitmapLookupResult(int, SnapshotWindow) {}
+func (NoOpLocalCheckUnionProbe) ContainsCheck(schema.TypeName, schema.ID, schema.RelationName, schema.TypeName, schema.ID) {
+}
+func (NoOpLocalCheckUnionProbe) ContainsCheckResult(bool, SnapshotWindow) {}
+func (NoOpLocalCheckUnionProbe) Result(CheckResult)                       {}
+func (NoOpLocalCheckUnionProbe) Error(error)                              {}
+func (NoOpLocalCheckUnionProbe) End()                                     {}
+
+// -----------------------------------------------------------------------------
+// MVCCObserver - instruments versioned set operations (mvcc.go)
+// -----------------------------------------------------------------------------
+
+// MVCCObserver is called at key points during versionedSet operations.
+// Implementations should embed NoOpMVCCObserver for forward compatibility
+// with new methods added to this interface.
+type MVCCObserver interface {
+	// ContainsWithinStarted is called when ContainsWithin begins.
+	ContainsWithinStarted(id schema.ID, maxTime store.StoreTime) MVCCProbe
+
+	// SnapshotWithinStarted is called when SnapshotWithin begins.
+	SnapshotWithinStarted(maxTime store.StoreTime) MVCCProbe
+}
+
+// MVCCProbe tracks a single MVCC lookup operation.
+// Implementations should embed NoOpMVCCProbe for forward compatibility.
+type MVCCProbe interface {
+	// HistoryDepth reports how many history entries were traversed.
+	HistoryDepth(depth int)
+
+	// UndoApplied is called when an undo entry is applied during time travel.
+	UndoApplied(timeDelta uint32)
+
+	// HeadUsed is called when the head state was used (no time travel needed).
+	HeadUsed()
+
+	// Result is called with the operation result.
+	// For ContainsWithin: found indicates presence, stateTime is the oldest valid time.
+	// For SnapshotWithin: found is always true if successful, stateTime is the snapshot time.
+	Result(found bool, stateTime store.StoreTime)
+
+	// End signals the operation is complete (for timing). Called via defer.
+	End()
+}
+
+// NoOpMVCCObserver is a no-op implementation of MVCCObserver.
+// Embed this in custom observers for forward compatibility with new methods.
+type NoOpMVCCObserver struct{}
+
+// ContainsWithinStarted returns a no-op probe.
+func (NoOpMVCCObserver) ContainsWithinStarted(_ schema.ID, _ store.StoreTime) MVCCProbe {
+	return NoOpMVCCProbe{}
+}
+
+// SnapshotWithinStarted returns a no-op probe.
+func (NoOpMVCCObserver) SnapshotWithinStarted(_ store.StoreTime) MVCCProbe {
+	return NoOpMVCCProbe{}
+}
+
+// NoOpMVCCProbe is a no-op implementation of MVCCProbe.
+// Embed this in custom probes for forward compatibility with new methods.
+type NoOpMVCCProbe struct{}
+
+func (NoOpMVCCProbe) HistoryDepth(int)             {}
+func (NoOpMVCCProbe) UndoApplied(uint32)           {}
+func (NoOpMVCCProbe) HeadUsed()                    {}
+func (NoOpMVCCProbe) Result(bool, store.StoreTime) {}
+func (NoOpMVCCProbe) End()                         {}

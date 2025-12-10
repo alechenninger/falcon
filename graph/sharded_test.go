@@ -47,7 +47,7 @@ func NewTestShardedGraph(s *schema.Schema, shardIDs []graph.ShardID, router grap
 		remoteShards := make(map[graph.ShardID]graph.Graph)
 		// Remote shards will be set after all graphs are created
 		nodes[shardID].graph = graph.NewShardedGraph(shardID, s, router, remoteShards, ms, ms).
-			WithObserver(nodes[shardID].observer)
+			WithUsersetsObserver(nodes[shardID].observer)
 	}
 
 	// Wire up cross-shard references by updating the shard maps

@@ -14,27 +14,37 @@ type VisitedKey struct {
 	Relation   schema.RelationName
 }
 
-// check is the core walk algorithm. It's a standalone function that takes
+// Check is the core walk algorithm. It's a standalone function that takes
 // Graph for recursion and MultiversionUsersets for data access.
-func check(
+// The observer parameter is used for observability; pass NoOpCheckObserver{} if not needed.
+func Check(
 	ctx context.Context,
 	graph Graph,
 	usersets *MultiversionUsersets,
+	observer CheckObserver,
 	subjectType schema.TypeName, subjectID schema.ID,
 	objectType schema.TypeName, objectID schema.ID,
 	relation schema.RelationName,
 	window SnapshotWindow,
 	visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
+	// Create probe for this check
+	ctx, probe := observer.CheckStarted(ctx, subjectType, subjectID, objectType, objectID, relation)
+	defer probe.End()
+
 	// Validate inputs
 	sch := usersets.Schema()
 	ot, ok := sch.Types[objectType]
 	if !ok {
-		return false, window, fmt.Errorf("unknown object type: %s", objectType)
+		err := fmt.Errorf("unknown object type: %s", objectType)
+		probe.Error(err)
+		return false, window, err
 	}
 	rel, ok := ot.Relations[relation]
 	if !ok {
-		return false, window, fmt.Errorf("unknown relation %s on type %s", relation, objectType)
+		err := fmt.Errorf("unknown relation %s on type %s", relation, objectType)
+		probe.Error(err)
+		return false, window, err
 	}
 
 	// Convert visited slice to map for O(1) lookups
@@ -43,7 +53,13 @@ func check(
 		visitedMap[v] = true
 	}
 
-	return checkRelation(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel, visitedMap, window)
+	found, resultWindow, err := checkRelation(ctx, graph, usersets, probe, subjectType, subjectID, objectType, objectID, rel, visitedMap, window)
+	if err != nil {
+		probe.Error(err)
+	} else {
+		probe.Result(found, resultWindow)
+	}
+	return found, resultWindow, err
 }
 
 // checkRelation evaluates a relation definition against the graph.
@@ -51,15 +67,19 @@ func checkRelation(
 	ctx context.Context,
 	graph Graph,
 	usersets *MultiversionUsersets,
+	probe CheckProbe,
 	subjectType schema.TypeName, subjectID schema.ID,
 	objectType schema.TypeName, objectID schema.ID,
 	rel *schema.Relation,
 	visited map[VisitedKey]bool,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
+	probe.RelationEntered(objectType, objectID, rel.Name)
+
 	key := VisitedKey{objectType, objectID, rel.Name}
 	if visited[key] {
 		// Already visiting this node - cycle detected, return false to avoid infinite loop
+		probe.CycleDetected(key)
 		return false, window, nil
 	}
 	visited[key] = true
@@ -70,12 +90,15 @@ func checkRelation(
 	resultMin := window.Min()
 	resultMax := window.Max()
 
-	for _, us := range rel.Usersets {
-		ok, newWindow, err := checkUserset(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel, us, visited, window)
+	for i, us := range rel.Usersets {
+		probe.UsersetChecking(&us)
+		ok, newWindow, err := checkUserset(ctx, graph, usersets, probe, subjectType, subjectID, objectType, objectID, rel, us, visited, window)
 		if err != nil {
+			probe.Error(err)
 			return false, window, err
 		}
 		if ok {
+			probe.UnionBranchFound(i)
 			return true, newWindow, nil
 		}
 		// For "not found", track tightest window (highest min)
@@ -98,6 +121,7 @@ func checkUserset(
 	ctx context.Context,
 	graph Graph,
 	usersets *MultiversionUsersets,
+	probe CheckProbe,
 	subjectType schema.TypeName, subjectID schema.ID,
 	objectType schema.TypeName, objectID schema.ID,
 	rel *schema.Relation,
@@ -108,7 +132,7 @@ func checkUserset(
 	switch {
 	case len(us.This) > 0:
 		// Direct tuple membership for the current relation (including userset subjects)
-		return checkDirectAndUserset(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, rel.Name, us.This, visited, window)
+		return checkDirectAndUserset(ctx, graph, usersets, probe, subjectType, subjectID, objectType, objectID, rel.Name, us.This, visited, window)
 
 	case us.ComputedRelation != "":
 		// Reference to another relation on the same object (no routing needed - same object)
@@ -116,16 +140,20 @@ func checkUserset(
 		ot := sch.Types[objectType]
 		computedRel, ok := ot.Relations[us.ComputedRelation]
 		if !ok {
-			return false, window, fmt.Errorf("unknown computed relation %s on type %s", us.ComputedRelation, objectType)
+			err := fmt.Errorf("unknown computed relation %s on type %s", us.ComputedRelation, objectType)
+			probe.Error(err)
+			return false, window, err
 		}
-		return checkRelation(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, computedRel, visited, window)
+		return checkRelation(ctx, graph, usersets, probe, subjectType, subjectID, objectType, objectID, computedRel, visited, window)
 
 	case us.TupleToUserset != nil:
 		// Arrow traversal: follow relation to find targets, then check relation on targets
-		return checkArrow(ctx, graph, usersets, subjectType, subjectID, objectType, objectID, us.TupleToUserset, visited, window)
+		return checkArrow(ctx, graph, usersets, probe, subjectType, subjectID, objectType, objectID, us.TupleToUserset, visited, window)
 
 	default:
-		return false, window, fmt.Errorf("invalid userset: no operation specified")
+		err := fmt.Errorf("invalid userset: no operation specified")
+		probe.Error(err)
+		return false, window, err
 	}
 }
 
@@ -134,6 +162,7 @@ func checkDirectAndUserset(
 	ctx context.Context,
 	graph Graph,
 	usersets *MultiversionUsersets,
+	probe CheckProbe,
 	subjectType schema.TypeName, subjectID schema.ID,
 	objectType schema.TypeName, objectID schema.ID,
 	relation schema.RelationName,
@@ -142,7 +171,9 @@ func checkDirectAndUserset(
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
 	// Check direct membership first
+	probe.DirectLookup(objectType, objectID, relation, subjectType)
 	found, directWindow := usersets.ContainsDirectWithin(objectType, objectID, relation, subjectType, subjectID, window)
+	probe.DirectLookupResult(found, directWindow)
 	if found {
 		return true, directWindow, nil
 	}
@@ -180,10 +211,10 @@ func checkDirectAndUserset(
 	}
 
 	// Check if subject is in the union of all userset subjects
-	visitedSlice := visitedMapToSlice(visited)
-
-	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
+	probe.RecursiveCheck(subjectType, subjectID, objectType, objectID, relation, len(visited)+1)
+	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedMapToSlice(visited))
 	if err != nil {
+		probe.Error(err)
 		return false, window, err
 	}
 
@@ -237,25 +268,32 @@ func checkArrow(
 	ctx context.Context,
 	graph Graph,
 	usersets *MultiversionUsersets,
+	probe CheckProbe,
 	subjectType schema.TypeName, subjectID schema.ID,
 	objectType schema.TypeName, objectID schema.ID,
 	arrow *schema.TupleToUserset,
 	visited map[VisitedKey]bool,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
+	probe.ArrowTraversal(arrow.TuplesetRelation, arrow.ComputedUsersetRelation)
+
 	sch := usersets.Schema()
 
 	// Get the target type from the schema
 	ot := sch.Types[objectType]
 	tuplesetRel, ok := ot.Relations[arrow.TuplesetRelation]
 	if !ok {
-		return false, window, fmt.Errorf("unknown tupleset relation %s on type %s", arrow.TuplesetRelation, objectType)
+		err := fmt.Errorf("unknown tupleset relation %s on type %s", arrow.TuplesetRelation, objectType)
+		probe.Error(err)
+		return false, window, err
 	}
 
 	// Determine the target types from the tupleset relation's Direct userset
 	targetTypes := tuplesetRel.DirectTargetTypes()
 	if targetTypes == nil {
-		return false, window, fmt.Errorf("relation %s has no Direct userset with target types", arrow.TuplesetRelation)
+		err := fmt.Errorf("relation %s has no Direct userset with target types", arrow.TuplesetRelation)
+		probe.Error(err)
+		return false, window, err
 	}
 
 	// Build checks for each target type with independent windows
@@ -301,9 +339,10 @@ func checkArrow(
 	}
 
 	// Check if subject has relation on any of the target objects
-	visitedSlice := visitedMapToSlice(visited)
-	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedSlice)
+	probe.RecursiveCheck(subjectType, subjectID, "", 0, arrow.ComputedUsersetRelation, len(visited)+1)
+	result, err := graph.CheckUnion(ctx, subjectType, subjectID, checks, visitedMapToSlice(visited))
 	if err != nil {
+		probe.Error(err)
 		return false, window, err
 	}
 

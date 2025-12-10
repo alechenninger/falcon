@@ -32,6 +32,7 @@ type ShardedGraph struct {
 	st              store.Store
 	observer        UsersetsObserver
 	shardedObserver ShardedGraphObserver
+	checkObserver   CheckObserver
 }
 
 // NewShardedGraph creates a new ShardedGraph.
@@ -60,11 +61,12 @@ func NewShardedGraph(
 		st:              st,
 		observer:        NoOpUsersetsObserver{},
 		shardedObserver: NoOpShardedGraphObserver{},
+		checkObserver:   NoOpCheckObserver{},
 	}
 }
 
-// WithObserver returns a copy with the given UsersetsObserver for instrumentation.
-func (g *ShardedGraph) WithObserver(obs UsersetsObserver) *ShardedGraph {
+// WithUsersetsObserver returns a copy with the given UsersetsObserver for instrumentation.
+func (g *ShardedGraph) WithUsersetsObserver(obs UsersetsObserver) *ShardedGraph {
 	if obs == nil {
 		obs = NoOpUsersetsObserver{}
 	}
@@ -77,11 +79,12 @@ func (g *ShardedGraph) WithObserver(obs UsersetsObserver) *ShardedGraph {
 		st:              g.st,
 		observer:        obs,
 		shardedObserver: g.shardedObserver,
+		checkObserver:   g.checkObserver,
 	}
 }
 
-// WithShardedObserver returns a copy with the given ShardedGraphObserver for instrumentation.
-func (g *ShardedGraph) WithShardedObserver(obs ShardedGraphObserver) *ShardedGraph {
+// WithGraphObserver returns a copy with the given ShardedGraphObserver for instrumentation.
+func (g *ShardedGraph) WithGraphObserver(obs ShardedGraphObserver) *ShardedGraph {
 	if obs == nil {
 		obs = NoOpShardedGraphObserver{}
 	}
@@ -94,6 +97,25 @@ func (g *ShardedGraph) WithShardedObserver(obs ShardedGraphObserver) *ShardedGra
 		st:              g.st,
 		observer:        g.observer,
 		shardedObserver: obs,
+		checkObserver:   g.checkObserver,
+	}
+}
+
+// WithCheckObserver returns a copy with the given CheckObserver for instrumentation.
+func (g *ShardedGraph) WithCheckObserver(obs CheckObserver) *ShardedGraph {
+	if obs == nil {
+		obs = NoOpCheckObserver{}
+	}
+	return &ShardedGraph{
+		localShardID:    g.localShardID,
+		usersets:        g.usersets,
+		shards:          g.shards,
+		router:          g.router,
+		stream:          g.stream,
+		st:              g.st,
+		observer:        g.observer,
+		shardedObserver: g.shardedObserver,
+		checkObserver:   obs,
 	}
 }
 
@@ -146,8 +168,8 @@ func (g *ShardedGraph) Check(ctx context.Context,
 	if targetShard == g.localShardID {
 		// Local check - validate window is within replicated time
 		g.assertWindowWithinReplicated(window)
-		// Use our usersets but pass self as graph for recursion
-		return check(ctx, g, g.usersets,
+
+		return Check(ctx, g, g.usersets, g.checkObserver,
 			subjectType, subjectID, objectType, objectID, relation,
 			window, visited)
 	}
@@ -157,7 +179,7 @@ func (g *ShardedGraph) Check(ctx context.Context,
 	if !ok {
 		// Unknown shard - this shouldn't happen with a properly configured router
 		// For now, fall back to local (in production this would be an error)
-		return check(ctx, g, g.usersets,
+		return Check(ctx, g, g.usersets, g.checkObserver,
 			subjectType, subjectID, objectType, objectID, relation,
 			window, visited)
 	}
@@ -252,12 +274,14 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
 			objectID := schema.ID(iter.Next())
-			ok, resultWindow, err := check(ctx, g, g.usersets,
+
+			ok, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
 				chk.Window, visited)
 			if err != nil {
 				return CheckResult{Window: chk.Window}, err
 			}
+
 			if ok {
 				probe.Result(true, resultWindow)
 				// Found: return single matching object

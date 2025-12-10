@@ -25,7 +25,7 @@ func NewTestGraph(s *schema.Schema) *TestGraph {
 	ms := store.NewMemoryStore()
 	observer := NewSignalingObserver()
 
-	g := NewLocalGraph(s, ms, ms).WithObserver(observer)
+	g := NewLocalGraph(s, ms, ms).WithUsersetsObserver(observer)
 
 	tg := &TestGraph{
 		LocalGraph: g,

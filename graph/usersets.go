@@ -39,13 +39,31 @@ type MultiversionUsersets struct {
 	// This represents the point in the log that we know our in-memory state
 	// is up to date with.
 	replicatedTime store.AtomicStoreTime
+
+	// observer is called for read/write operations. Never nil.
+	observer UsersetsObserver
 }
 
 // NewMultiversionUsersets creates a new MultiversionUsersets with the given schema.
 func NewMultiversionUsersets(s *schema.Schema) *MultiversionUsersets {
 	return &MultiversionUsersets{
-		schema: s,
-		tuples: make(map[usersetKey]*versionedSet),
+		schema:   s,
+		tuples:   make(map[usersetKey]*versionedSet),
+		observer: NoOpUsersetsObserver{},
+	}
+}
+
+// WithObserver returns a copy with the given observer for read operation instrumentation.
+// This is separate from the Subscribe observer which is only for write operations.
+func (u *MultiversionUsersets) WithObserver(obs UsersetsObserver) *MultiversionUsersets {
+	if obs == nil {
+		obs = NoOpUsersetsObserver{}
+	}
+	return &MultiversionUsersets{
+		schema:         u.schema,
+		tuples:         u.tuples,
+		replicatedTime: u.replicatedTime,
+		observer:       obs,
 	}
 }
 
@@ -206,10 +224,20 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
+	key := UsersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: "",
+	}
+	probe := u.observer.ContainsDirectStarted(key, subjectID, window)
+	defer probe.End()
+
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	key := usersetKey{
+	internalKey := usersetKey{
 		ObjectType:      objectType,
 		ObjectID:        objectID,
 		Relation:        relation,
@@ -217,16 +245,20 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 		SubjectRelation: "",
 	}
 
-	vs, ok := u.tuples[key]
+	vs, ok := u.tuples[internalKey]
 	if !ok {
 		// Not found - window max is still correct, min is 0 (always not found)
-		return false, NewSnapshotWindow(0, window.Max())
+		result := NewSnapshotWindow(0, window.Max())
+		probe.Result(false, result)
+		return false, result
 	}
 
 	found, actualTime := vs.ContainsWithin(subjectID, window.Max())
 
 	// Return window with min = oldest time the result is valid
-	return found, NewSnapshotWindow(actualTime, window.Max())
+	result := NewSnapshotWindow(actualTime, window.Max())
+	probe.Result(found, result)
+	return found, result
 }
 
 // ContainsUsersetSubjectWithin checks if a specific userset subject is in the relation.
@@ -240,10 +272,20 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
+	key := UsersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
+	}
+	probe := u.observer.ContainsUsersetSubjectStarted(key, subjectID, window)
+	defer probe.End()
+
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	key := usersetKey{
+	internalKey := usersetKey{
 		ObjectType:      objectType,
 		ObjectID:        objectID,
 		Relation:        relation,
@@ -251,14 +293,18 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 		SubjectRelation: subjectRelation,
 	}
 
-	vs, ok := u.tuples[key]
+	vs, ok := u.tuples[internalKey]
 	if !ok {
-		return false, NewSnapshotWindow(0, window.Max())
+		result := NewSnapshotWindow(0, window.Max())
+		probe.Result(false, result)
+		return false, result
 	}
 
 	found, actualTime := vs.ContainsWithin(subjectID, window.Max())
 
-	return found, NewSnapshotWindow(actualTime, window.Max())
+	result := NewSnapshotWindow(actualTime, window.Max())
+	probe.Result(found, result)
+	return found, result
 }
 
 // GetSubjectBitmapWithin gets the subject bitmap for the given tuple key within the snapshot window.
@@ -272,6 +318,16 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 ) (*roaring.Bitmap, SnapshotWindow) {
 	// Constrain max to replicated time
 	window = u.constrainWindow(window)
+
+	obsKey := UsersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
+	}
+	probe := u.observer.GetSubjectBitmapStarted(obsKey, window)
+	defer probe.End()
 
 	u.mu.RLock()
 	defer u.mu.RUnlock()
@@ -287,21 +343,28 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 	vs, ok := u.tuples[key]
 	if !ok {
 		// Not found - return window with min=0 (always empty)
+		probe.NotFound()
 		return nil, NewSnapshotWindow(0, window.Max())
 	}
 
 	// If head is within bounds, use it directly
 	if vs.HeadTime() <= window.Max() {
-		return vs.Head(), NewSnapshotWindow(vs.HeadTime(), window.Max())
+		bitmap := vs.Head()
+		result := NewSnapshotWindow(vs.HeadTime(), window.Max())
+		probe.Result(int(bitmap.GetCardinality()), result)
+		return bitmap, result
 	}
 
 	// Need historical snapshot
 	bitmap, actualTime := vs.SnapshotWithin(window.Max())
 	if bitmap == nil {
+		probe.NotFound()
 		return nil, NewSnapshotWindow(0, window.Max())
 	}
 
-	return bitmap, NewSnapshotWindow(actualTime, window.Max())
+	result := NewSnapshotWindow(actualTime, window.Max())
+	probe.Result(int(bitmap.GetCardinality()), result)
+	return bitmap, result
 }
 
 // ValidateTuple checks that the object type, relation, and subject reference
