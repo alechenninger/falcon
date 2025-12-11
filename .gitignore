@@ -10,3 +10,5 @@ bin/
 # OS
 .DS_Store
 
+# pprof
+*.pb.gz

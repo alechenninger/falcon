@@ -15,8 +15,8 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - [ ] Hydration protocol: COPY SQL, replication slot by lease.
 - [~] Graph dispatch by shard. (should be straight forward with routing layer)
 - [~] Routing should not be calculated per tuple in a subjectset b/c their might be a high cardinality of tuples. We would want to scatter-gather: group all the subjects by route and dispatch concurrently (or up to some concurrency threshold).
-- [ ] Server API for graph
-- [ ] Graph wiring for remote dispatch
+- [~] Server API for graph
+- [~] Graph wiring for remote dispatch
 - [ ] Schema updates, tied to storetime / proper schema API that takes into account windows. If you know about a relevant schema update it must be taken into account even if tuple hasn't changed. Max window before schema update must see old schema.
 - [ ] Intersection operator – complicates dispatch. Note "BatchCheck" is really "CheckAny" or "CheckUnion". I thnk we need a CheckSomething that takes into account the whole "set equation" – then we dispatch accordingly.
 - [ ] ListSubjects
