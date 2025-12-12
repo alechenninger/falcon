@@ -73,14 +73,15 @@ Postgres acts as:
       - Or even hedge? Do retry-w-max + latest LSN and pick first?
     - Both: provide min lsn (object head, for freshness but minimum freshness) and max verified lsn (from log). We can basically have options:
       - Max consistency without waiting: rely on old deltas, pick the newest we can at the point where all shards are up to date. Avoids "frankenstates" by using an old object a newer LSN would require a node to wait to confirm it did not pick invalid state.
-      - Max shard consistency: rely on possible waits (wait until all shards are up to date with the latest object)
+      - Max shard consistency: rely on possible waits (wait until all shards are up to date with the latest object). Only retry if it might change the answer. Only need to retry once for external consistency.
+        - Examples: 
+          - user added to group, then query document, document shard not up to date: only has to wait; document didn't move.
+          - document moved, user immediately added to group of previous folder, document shard not up to date: has to wait & retry. gets new result.
       - Linearizable (write optimized / write agnostic): get the most recent flushed LSN at the tip of the query, query at that snapshot (everything waits). This extreme approach is required IF we support cross-shard atomic writes AND we don't want to wait during write.
-      - Linearizable (read optimized): Same as "max consistency without waiting" **as long as** any write waited for all nodes involved to acknowledge the write.
+      - Linearizable (read optimized): Same as "max shard consistency" **as long as** any write waited for all nodes involved to acknowledge the write. Cannot get this with max latency without waiting unless we wait for ALL nodes to acknowledge the write (which is another option)
   - Queries abort & retry if nodes no longer have the requested snapshot
-- Logical replication: Support cross shard writes (reverse indexes, atomic multi-shard association writes, which also require write repair)
+- Logical replication: Support cross shard writes (reverse indexes, atomic multi-shard association writes)
   - May also be necessary for snapshot isolation, since its the only way we can get a commit LSN. See below "maybe's" for a possible write optimization.
-- Read repair on cache miss for shard owner: if a request comes to a shard which doesn't know it is the new owner yet, it waits for replication (within some timeout?) to see the object.
-  - In the synchronous RAM-write model, this was: "Lazy hydration of new object owners: Supports atomic shard moves (owner invalidates, next state must go to new owner)"
 - Shard roots: Maintain a dictionary of objects to shard roots, to balance related object locality and shard load balancing. Some objects are their own roots (e.g. medium-sized aggregates like folders, etc.)
 - Roaring bitmaps: Very high compression of set membership for high scale.
 - Distributed external ID to dense "roaring" integer dictionary: Bi-map external IDs to integers to support arbitrary IDs yet have highly compressed sets.
@@ -91,22 +92,51 @@ Postgres acts as:
 - Follower nodes: When assigning shards, also assign a follower node which can be used for queries and can quickly become a leader (already hydrated).
   - Q: Can follower nodes use replication shot or do they need to stream from leader to have exact same LSNs?
 
-Maybe's:
+### All query options & guarantees
+
+- Read repair:
+  1. Minimum (only that required for causal consistency) – only wait for the minimum causally related snapshot in memory
+  2. Max shard (linearizable w/ write acknowledgements) – wait for max window (retry once if needed)
+  3. Fully consistent (linearizable w/out write acknowledgements) - set min to latest snapshot flushed to database
+- Write acknowledgements:
+  1. None
+  2. Involved nodes (linearizable w/ max read repair)
+  3. All nodes (linearizable w/out read repair)
+- Secondary reads:
+  1. None – guarantees monotonic reads w/ minimum read repair
+  2. Allowed - monotonic only w/ read repair
+
+So you get:
+
+- Linearizability if any of:
+  1. You pick a time window pinned on "last flushed lsn" (nodes must all wait if not already caught up)
+  2. You wait for writes to be acknowledged by shards and you wait for max causally relevant snapshot on read
+  3. You wait for writes to be acknowledge everywhere
+- Monotonic reads if any of:
+  1. There are no secondary replicas for a shard.
+  - If there are secondaries, then you can read from node 1, get max 100, then read from node 2, get max 99
+  2. You use any of the techniques to get linearizability (above)
+- Causal consistency, always
+
+
+### "Maybe's" / old ideas that incorporated dual write:
 
 - [maybe / possible optimization] Shard owner with lock: In process lock with shard ownership allows (1) a consistent dual-write to disk and RAM and (2) an (optional) follow-up select to get an LSN at-least-as-recent as the last commit (to give us a "max revision" LSN up to date synchronously). Due to imperfect LSN, this may only be an optimization. We cannot rely on that alone for snapshot isolation. We CAN use it as a consistency & latency optimization to immediate get a "minimum LSN" for reads that then hit this shard (getting immediate read-your-write without waiting). However, if a query comes within the "gap" (last verfied object write LSN vs max possible for head state), we'll have to wait for the write's true LSN before knowing what state to use. If a read comes in at ≤ the known write LSN of the object, we can use that state, and then the max outgoing LSN would be our max verified.
   - NOTE: The locking is only really helpful if coupled with "write repair": After writing, read the latest state of an object WITH the LSN, in order to ensure consistent states from cross-shard writes before applying to RAM. Routing to the right shard for writes becomes not a necessity but an optimization (see shard owner with lock). We could optionally get the last flushed LSN and wait for that to replicate, which would not introduce any gaps.
 - [I think we only need this if we try to synchronously update RAM as in above bullet] Fencing of writes on shard roots: Ensures writes never populate the wrong shard memory, and shards never miss their writes (even after shard moves) without 2PC
   - Q: Do we still need to fence on every root of every tuple?
+- Read repair on cache miss for shard owner: if a request comes to a shard which doesn't know it is the new owner yet, it waits for replication (within some timeout?) to see the object.
+  - In the synchronous RAM-write model, this was: "Lazy hydration of new object owners: Supports atomic shard moves (owner invalidates, next state must go to new owner)"
 
-Caching optimizations?
+### Caching optimizations?
 
 - We can cache bitmaps for a relation at a **range** of LSNs, and discard then when we truncate those snapshots. This provides a form of hotspot caching. We don't need to perform the userset lookup again for an LSN range!
 
-Crazy ideas?
+### Crazy ideas?
 
 - Can we support "tuple transformation" (e.g. for schema changes) by applying transformations at hydration time? it would be permanent overhead unless those transformations will written back out to disk
 
-Semantics-by-techniques:
+## Semantics-by-techniques (likely out of date)
 
 - Critical scaling & availability requirements:
   - Roaring bitmaps
@@ -120,17 +150,6 @@ Semantics-by-techniques:
   - Logical replication
 - Atomic cross-shard writes, so clients do not need to care about sharding and do not need to code for partial writes:
   - Logical replication
-
-Guarantees
-
-- Linearizability if either:
-  1. You pick a time window pinned on "last flushed lsn" (nodes must all wait if not already caught up)
-  2. You wait for writes to be acknowledged
-- Monotonic reads if either:
-  1. There are no secondary replicas for a shard.
-  - If there are secondaries, then you can read from node 1, get max 100, then read from node 2, get max 99
-  2. You use any of the techniques to get linearizability (above)
-- Causal consistency, always
 
 ## Where to start
 
