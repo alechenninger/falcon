@@ -50,6 +50,8 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - How would this design deal with partial evaluation of conditionals? I guess it counts as dependent for the sake of causality.
 - DependentSets could be serialized different for small sets similar to versionedSet
 - We could use the type/relation IDs internally in more places vs names
+- We could use a sync.pool of undo entries possibly to avoid allocation & GC costs
+  - Perhaps we could combine this with a global entry limit that automatically GC'd old entries as new ones were added
 
 ## Thoughts / Maybe bad ideas
 
