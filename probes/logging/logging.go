@@ -39,8 +39,11 @@ func NewUsersetsObserver(logger *slog.Logger) *UsersetsObserver {
 
 // SubscribeReady logs that the subscription is ready.
 func (o *UsersetsObserver) SubscribeReady(ctx context.Context) {
-	o.logger.InfoContext(ctx, "subscription ready",
-		"request_id", RequestIDFromContext(ctx))
+	if !o.logger.Enabled(ctx, slog.LevelInfo) {
+		return
+	}
+	o.logger.LogAttrs(ctx, slog.LevelInfo, "subscription ready",
+		slog.String("request_id", RequestIDFromContext(ctx)))
 }
 
 // ApplyChangeStarted logs the start of a change application.
@@ -101,16 +104,19 @@ func (p *applyChangeProbe) Applied(t store.StoreTime) {
 }
 
 func (p *applyChangeProbe) End() {
-	p.logger.DebugContext(p.ctx, "change applied",
-		"request_id", RequestIDFromContext(p.ctx),
-		"object_type", p.change.Tuple.ObjectType,
-		"object_id", p.change.Tuple.ObjectID,
-		"relation", p.change.Tuple.Relation,
-		"subject_type", p.change.Tuple.SubjectType,
-		"subject_id", p.change.Tuple.SubjectID,
-		"op", p.change.Op,
-		"applied_time", p.applied,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "change applied",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(p.change.Tuple.ObjectType)),
+		slog.Any("object_id", p.change.Tuple.ObjectID),
+		slog.String("relation", string(p.change.Tuple.Relation)),
+		slog.String("subject_type", string(p.change.Tuple.SubjectType)),
+		slog.Any("subject_id", p.change.Tuple.SubjectID),
+		slog.Any("op", p.change.Op),
+		slog.Any("applied_time", p.applied),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 type bitmapReadProbe struct {
@@ -135,19 +141,22 @@ func (p *bitmapReadProbe) NotFound() {
 }
 
 func (p *bitmapReadProbe) End() {
-	p.logger.Debug("bitmap read",
-		"object_type", p.key.ObjectType,
-		"object_id", p.key.ObjectID,
-		"relation", p.key.Relation,
-		"subject_type", p.key.SubjectType,
-		"subject_relation", p.key.SubjectRelation,
-		"window_min", p.window.Min,
-		"window_max", p.window.Max,
-		"found", p.found,
-		"size", p.size,
-		"result_window_min", p.result.Min,
-		"result_window_max", p.result.Max,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(context.Background(), slog.LevelDebug, "bitmap read",
+		slog.String("object_type", string(p.key.ObjectType)),
+		slog.Any("object_id", p.key.ObjectID),
+		slog.String("relation", string(p.key.Relation)),
+		slog.String("subject_type", string(p.key.SubjectType)),
+		slog.String("subject_relation", string(p.key.SubjectRelation)),
+		slog.Uint64("window_min", uint64(p.window.Min())),
+		slog.Uint64("window_max", uint64(p.window.Max())),
+		slog.Bool("found", p.found),
+		slog.Int("size", p.size),
+		slog.Uint64("result_window_min", uint64(p.result.Min())),
+		slog.Uint64("result_window_max", uint64(p.result.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 type containsReadProbe struct {
@@ -168,23 +177,26 @@ func (p *containsReadProbe) Result(found bool, window graph.SnapshotWindow) {
 }
 
 func (p *containsReadProbe) End() {
+	if !p.logger.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
 	checkType := "userset"
 	if p.direct {
 		checkType = "direct"
 	}
-	p.logger.Debug("contains check",
-		"check_type", checkType,
-		"object_type", p.key.ObjectType,
-		"object_id", p.key.ObjectID,
-		"relation", p.key.Relation,
-		"subject_type", p.key.SubjectType,
-		"subject_id", p.subjectID,
-		"window_min", p.window.Min,
-		"window_max", p.window.Max,
-		"found", p.found,
-		"result_window_min", p.result.Min,
-		"result_window_max", p.result.Max,
-		"duration", time.Since(p.startTime))
+	p.logger.LogAttrs(context.Background(), slog.LevelDebug, "contains check",
+		slog.String("check_type", checkType),
+		slog.String("object_type", string(p.key.ObjectType)),
+		slog.Any("object_id", p.key.ObjectID),
+		slog.String("relation", string(p.key.Relation)),
+		slog.String("subject_type", string(p.key.SubjectType)),
+		slog.Any("subject_id", p.subjectID),
+		slog.Uint64("window_min", uint64(p.window.Min())),
+		slog.Uint64("window_max", uint64(p.window.Max())),
+		slog.Bool("found", p.found),
+		slog.Uint64("result_window_min", uint64(p.result.Min())),
+		slog.Uint64("result_window_max", uint64(p.result.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 // -----------------------------------------------------------------------------
@@ -254,19 +266,22 @@ func (p *shardedCheckProbe) LocalCheck() {
 
 func (p *shardedCheckProbe) RemoteCheck(shardID graph.ShardID) {
 	p.remoteShard = shardID
-	p.logger.DebugContext(p.ctx, "routing to remote shard",
-		"request_id", RequestIDFromContext(p.ctx),
-		"shard_id", shardID,
-		"object_type", p.objectType,
-		"object_id", p.objectID)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "routing to remote shard",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Any("shard_id", shardID),
+		slog.String("object_type", string(p.objectType)),
+		slog.Any("object_id", p.objectID))
 }
 
 func (p *shardedCheckProbe) UnknownShard(shardID graph.ShardID) {
-	p.logger.WarnContext(p.ctx, "unknown shard, falling back to local",
-		"request_id", RequestIDFromContext(p.ctx),
-		"shard_id", shardID,
-		"object_type", p.objectType,
-		"object_id", p.objectID)
+	p.logger.LogAttrs(p.ctx, slog.LevelWarn, "unknown shard, falling back to local",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Any("shard_id", shardID),
+		slog.String("object_type", string(p.objectType)),
+		slog.Any("object_id", p.objectID))
 }
 
 func (p *shardedCheckProbe) Result(found bool, window graph.SnapshotWindow) {
@@ -280,32 +295,35 @@ func (p *shardedCheckProbe) Error(err error) {
 
 func (p *shardedCheckProbe) End() {
 	if p.err != nil {
-		p.logger.ErrorContext(p.ctx, "sharded check error",
-			"request_id", RequestIDFromContext(p.ctx),
-			"subject_type", p.subjectType,
-			"subject_id", p.subjectID,
-			"object_type", p.objectType,
-			"object_id", p.objectID,
-			"relation", p.relation,
-			"local", p.local,
-			"remote_shard", p.remoteShard,
-			"error", p.err,
-			"duration", time.Since(p.startTime))
+		p.logger.LogAttrs(p.ctx, slog.LevelError, "sharded check error",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("subject_type", string(p.subjectType)),
+			slog.Any("subject_id", p.subjectID),
+			slog.String("object_type", string(p.objectType)),
+			slog.Any("object_id", p.objectID),
+			slog.String("relation", string(p.relation)),
+			slog.Bool("local", p.local),
+			slog.Any("remote_shard", p.remoteShard),
+			slog.Any("error", p.err),
+			slog.Duration("duration", time.Since(p.startTime)))
 		return
 	}
-	p.logger.DebugContext(p.ctx, "sharded check completed",
-		"request_id", RequestIDFromContext(p.ctx),
-		"subject_type", p.subjectType,
-		"subject_id", p.subjectID,
-		"object_type", p.objectType,
-		"object_id", p.objectID,
-		"relation", p.relation,
-		"local", p.local,
-		"remote_shard", p.remoteShard,
-		"found", p.found,
-		"window_min", p.window.Min,
-		"window_max", p.window.Max,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "sharded check completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("subject_type", string(p.subjectType)),
+		slog.Any("subject_id", p.subjectID),
+		slog.String("object_type", string(p.objectType)),
+		slog.Any("object_id", p.objectID),
+		slog.String("relation", string(p.relation)),
+		slog.Bool("local", p.local),
+		slog.Any("remote_shard", p.remoteShard),
+		slog.Bool("found", p.found),
+		slog.Uint64("window_min", uint64(p.window.Min())),
+		slog.Uint64("window_max", uint64(p.window.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 type checkUnionProbe struct {
@@ -326,31 +344,37 @@ func (p *checkUnionProbe) Empty() {
 }
 
 func (p *checkUnionProbe) UnknownShard(shardID graph.ShardID) {
-	p.logger.WarnContext(p.ctx, "unknown shard",
-		"request_id", RequestIDFromContext(p.ctx),
-		"shard_id", shardID)
+	p.logger.LogAttrs(p.ctx, slog.LevelWarn, "unknown shard",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Any("shard_id", shardID))
 }
 
 func (p *checkUnionProbe) RemoteShardDispatched(shardID graph.ShardID) {
-	p.logger.DebugContext(p.ctx, "dispatching to remote shard",
-		"request_id", RequestIDFromContext(p.ctx),
-		"shard_id", shardID)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "dispatching to remote shard",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Any("shard_id", shardID))
 }
 
 func (p *checkUnionProbe) RemoteShardResult(shardID graph.ShardID, found bool, window graph.SnapshotWindow) {
-	p.logger.DebugContext(p.ctx, "remote shard result",
-		"request_id", RequestIDFromContext(p.ctx),
-		"shard_id", shardID,
-		"found", found,
-		"window_min", window.Min,
-		"window_max", window.Max)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "remote shard result",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Any("shard_id", shardID),
+		slog.Bool("found", found),
+		slog.Uint64("window_min", uint64(window.Min())),
+		slog.Uint64("window_max", uint64(window.Max())))
 }
 
 func (p *checkUnionProbe) RemoteShardError(shardID graph.ShardID, err error) {
-	p.logger.ErrorContext(p.ctx, "remote shard error",
-		"request_id", RequestIDFromContext(p.ctx),
-		"shard_id", shardID,
-		"error", err)
+	p.logger.LogAttrs(p.ctx, slog.LevelError, "remote shard error",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Any("shard_id", shardID),
+		slog.Any("error", err))
 }
 
 func (p *checkUnionProbe) Result(found bool, window graph.SnapshotWindow) {
@@ -364,30 +388,36 @@ func (p *checkUnionProbe) Inconclusive(failedShards []graph.ShardID) {
 
 func (p *checkUnionProbe) End() {
 	if p.empty {
-		p.logger.DebugContext(p.ctx, "check union empty",
-			"request_id", RequestIDFromContext(p.ctx),
-			"subject_type", p.subjectType,
-			"subject_id", p.subjectID,
-			"duration", time.Since(p.startTime))
+		if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+			return
+		}
+		p.logger.LogAttrs(p.ctx, slog.LevelDebug, "check union empty",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("subject_type", string(p.subjectType)),
+			slog.Any("subject_id", p.subjectID),
+			slog.Duration("duration", time.Since(p.startTime)))
 		return
 	}
 	if len(p.failed) > 0 {
-		p.logger.WarnContext(p.ctx, "check union inconclusive",
-			"request_id", RequestIDFromContext(p.ctx),
-			"subject_type", p.subjectType,
-			"subject_id", p.subjectID,
-			"failed_shards", p.failed,
-			"duration", time.Since(p.startTime))
+		p.logger.LogAttrs(p.ctx, slog.LevelWarn, "check union inconclusive",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("subject_type", string(p.subjectType)),
+			slog.Any("subject_id", p.subjectID),
+			slog.Any("failed_shards", p.failed),
+			slog.Duration("duration", time.Since(p.startTime)))
 		return
 	}
-	p.logger.InfoContext(p.ctx, "check union completed",
-		"request_id", RequestIDFromContext(p.ctx),
-		"subject_type", p.subjectType,
-		"subject_id", p.subjectID,
-		"found", p.found,
-		"window_min", p.window.Min,
-		"window_max", p.window.Max,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(p.ctx, slog.LevelInfo) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelInfo, "check union completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("subject_type", string(p.subjectType)),
+		slog.Any("subject_id", p.subjectID),
+		slog.Bool("found", p.found),
+		slog.Uint64("window_min", uint64(p.window.Min())),
+		slog.Uint64("window_max", uint64(p.window.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 // -----------------------------------------------------------------------------
@@ -411,13 +441,15 @@ func (o *CheckObserver) CheckStarted(ctx context.Context,
 	objectType schema.TypeName, objectID schema.ID,
 	relation schema.RelationName,
 ) (context.Context, graph.CheckProbe) {
-	o.logger.DebugContext(ctx, "check started",
-		"request_id", RequestIDFromContext(ctx),
-		"subject_type", subjectType,
-		"subject_id", subjectID,
-		"object_type", objectType,
-		"object_id", objectID,
-		"relation", relation)
+	if o.logger.Enabled(ctx, slog.LevelDebug) {
+		o.logger.LogAttrs(ctx, slog.LevelDebug, "check started",
+			slog.String("request_id", RequestIDFromContext(ctx)),
+			slog.String("subject_type", string(subjectType)),
+			slog.Any("subject_id", subjectID),
+			slog.String("object_type", string(objectType)),
+			slog.Any("object_id", objectID),
+			slog.String("relation", string(relation)))
+	}
 	return ctx, &checkProbe{
 		logger:      o.logger,
 		ctx:         ctx,
@@ -446,25 +478,34 @@ type checkProbe struct {
 }
 
 func (p *checkProbe) RelationEntered(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) {
-	p.logger.DebugContext(p.ctx, "relation entered",
-		"request_id", RequestIDFromContext(p.ctx),
-		"object_type", objectType,
-		"object_id", objectID,
-		"relation", relation)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "relation entered",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(objectType)),
+		slog.Any("object_id", objectID),
+		slog.String("relation", string(relation)))
 }
 
 func (p *checkProbe) CycleDetected(key graph.VisitedKey) {
-	p.logger.DebugContext(p.ctx, "cycle detected",
-		"request_id", RequestIDFromContext(p.ctx),
-		"object_type", key.ObjectType,
-		"object_id", key.ObjectID,
-		"relation", key.Relation)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "cycle detected",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(key.ObjectType)),
+		slog.Any("object_id", key.ObjectID),
+		slog.String("relation", string(key.Relation)))
 }
 
 func (p *checkProbe) UsersetChecking(userset *schema.Userset) {
-	p.logger.DebugContext(p.ctx, "checking userset",
-		"request_id", RequestIDFromContext(p.ctx),
-		"userset_type", usersetType(userset))
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "checking userset",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("userset_type", usersetType(userset)))
 }
 
 // usersetType returns a string describing the userset variant.
@@ -482,46 +523,61 @@ func usersetType(us *schema.Userset) string {
 }
 
 func (p *checkProbe) DirectLookup(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName) {
-	p.logger.DebugContext(p.ctx, "direct lookup",
-		"request_id", RequestIDFromContext(p.ctx),
-		"object_type", objectType,
-		"object_id", objectID,
-		"relation", relation,
-		"subject_type", subjectType)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "direct lookup",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(objectType)),
+		slog.Any("object_id", objectID),
+		slog.String("relation", string(relation)),
+		slog.String("subject_type", string(subjectType)))
 }
 
 func (p *checkProbe) DirectLookupResult(found bool, window graph.SnapshotWindow) {
-	p.logger.DebugContext(p.ctx, "direct lookup result",
-		"request_id", RequestIDFromContext(p.ctx),
-		"found", found,
-		"window_min", window.Min,
-		"window_max", window.Max)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "direct lookup result",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Bool("found", found),
+		slog.Uint64("window_min", uint64(window.Min())),
+		slog.Uint64("window_max", uint64(window.Max())))
 }
 
 func (p *checkProbe) ArrowTraversal(tuplesetRelation, computedRelation schema.RelationName) {
-	p.logger.DebugContext(p.ctx, "arrow traversal",
-		"request_id", RequestIDFromContext(p.ctx),
-		"tupleset_relation", tuplesetRelation,
-		"computed_relation", computedRelation)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "arrow traversal",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("tupleset_relation", string(tuplesetRelation)),
+		slog.String("computed_relation", string(computedRelation)))
 }
 
 func (p *checkProbe) RecursiveCheck(subjectType schema.TypeName, subjectID schema.ID,
 	objectType schema.TypeName, objectID schema.ID,
 	relation schema.RelationName, depth int) {
-	p.logger.DebugContext(p.ctx, "recursive check",
-		"request_id", RequestIDFromContext(p.ctx),
-		"subject_type", subjectType,
-		"subject_id", subjectID,
-		"object_type", objectType,
-		"object_id", objectID,
-		"relation", relation,
-		"depth", depth)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "recursive check",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("subject_type", string(subjectType)),
+		slog.Any("subject_id", subjectID),
+		slog.String("object_type", string(objectType)),
+		slog.Any("object_id", objectID),
+		slog.String("relation", string(relation)),
+		slog.Int("depth", depth))
 }
 
 func (p *checkProbe) UnionBranchFound(branchIndex int) {
-	p.logger.DebugContext(p.ctx, "union branch found",
-		"request_id", RequestIDFromContext(p.ctx),
-		"branch_index", branchIndex)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "union branch found",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Int("branch_index", branchIndex))
 }
 
 func (p *checkProbe) Result(found bool, window graph.SnapshotWindow) {
@@ -535,28 +591,31 @@ func (p *checkProbe) Error(err error) {
 
 func (p *checkProbe) End() {
 	if p.err != nil {
-		p.logger.ErrorContext(p.ctx, "check error",
-			"request_id", RequestIDFromContext(p.ctx),
-			"subject_type", p.subjectType,
-			"subject_id", p.subjectID,
-			"object_type", p.objectType,
-			"object_id", p.objectID,
-			"relation", p.relation,
-			"error", p.err,
-			"duration", time.Since(p.startTime))
+		p.logger.LogAttrs(p.ctx, slog.LevelError, "check error",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("subject_type", string(p.subjectType)),
+			slog.Any("subject_id", p.subjectID),
+			slog.String("object_type", string(p.objectType)),
+			slog.Any("object_id", p.objectID),
+			slog.String("relation", string(p.relation)),
+			slog.Any("error", p.err),
+			slog.Duration("duration", time.Since(p.startTime)))
 		return
 	}
-	p.logger.InfoContext(p.ctx, "check completed",
-		"request_id", RequestIDFromContext(p.ctx),
-		"subject_type", p.subjectType,
-		"subject_id", p.subjectID,
-		"object_type", p.objectType,
-		"object_id", p.objectID,
-		"relation", p.relation,
-		"found", p.found,
-		"window_min", p.window.Min,
-		"window_max", p.window.Max,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(p.ctx, slog.LevelInfo) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelInfo, "check completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("subject_type", string(p.subjectType)),
+		slog.Any("subject_id", p.subjectID),
+		slog.String("object_type", string(p.objectType)),
+		slog.Any("object_id", p.objectID),
+		slog.String("relation", string(p.relation)),
+		slog.Bool("found", p.found),
+		slog.Uint64("window_min", uint64(p.window.Min())),
+		slog.Uint64("window_max", uint64(p.window.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 // -----------------------------------------------------------------------------
@@ -633,28 +692,31 @@ func (p *localCheckProbe) Error(err error) {
 
 func (p *localCheckProbe) End() {
 	if p.err != nil {
-		p.logger.ErrorContext(p.ctx, "local check error",
-			"request_id", RequestIDFromContext(p.ctx),
-			"subject_type", p.subjectType,
-			"subject_id", p.subjectID,
-			"object_type", p.objectType,
-			"object_id", p.objectID,
-			"relation", p.relation,
-			"error", p.err,
-			"duration", time.Since(p.startTime))
+		p.logger.LogAttrs(p.ctx, slog.LevelError, "local check error",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("subject_type", string(p.subjectType)),
+			slog.Any("subject_id", p.subjectID),
+			slog.String("object_type", string(p.objectType)),
+			slog.Any("object_id", p.objectID),
+			slog.String("relation", string(p.relation)),
+			slog.Any("error", p.err),
+			slog.Duration("duration", time.Since(p.startTime)))
 		return
 	}
-	p.logger.DebugContext(p.ctx, "local check completed",
-		"request_id", RequestIDFromContext(p.ctx),
-		"subject_type", p.subjectType,
-		"subject_id", p.subjectID,
-		"object_type", p.objectType,
-		"object_id", p.objectID,
-		"relation", p.relation,
-		"found", p.found,
-		"window_min", p.window.Min,
-		"window_max", p.window.Max,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "local check completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("subject_type", string(p.subjectType)),
+		slog.Any("subject_id", p.subjectID),
+		slog.String("object_type", string(p.objectType)),
+		slog.Any("object_id", p.objectID),
+		slog.String("relation", string(p.relation)),
+		slog.Bool("found", p.found),
+		slog.Uint64("window_min", uint64(p.window.Min())),
+		slog.Uint64("window_max", uint64(p.window.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 type localCheckUnionProbe struct {
@@ -671,40 +733,52 @@ type localCheckUnionProbe struct {
 
 func (p *localCheckUnionProbe) BitmapLookup(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
 	subjectType schema.TypeName, subjectRelation schema.RelationName) {
-	p.logger.DebugContext(p.ctx, "bitmap lookup",
-		"request_id", RequestIDFromContext(p.ctx),
-		"object_type", objectType,
-		"object_id", objectID,
-		"relation", relation,
-		"subject_type", subjectType,
-		"subject_relation", subjectRelation)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "bitmap lookup",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(objectType)),
+		slog.Any("object_id", objectID),
+		slog.String("relation", string(relation)),
+		slog.String("subject_type", string(subjectType)),
+		slog.String("subject_relation", string(subjectRelation)))
 }
 
 func (p *localCheckUnionProbe) BitmapLookupResult(size int, window graph.SnapshotWindow) {
-	p.logger.DebugContext(p.ctx, "bitmap lookup result",
-		"request_id", RequestIDFromContext(p.ctx),
-		"size", size,
-		"window_min", window.Min,
-		"window_max", window.Max)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "bitmap lookup result",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Int("size", size),
+		slog.Uint64("window_min", uint64(window.Min())),
+		slog.Uint64("window_max", uint64(window.Max())))
 }
 
 func (p *localCheckUnionProbe) ContainsCheck(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
 	subjectType schema.TypeName, subjectID schema.ID) {
-	p.logger.DebugContext(p.ctx, "contains check",
-		"request_id", RequestIDFromContext(p.ctx),
-		"object_type", objectType,
-		"object_id", objectID,
-		"relation", relation,
-		"subject_type", subjectType,
-		"subject_id", subjectID)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "contains check",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(objectType)),
+		slog.Any("object_id", objectID),
+		slog.String("relation", string(relation)),
+		slog.String("subject_type", string(subjectType)),
+		slog.Any("subject_id", subjectID))
 }
 
 func (p *localCheckUnionProbe) ContainsCheckResult(found bool, window graph.SnapshotWindow) {
-	p.logger.DebugContext(p.ctx, "contains check result",
-		"request_id", RequestIDFromContext(p.ctx),
-		"found", found,
-		"window_min", window.Min,
-		"window_max", window.Max)
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "contains check result",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Bool("found", found),
+		slog.Uint64("window_min", uint64(window.Min())),
+		slog.Uint64("window_max", uint64(window.Max())))
 }
 
 func (p *localCheckUnionProbe) Result(result graph.CheckResult) {
@@ -717,24 +791,27 @@ func (p *localCheckUnionProbe) Error(err error) {
 
 func (p *localCheckUnionProbe) End() {
 	if p.err != nil {
-		p.logger.ErrorContext(p.ctx, "local check union error",
-			"request_id", RequestIDFromContext(p.ctx),
-			"subject_type", p.subjectType,
-			"subject_id", p.subjectID,
-			"num_checks", p.numChecks,
-			"error", p.err,
-			"duration", time.Since(p.startTime))
+		p.logger.LogAttrs(p.ctx, slog.LevelError, "local check union error",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("subject_type", string(p.subjectType)),
+			slog.Any("subject_id", p.subjectID),
+			slog.Int("num_checks", p.numChecks),
+			slog.Any("error", p.err),
+			slog.Duration("duration", time.Since(p.startTime)))
 		return
 	}
-	p.logger.DebugContext(p.ctx, "local check union completed",
-		"request_id", RequestIDFromContext(p.ctx),
-		"subject_type", p.subjectType,
-		"subject_id", p.subjectID,
-		"num_checks", p.numChecks,
-		"found", p.result.Found,
-		"window_min", p.result.Window.Min,
-		"window_max", p.result.Window.Max,
-		"duration", time.Since(p.startTime))
+	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
+		return
+	}
+	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "local check union completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("subject_type", string(p.subjectType)),
+		slog.Any("subject_id", p.subjectID),
+		slog.Int("num_checks", p.numChecks),
+		slog.Bool("found", p.result.Found),
+		slog.Uint64("window_min", uint64(p.result.Window.Min())),
+		slog.Uint64("window_max", uint64(p.result.Window.Max())),
+		slog.Duration("duration", time.Since(p.startTime)))
 }
 
 // -----------------------------------------------------------------------------
@@ -759,7 +836,6 @@ func (o *MVCCObserver) ContainsWithinStarted(id schema.ID, maxTime store.StoreTi
 		operation: "contains_within",
 		id:        id,
 		maxTime:   maxTime,
-		startTime: time.Now(),
 	}
 }
 
@@ -769,7 +845,6 @@ func (o *MVCCObserver) SnapshotWithinStarted(maxTime store.StoreTime) graph.MVCC
 		logger:    o.logger,
 		operation: "snapshot_within",
 		maxTime:   maxTime,
-		startTime: time.Now(),
 	}
 }
 
@@ -779,7 +854,6 @@ type mvccProbe struct {
 	operation    string
 	id           schema.ID
 	maxTime      store.StoreTime
-	startTime    time.Time
 	historyDepth int
 	undoCount    int
 	headUsed     bool
@@ -805,18 +879,20 @@ func (p *mvccProbe) Result(found bool, stateTime store.StoreTime) {
 }
 
 func (p *mvccProbe) End() {
-	attrs := []any{
-		"operation", p.operation,
-		"max_time", p.maxTime,
-		"history_depth", p.historyDepth,
-		"undo_count", p.undoCount,
-		"head_used", p.headUsed,
-		"found", p.found,
-		"state_time", p.stateTime,
-		"duration", time.Since(p.startTime),
+	if !p.logger.Enabled(context.Background(), slog.LevelDebug) {
+		return
+	}
+	attrs := []slog.Attr{
+		slog.String("operation", p.operation),
+		slog.Any("max_time", p.maxTime),
+		slog.Int("history_depth", p.historyDepth),
+		slog.Int("undo_count", p.undoCount),
+		slog.Bool("head_used", p.headUsed),
+		slog.Bool("found", p.found),
+		slog.Any("state_time", p.stateTime),
 	}
 	if p.id != 0 {
-		attrs = append([]any{"id", p.id}, attrs...)
+		attrs = append([]slog.Attr{slog.Any("id", p.id)}, attrs...)
 	}
-	p.logger.Debug("mvcc operation", attrs...)
+	p.logger.LogAttrs(context.Background(), slog.LevelDebug, "mvcc operation", attrs...)
 }

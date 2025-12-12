@@ -17,17 +17,17 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - [~] Routing should not be calculated per tuple in a subjectset b/c their might be a high cardinality of tuples. We would want to scatter-gather: group all the subjects by route and dispatch concurrently (or up to some concurrency threshold).
 - [~] Server API for graph
 - [~] Graph wiring for remote dispatch
-- [ ] Schema updates, tied to storetime / proper schema API that takes into account windows. If you know about a relevant schema update it must be taken into account even if tuple hasn't changed. Max window before schema update must see old schema.
 - [ ] Intersection operator – complicates dispatch. Note "BatchCheck" is really "CheckAny" or "CheckUnion". I thnk we need a CheckSomething that takes into account the whole "set equation" – then we dispatch accordingly.
 - [ ] ListSubjects
 - [ ] Reverse indexing (ListObjects)
 - [ ] Read repair (waiting for replication when needed)
 - [ ] Abort on unsatisfiable snapshot window. Panicing for now.
 - [ ] Write acknowledgements (pre shard movement & rebalancing).
+- [ ] Schema updates, tied to storetime / proper schema API that takes into account windows. If you know about a relevant schema update it must be taken into account even if tuple hasn't changed. Max window before schema update must see old schema.
 - [ ] Shard movement (w/ write acknowledgements).
 - [ ] Lease protocol for shard assignment.
 - [ ] GC old undo entries
-- [ ] If a graph gets a query that doesn't have tuples for it any more (i.e. they moved), make sure it reroutes without constraining window
+- [~] If a graph gets a query that doesn't have tuples for it any more (i.e. they moved), make sure it reroutes without constraining window
 
 ## Advanced
 
@@ -52,6 +52,7 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - We could use the type/relation IDs internally in more places vs names
 - We could use a sync.pool of undo entries possibly to avoid allocation & GC costs
   - Perhaps we could combine this with a global entry limit that automatically GC'd old entries as new ones were added
+- Zerolog apparently performs much better than slog
 
 ## Thoughts / Maybe bad ideas
 
