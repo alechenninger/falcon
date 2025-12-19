@@ -288,29 +288,45 @@ func (s *PostgresStream) decodeTuple(rel *pglogrepl.RelationMessage, tuple *pglo
 		}
 		colName := rel.Columns[i].Name
 		switch col.DataType {
-		case 't': // text
+		case 't': // text (integers are sent as text in pgoutput)
 			values[colName] = string(col.Data)
 		case 'n': // null
-			values[colName] = ""
+			values[colName] = "0"
 		}
 	}
 
+	objectType, err := parseSmallInt(values["object_type"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse object_type: %w", err)
+	}
 	objectID, err := parseOID(values["object_id"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse object_id: %w", err)
+	}
+	relation, err := parseSmallInt(values["relation"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse relation: %w", err)
+	}
+	subjectType, err := parseSmallInt(values["subject_type"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse subject_type: %w", err)
 	}
 	subjectID, err := parseOID(values["subject_id"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subject_id: %w", err)
 	}
+	subjectRelation, err := parseSmallInt(values["subject_relation"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse subject_relation: %w", err)
+	}
 
 	return &Tuple{
-		ObjectType:      schema.TypeName(values["object_type"]),
+		ObjectType:      schema.TypeID(objectType),
 		ObjectID:        schema.ID(objectID),
-		Relation:        schema.RelationName(values["relation"]),
-		SubjectType:     schema.TypeName(values["subject_type"]),
+		Relation:        schema.RelationID(relation),
+		SubjectType:     schema.TypeID(subjectType),
 		SubjectID:       schema.ID(subjectID),
-		SubjectRelation: schema.RelationName(values["subject_relation"]),
+		SubjectRelation: schema.RelationID(subjectRelation),
 	}, nil
 }
 
@@ -320,6 +336,14 @@ func parseOID(s string) (uint32, error) {
 		return 0, err
 	}
 	return uint32(v), nil
+}
+
+func parseSmallInt(s string) (int16, error) {
+	v, err := strconv.ParseInt(s, 10, 16)
+	if err != nil {
+		return 0, err
+	}
+	return int16(v), nil
 }
 
 func pgQuoteIdent(s string) string {

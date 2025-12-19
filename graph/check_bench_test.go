@@ -107,14 +107,28 @@ func NewBenchGraph(s *schema.Schema) *BenchGraph {
 }
 
 // Check delegates to the underlying LocalGraph.
+// Takes string names for convenience and converts to IDs internally.
 func (bg *BenchGraph) Check(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
-	ok, window, err := bg.graph.Check(ctx, subjectType, subjectID, objectType, objectID, relation, MaxSnapshotWindow, nil)
+	s := bg.graph.Schema()
+	ok, window, err := bg.graph.Check(ctx,
+		s.GetTypeID(subjectType), subjectID,
+		s.GetTypeID(objectType), objectID,
+		s.GetRelationID(objectType, relation),
+		MaxSnapshotWindow, nil)
 	return ok, window.Max(), err
 }
 
 // AddDirect adds a tuple directly to the graph's in-memory state.
 func (bg *BenchGraph) AddDirect(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) {
-	bg.usersets.applyAdd(objectType, objectID, relation, subjectType, subjectID, subjectRelation, bg.time)
+	s := bg.usersets.Schema()
+	bg.usersets.applyAdd(store.Tuple{
+		ObjectType:      s.GetTypeID(objectType),
+		ObjectID:        objectID,
+		Relation:        s.GetRelationID(objectType, relation),
+		SubjectType:     s.GetTypeID(subjectType),
+		SubjectID:       subjectID,
+		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
+	}, bg.time)
 	bg.time++
 }
 

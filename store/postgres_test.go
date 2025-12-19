@@ -6,11 +6,30 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alechenninger/falcon/schema"
 	"github.com/alechenninger/falcon/store"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+// testSchema returns a schema suitable for postgres store tests.
+var testSchema = func() *schema.Schema {
+	s := &schema.Schema{
+		Types: map[schema.TypeName]*schema.ObjectType{
+			"user":     {ID: 1, Name: "user", Relations: map[schema.RelationName]*schema.Relation{}},
+			"group":    {ID: 2, Name: "group", Relations: map[schema.RelationName]*schema.Relation{}},
+			"document": {ID: 3, Name: "document", Relations: map[schema.RelationName]*schema.Relation{}},
+			"folder":   {ID: 4, Name: "folder", Relations: map[schema.RelationName]*schema.Relation{}},
+		},
+	}
+	s.Types["group"].Relations["member"] = &schema.Relation{ID: 1, Name: "member"}
+	s.Types["document"].Relations["viewer"] = &schema.Relation{ID: 1, Name: "viewer"}
+	s.Types["document"].Relations["editor"] = &schema.Relation{ID: 2, Name: "editor"}
+	s.Types["folder"].Relations["viewer"] = &schema.Relation{ID: 1, Name: "viewer"}
+	s.Compile()
+	return s
+}()
 
 // collectTuples is a test helper that collects all tuples from an iterator.
 func collectTuples(t *testing.T, iter store.TupleIterator) []store.Tuple {
@@ -86,10 +105,10 @@ func TestPostgresStore_WriteTuple(t *testing.T) {
 	ctx := context.Background()
 
 	tuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    100,
-		Relation:    "viewer",
-		SubjectType: "user",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("user"),
 		SubjectID:   1,
 	}
 
@@ -118,10 +137,10 @@ func TestPostgresStore_WriteTuple_Idempotent(t *testing.T) {
 	ctx := context.Background()
 
 	tuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    100,
-		Relation:    "viewer",
-		SubjectType: "user",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("user"),
 		SubjectID:   1,
 	}
 
@@ -150,10 +169,10 @@ func TestPostgresStore_DeleteTuple(t *testing.T) {
 	ctx := context.Background()
 
 	tuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    100,
-		Relation:    "viewer",
-		SubjectType: "user",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("user"),
 		SubjectID:   1,
 	}
 
@@ -184,10 +203,10 @@ func TestPostgresStore_DeleteTuple_NotExists(t *testing.T) {
 	ctx := context.Background()
 
 	tuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    100,
-		Relation:    "viewer",
-		SubjectType: "user",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("user"),
 		SubjectID:   1,
 	}
 
@@ -217,10 +236,10 @@ func TestPostgresStore_LoadAll_Multiple(t *testing.T) {
 	ctx := context.Background()
 
 	tuples := []store.Tuple{
-		{ObjectType: "document", ObjectID: 100, Relation: "viewer", SubjectType: "user", SubjectID: 1},
-		{ObjectType: "document", ObjectID: 100, Relation: "viewer", SubjectType: "user", SubjectID: 2},
-		{ObjectType: "document", ObjectID: 100, Relation: "editor", SubjectType: "user", SubjectID: 3},
-		{ObjectType: "folder", ObjectID: 10, Relation: "viewer", SubjectType: "user", SubjectID: 1},
+		{ObjectType: testSchema.GetTypeID("document"), ObjectID: 100, Relation: testSchema.GetRelationID("document", "viewer"), SubjectType: testSchema.GetTypeID("user"), SubjectID: 1},
+		{ObjectType: testSchema.GetTypeID("document"), ObjectID: 100, Relation: testSchema.GetRelationID("document", "viewer"), SubjectType: testSchema.GetTypeID("user"), SubjectID: 2},
+		{ObjectType: testSchema.GetTypeID("document"), ObjectID: 100, Relation: testSchema.GetRelationID("document", "editor"), SubjectType: testSchema.GetTypeID("user"), SubjectID: 3},
+		{ObjectType: testSchema.GetTypeID("folder"), ObjectID: 10, Relation: testSchema.GetRelationID("folder", "viewer"), SubjectType: testSchema.GetTypeID("user"), SubjectID: 1},
 	}
 
 	for _, tuple := range tuples {
@@ -258,10 +277,10 @@ func TestPostgresStore_MaxUint32(t *testing.T) {
 
 	// Test that we can store max uint32 values (OID should handle this)
 	tuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    4294967295, // max uint32
-		Relation:    "viewer",
-		SubjectType: "user",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("user"),
 		SubjectID:   4294967295, // max uint32
 	}
 
@@ -291,17 +310,17 @@ func TestPostgresStore_DifferentSubjectTypes(t *testing.T) {
 
 	// Same object, same relation, same subject_id, but different subject_types
 	userTuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    100,
-		Relation:    "viewer",
-		SubjectType: "user",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("user"),
 		SubjectID:   1,
 	}
 	groupTuple := store.Tuple{
-		ObjectType:  "document",
+		ObjectType:  testSchema.GetTypeID("document"),
 		ObjectID:    100,
-		Relation:    "viewer",
-		SubjectType: "group",
+		Relation:    testSchema.GetRelationID("document", "viewer"),
+		SubjectType: testSchema.GetTypeID("group"),
 		SubjectID:   1, // Same ID as user!
 	}
 
@@ -352,22 +371,22 @@ func TestPostgresStore_UsersetSubject(t *testing.T) {
 
 	// Direct subject: document:100#viewer@user:1
 	directTuple := store.Tuple{
-		ObjectType:      "document",
+		ObjectType:      testSchema.GetTypeID("document"),
 		ObjectID:        100,
-		Relation:        "viewer",
-		SubjectType:     "user",
+		Relation:        testSchema.GetRelationID("document", "viewer"),
+		SubjectType:     testSchema.GetTypeID("user"),
 		SubjectID:       1,
-		SubjectRelation: "", // empty = direct subject
+		SubjectRelation: schema.NoRelation, // 0 = direct subject
 	}
 
 	// Userset subject: document:100#viewer@group:1#member
 	usersetTuple := store.Tuple{
-		ObjectType:      "document",
+		ObjectType:      testSchema.GetTypeID("document"),
 		ObjectID:        100,
-		Relation:        "viewer",
-		SubjectType:     "group",
+		Relation:        testSchema.GetRelationID("document", "viewer"),
+		SubjectType:     testSchema.GetTypeID("group"),
 		SubjectID:       1,
-		SubjectRelation: "member", // non-empty = userset subject
+		SubjectRelation: testSchema.GetRelationID("group", "member"), // non-zero = userset subject
 	}
 
 	// Write both tuples

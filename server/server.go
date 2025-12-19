@@ -82,19 +82,19 @@ type Server struct {
 func Start(ctx context.Context, cfg Config) (*Server, error) {
 	log.Printf("[%s] Starting falcon server on %s", cfg.ShardID, cfg.ListenAddr)
 
+	// Create schema first (needed for test data generation)
+	sch := graph.TestDataSchema()
+	router := graph.TestDataRouter(cfg.NumShards, sch)
+
 	// Generate test data
 	log.Printf("[%s] Generating test data...", cfg.ShardID)
 	startGen := time.Now()
-	allTuples := graph.GenerateTestData(cfg.TestDataConfig)
+	allTuples := graph.GenerateTestData(cfg.TestDataConfig, sch)
 	log.Printf("[%s] Generated %d tuples in %v", cfg.ShardID, len(allTuples), time.Since(startGen))
 
 	// Create static store with ALL tuples (store is not sharded)
 	// ShardedGraph.Start() will filter during hydration via filteringTupleIterator
-	router := graph.TestDataRouter(cfg.NumShards)
 	staticStore := newStaticStore(allTuples)
-
-	// Create the sharded graph (initially without remote shards - we'll add them after)
-	sch := graph.TestDataSchema()
 
 	// Create slog logger with shard ID and appropriate log level
 	logLevel := slog.LevelInfo

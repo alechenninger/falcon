@@ -15,7 +15,7 @@ type ShardID string
 
 // Router determines which shard owns a given object.
 // This is called during Check and CheckUnion to route requests.
-type Router func(objectType schema.TypeName, objectID schema.ID) ShardID
+type Router func(objectType schema.TypeID, objectID schema.ID) ShardID
 
 // ShardedGraph is a distributed Graph implementation that routes checks
 // to the appropriate shard based on object ownership.
@@ -146,7 +146,7 @@ func (g *ShardedGraph) Start(ctx context.Context) error {
 }
 
 // ownsObject returns true if this shard owns the given object.
-func (g *ShardedGraph) ownsObject(objectType schema.TypeName, objectID schema.ID) bool {
+func (g *ShardedGraph) ownsObject(objectType schema.TypeID, objectID schema.ID) bool {
 	return g.router(objectType, objectID) == g.localShardID
 }
 
@@ -158,9 +158,9 @@ func (g *ShardedGraph) Schema() *schema.Schema {
 // Check determines if subject has relation on object.
 // Routes to the appropriate shard based on the object's ownership.
 func (g *ShardedGraph) Check(ctx context.Context,
-	subjectType schema.TypeName, subjectID schema.ID,
-	objectType schema.TypeName, objectID schema.ID,
-	relation schema.RelationName,
+	subjectType schema.TypeID, subjectID schema.ID,
+	objectType schema.TypeID, objectID schema.ID,
+	relation schema.RelationID,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
 	ctx, probe := g.shardedObserver.CheckStarted(ctx, subjectType, subjectID, objectType, objectID, relation)
@@ -223,7 +223,7 @@ type checkUnionResult struct {
 // Remote shard checks run in parallel and cancel when any returns true.
 // If some shards error but none return true, returns an inconclusive error.
 func (g *ShardedGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeName, subjectID schema.ID,
+	subjectType schema.TypeID, subjectID schema.ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
 ) (CheckResult, error) {
@@ -266,6 +266,10 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 
 		// Add local check if any local objects
 		if !localBitmap.IsEmpty() {
+			// Validate window for local check is within replicated time
+			// TODO: eventually this should wait to catch up
+			g.assertWindowWithinReplicated(chk.Window)
+
 			localChecks = append(localChecks, RelationCheck{
 				ObjectType: chk.ObjectType,
 				ObjectIDs:  localBitmap,
@@ -287,11 +291,6 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 
 	var tightestWindow SnapshotWindow
 	first := true
-
-	// Validate windows for local checks are within replicated time
-	for _, chk := range localChecks {
-		g.assertWindowWithinReplicated(chk.Window)
-	}
 
 	// Process local checks first (fast path - no network)
 	for _, chk := range localChecks {
@@ -495,7 +494,7 @@ var (
 // filteringTupleIterator wraps a TupleIterator and only yields tuples matching the filter.
 type filteringTupleIterator struct {
 	inner   store.TupleIterator
-	include func(schema.TypeName, schema.ID) bool
+	include func(schema.TypeID, schema.ID) bool
 	current store.Tuple
 }
 
@@ -527,7 +526,7 @@ func (f *filteringTupleIterator) Close() error {
 // replicatedTime still advances, but no data is applied.
 type filteringChangeStream struct {
 	inner   store.ChangeStream
-	include func(schema.TypeName, schema.ID) bool
+	include func(schema.TypeID, schema.ID) bool
 }
 
 func (f *filteringChangeStream) Subscribe(ctx context.Context, after store.StoreTime) (<-chan store.Change, <-chan error) {

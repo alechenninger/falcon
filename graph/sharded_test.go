@@ -15,6 +15,7 @@ import (
 // TestShardedGraph holds multiple sharded graphs sharing a single store.
 type TestShardedGraph struct {
 	store    *store.MemoryStore
+	schema   *schema.Schema
 	shards   map[graph.ShardID]*shardedTestNode
 	assigner graph.Router
 	ctx      context.Context
@@ -63,6 +64,7 @@ func NewTestShardedGraph(s *schema.Schema, shardIDs []graph.ShardID, router grap
 
 	tsg := &TestShardedGraph{
 		store:    ms,
+		schema:   s,
 		shards:   nodes,
 		assigner: router,
 		ctx:      ctx,
@@ -90,6 +92,7 @@ func (tsg *TestShardedGraph) Shard(id graph.ShardID) *graph.ShardedGraph {
 }
 
 // WriteTuple writes a tuple and waits for all shards to apply it.
+// Takes string names for convenience and converts to IDs internally.
 func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
 	// Validate against any shard (they all share the schema)
 	for _, node := range tsg.shards {
@@ -99,13 +102,14 @@ func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType schema.T
 		break
 	}
 
+	s := tsg.schema
 	if err := tsg.store.WriteTuple(ctx, store.Tuple{
-		ObjectType:      objectType,
+		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
+		Relation:        s.GetRelationID(objectType, relation),
+		SubjectType:     s.GetTypeID(subjectType),
 		SubjectID:       subjectID,
-		SubjectRelation: subjectRelation,
+		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
 	}); err != nil {
 		return err
 	}
@@ -119,6 +123,7 @@ func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType schema.T
 }
 
 // DeleteTuple deletes a tuple and waits for all shards to apply it.
+// Takes string names for convenience and converts to IDs internally.
 func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
 	// Validate against any shard (they all share the schema)
 	for _, node := range tsg.shards {
@@ -128,13 +133,14 @@ func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType schema.
 		break
 	}
 
+	s := tsg.schema
 	if err := tsg.store.DeleteTuple(ctx, store.Tuple{
-		ObjectType:      objectType,
+		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
-		Relation:        relation,
-		SubjectType:     subjectType,
+		Relation:        s.GetRelationID(objectType, relation),
+		SubjectType:     s.GetTypeID(subjectType),
 		SubjectID:       subjectID,
-		SubjectRelation: subjectRelation,
+		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
 	}); err != nil {
 		return err
 	}
@@ -148,9 +154,30 @@ func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType schema.
 }
 
 // Check is a convenience wrapper that calls Check with MaxSnapshotWindow and nil visited.
+// Takes string names for convenience and converts to IDs internally.
 func (tsg *TestShardedGraph) Check(ctx context.Context, shardID graph.ShardID, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, error) {
-	ok, _, err := tsg.shards[shardID].graph.Check(ctx, subjectType, subjectID, objectType, objectID, relation, graph.MaxSnapshotWindow, nil)
+	s := tsg.shards[shardID].graph.Schema()
+	ok, _, err := tsg.shards[shardID].graph.Check(ctx,
+		s.GetTypeID(subjectType), subjectID,
+		s.GetTypeID(objectType), objectID,
+		s.GetRelationID(objectType, relation),
+		graph.MaxSnapshotWindow, nil)
 	return ok, err
+}
+
+// CheckUnion is a convenience wrapper for CheckUnion that takes string names.
+// Takes string names for convenience and converts to IDs internally.
+func (tsg *TestShardedGraph) CheckUnion(ctx context.Context, shardID graph.ShardID, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectIDs *roaring.Bitmap, relation schema.RelationName) (graph.CheckResult, error) {
+	s := tsg.shards[shardID].graph.Schema()
+	checks := []graph.RelationCheck{{
+		ObjectType: s.GetTypeID(objectType),
+		ObjectIDs:  objectIDs,
+		Relation:   s.GetRelationID(objectType, relation),
+		Window:     graph.MaxSnapshotWindow,
+	}}
+	return tsg.shards[shardID].graph.CheckUnion(ctx,
+		s.GetTypeID(subjectType), subjectID,
+		checks, nil)
 }
 
 // Close stops all shard subscriptions.
@@ -159,9 +186,27 @@ func (tsg *TestShardedGraph) Close() {
 }
 
 // byObjectType returns a Router that assigns shards by object type.
-func byObjectType(mapping map[schema.TypeName]graph.ShardID) graph.Router {
-	return func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		return mapping[objectType]
+// The schema is used to convert TypeNames to TypeIDs for the mapping.
+func byObjectType(s *schema.Schema, mapping map[schema.TypeName]graph.ShardID) graph.Router {
+	// Build a TypeID-based lookup
+	idMapping := make(map[schema.TypeID]graph.ShardID, len(mapping))
+	for typeName, shardID := range mapping {
+		idMapping[s.GetTypeID(typeName)] = shardID
+	}
+	return func(objectType schema.TypeID, objectID schema.ID) graph.ShardID {
+		return idMapping[objectType]
+	}
+}
+
+// testRouter creates a Router from a function that takes type name as string.
+// This is a test helper to minimize changes in test code.
+func testRouter(s *schema.Schema, fn func(typeName string, objectID schema.ID) graph.ShardID) graph.Router {
+	return func(objectType schema.TypeID, objectID schema.ID) graph.ShardID {
+		ot := s.TypeByID(objectType)
+		if ot == nil {
+			return ""
+		}
+		return fn(string(ot.Name), objectID)
 	}
 }
 
@@ -170,7 +215,7 @@ func TestShardedGraph_LocalCheck(t *testing.T) {
 	s := testSchema()
 
 	// Shard by type: documents on shard1, folders on shard2
-	router := byObjectType(map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
 		"document": "shard1",
 		"folder":   "shard2",
 		"group":    "shard1",
@@ -215,7 +260,7 @@ func TestShardedGraph_CrossShardArrow(t *testing.T) {
 	s := testSchema()
 
 	// Shard by type: documents on shard1, folders on shard2
-	router := byObjectType(map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
 		"document": "shard1",
 		"folder":   "shard2",
 		"group":    "shard2",
@@ -268,7 +313,7 @@ func TestShardedGraph_CrossShardUserset(t *testing.T) {
 	s := testSchema()
 
 	// Shard by type: documents on shard1, groups on shard2
-	router := byObjectType(map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
 		"document": "shard1",
 		"folder":   "shard1",
 		"group":    "shard2",
@@ -320,8 +365,8 @@ func TestShardedGraph_NestedCrossShardArrow(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding to spread folders across shards
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
@@ -329,7 +374,7 @@ func TestShardedGraph_NestedCrossShardArrow(t *testing.T) {
 		}
 		// Documents on shard1
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -382,15 +427,15 @@ func TestShardedGraph_CheckUnionMultipleShards(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
 			return "shard2"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -435,7 +480,7 @@ func TestShardedGraph_ArrowWithCrossShardUserset(t *testing.T) {
 	s := testSchema()
 
 	// documents on shard1, folders on shard2, groups on shard3
-	router := byObjectType(map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
 		"document": "shard1",
 		"folder":   "shard2",
 		"group":    "shard3",
@@ -494,15 +539,15 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
 			return "shard2"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -528,15 +573,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 	bitmap.Add(uint32(folder11))
 	bitmap.Add(uint32(folder12))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - should find user1 on folder11 (shard2)
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
@@ -556,15 +594,15 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
 			return "shard2"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -596,15 +634,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 	bitmap.Add(uint32(folder11))
 	bitmap.Add(uint32(folder12))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - user1 should NOT be found on any folder
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
@@ -632,8 +663,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			switch objectID % 3 {
 			case 0:
 				return "shard1"
@@ -644,7 +675,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 			}
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
@@ -675,15 +706,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 	bitmap.Add(uint32(folder10))
 	bitmap.Add(uint32(folder11))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion from shard1 - should check all three shards in parallel
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
@@ -703,9 +727,9 @@ func TestShardedGraph_CheckUnionWindowNarrowing_LocalOnly(t *testing.T) {
 	s := testSchema()
 
 	// All folders on shard1 (local)
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1"}, router)
 	defer tsg.Close()
@@ -737,16 +761,9 @@ func TestShardedGraph_CheckUnionWindowNarrowing_LocalOnly(t *testing.T) {
 	bitmap.Add(uint32(folder11))
 	bitmap.Add(uint32(folder12))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - user1 should NOT be found on any folder
 	// All checks are local (no remote shards)
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
@@ -778,15 +795,15 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Positive(t *testing.T
 
 	// Folders distributed across multiple remote shards (none on shard1)
 	// folder10 -> shard2, folder11 -> shard3, folder12 -> shard2, folder13 -> shard3
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard2"
 			}
 			return "shard3"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
@@ -811,15 +828,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Positive(t *testing.T
 	bitmap.Add(uint32(folder12))
 	bitmap.Add(uint32(folder13))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion from shard1 - checks go to shard2 and shard3 in parallel
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
@@ -840,15 +850,15 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 
 	// Folders distributed across multiple remote shards (none on shard1)
 	// folder10 -> shard2, folder11 -> shard3, folder12 -> shard2, folder13 -> shard3
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard2"
 			}
 			return "shard3"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
@@ -884,16 +894,9 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 	bitmap.Add(uint32(folder12))
 	bitmap.Add(uint32(folder13))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion from shard1 - checks go to shard2 and shard3 in parallel
 	// user1 should NOT be found on any folder
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("CheckUnion failed: %v", err)
 	}
@@ -929,15 +932,15 @@ func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
 			return "shard2"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -958,17 +961,10 @@ func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 	bitmap.Add(uint32(folder10))
 	bitmap.Add(uint32(folder11))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion multiple times to ensure parallel execution works correctly
 	// and early termination on true result functions properly
 	for i := 0; i < 10; i++ {
-		result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+		result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 		if err != nil {
 			t.Fatalf("CheckUnion iteration %d failed: %v", i, err)
 		}
@@ -990,7 +986,7 @@ type FailingGraph struct {
 
 // CheckUnion returns the configured error if set, otherwise delegates to the embedded graph.
 func (f *FailingGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeName, subjectID schema.ID,
+	subjectType schema.TypeID, subjectID schema.ID,
 	checks []graph.RelationCheck,
 	visited []graph.VisitedKey,
 ) (graph.CheckResult, error) {
@@ -1006,15 +1002,15 @@ func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
 			return "shard2"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -1037,16 +1033,9 @@ func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 	bitmap.Add(uint32(folder10))
 	bitmap.Add(uint32(folder11))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - shard1 returns false, shard2 errors
 	// Should return inconclusive error
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err == nil {
 		t.Fatal("expected error from CheckUnion when shard fails")
 	}
@@ -1067,8 +1056,8 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			switch objectID % 3 {
 			case 0:
 				return "shard1"
@@ -1079,7 +1068,7 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 			}
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
@@ -1107,15 +1096,8 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 	bitmap.Add(uint32(folder10))
 	bitmap.Add(uint32(folder11))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - both remote shards error
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err == nil {
 		t.Fatal("expected error from CheckUnion when all shards fail")
 	}
@@ -1137,15 +1119,15 @@ func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
 			}
 			return "shard2"
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
@@ -1173,16 +1155,9 @@ func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 	bitmap.Add(uint32(folder10))
 	bitmap.Add(uint32(folder11))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - shard1 returns true (found), shard2 errors
 	// Should return true and no error (short-circuit)
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err != nil {
 		t.Fatalf("expected no error when found on another shard, got: %v", err)
 	}
@@ -1200,8 +1175,8 @@ func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 	s := testSchema()
 
 	// Use ID-based sharding: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
-	router := func(objectType schema.TypeName, objectID schema.ID) graph.ShardID {
-		if objectType == "folder" {
+	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+		if typeName == "folder" {
 			switch objectID % 3 {
 			case 0:
 				return "shard1"
@@ -1212,7 +1187,7 @@ func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 			}
 		}
 		return "shard1"
-	}
+	})
 
 	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
@@ -1235,15 +1210,8 @@ func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 	bitmap.Add(uint32(folder10))
 	bitmap.Add(uint32(folder11))
 
-	checks := []graph.RelationCheck{{
-		ObjectType: "folder",
-		ObjectIDs:  bitmap,
-		Relation:   "viewer",
-		Window:     graph.MaxSnapshotWindow,
-	}}
-
 	// Call CheckUnion - shard2 returns false, shard3 errors
-	result, err := tsg.Shard("shard1").CheckUnion(ctx, "user", user1, checks, nil)
+	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
 	if err == nil {
 		t.Fatal("expected error from CheckUnion when some shards fail")
 	}

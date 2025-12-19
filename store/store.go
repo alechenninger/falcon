@@ -50,7 +50,7 @@ func (a *AtomicStoreTime) Store(t StoreTime) {
 	a.v.Store(uint64(t))
 }
 
-// Tuple represents a single authorization tuple.
+// Tuple represents a single authorization tuple using compact IDs.
 //
 // For direct subjects: object_type:object_id#relation@subject_type:subject_id
 // Example: document:100#viewer@user:1
@@ -58,12 +58,12 @@ func (a *AtomicStoreTime) Store(t StoreTime) {
 // For userset subjects: object_type:object_id#relation@subject_type:subject_id#subject_relation
 // Example: document:100#viewer@group:1#member (all members of group 1 are viewers)
 type Tuple struct {
-	ObjectType      schema.TypeName
+	ObjectType      schema.TypeID
 	ObjectID        schema.ID
-	Relation        schema.RelationName
-	SubjectType     schema.TypeName
+	Relation        schema.RelationID
+	SubjectType     schema.TypeID
 	SubjectID       schema.ID
-	SubjectRelation schema.RelationName // Optional: empty for direct subjects, set for userset subjects
+	SubjectRelation schema.RelationID // Optional: NoRelation for direct subjects
 }
 
 // ChangeOp represents the type of change (insert or delete).

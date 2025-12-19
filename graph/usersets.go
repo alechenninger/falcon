@@ -23,17 +23,15 @@ type usersetKey struct {
 	ObjectID        schema.ID         // 4 bytes
 }
 
-// makeKey creates a usersetKey from string type/relation names using schema lookup.
-func (u *MultiversionUsersets) makeKey(
-	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	subjectType schema.TypeName, subjectRelation schema.RelationName,
-) usersetKey {
+// tupleToKey converts a store.Tuple directly to a usersetKey.
+// Since both now use TypeID/RelationID, this is a direct mapping.
+func tupleToKey(t store.Tuple) usersetKey {
 	return usersetKey{
-		ObjectType:      u.schema.GetTypeID(objectType),
-		ObjectID:        objectID,
-		Relation:        u.schema.GetRelationID(objectType, relation),
-		SubjectType:     u.schema.GetTypeID(subjectType),
-		SubjectRelation: u.schema.GetRelationID(subjectType, subjectRelation),
+		ObjectType:      t.ObjectType,
+		ObjectID:        t.ObjectID,
+		Relation:        t.Relation,
+		SubjectType:     t.SubjectType,
+		SubjectRelation: t.SubjectRelation,
 	}
 }
 
@@ -119,7 +117,7 @@ func (u *MultiversionUsersets) Hydrate(iter store.TupleIterator) error {
 
 	for iter.Next() {
 		t := iter.Tuple()
-		key := u.makeKey(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectRelation)
+		key := tupleToKey(t)
 
 		vs, ok := u.tuples[key]
 		if !ok {
@@ -176,42 +174,42 @@ func (u *MultiversionUsersets) applyChange(ctx context.Context, change store.Cha
 
 	t := change.Tuple
 	// Skip empty tuples (filtered changes) but still advance time
-	if t.ObjectType != "" {
+	if t.ObjectType != 0 {
 		switch change.Op {
 		case store.OpInsert:
-			u.applyAdd(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
+			u.applyAdd(t, change.Time)
 		case store.OpDelete:
-			u.applyRemove(t.ObjectType, t.ObjectID, t.Relation, t.SubjectType, t.SubjectID, t.SubjectRelation, change.Time)
+			u.applyRemove(t, change.Time)
 		}
 	}
 	u.replicatedTime.Store(change.Time)
 	probe.Applied(change.Time)
 }
 
-// applyAdd adds a subject to the versioned set for the given tuple key.
-func (u *MultiversionUsersets) applyAdd(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, t store.StoreTime) {
+// applyAdd adds a subject to the versioned set for the given tuple.
+func (u *MultiversionUsersets) applyAdd(t store.Tuple, time store.StoreTime) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
+	key := tupleToKey(t)
 
 	vs, ok := u.tuples[key]
 	if !ok {
-		vs = newVersionedSet(t)
+		vs = newVersionedSet(time)
 		u.tuples[key] = vs
 	}
-	vs.Add(subjectID, t)
+	vs.Add(t.SubjectID, time)
 }
 
-// applyRemove removes a subject from the versioned set for the given tuple key.
-func (u *MultiversionUsersets) applyRemove(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName, t store.StoreTime) {
+// applyRemove removes a subject from the versioned set for the given tuple.
+func (u *MultiversionUsersets) applyRemove(t store.Tuple, time store.StoreTime) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
+	key := tupleToKey(t)
 
 	if vs, ok := u.tuples[key]; ok {
-		vs.Remove(subjectID, t)
+		vs.Remove(t.SubjectID, time)
 	}
 }
 
@@ -219,8 +217,8 @@ func (u *MultiversionUsersets) applyRemove(objectType schema.TypeName, objectID 
 // Only constrains result by window.Max(); result min is the actual store time of accessed data.
 // Returns (found, narrowedWindow) where window.Min() == oldest time the answer is valid.
 func (u *MultiversionUsersets) ContainsDirectWithin(
-	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	subjectType schema.TypeName, subjectID schema.ID,
+	objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
+	subjectType schema.TypeID, subjectID schema.ID,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow) {
 	// Constrain max to replicated time
@@ -231,7 +229,7 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 		ObjectID:        objectID,
 		Relation:        relation,
 		SubjectType:     subjectType,
-		SubjectRelation: "",
+		SubjectRelation: schema.NoRelation,
 	}
 	probe := u.observer.ContainsDirectStarted(obsKey, subjectID, window)
 	defer probe.End()
@@ -239,7 +237,13 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	key := u.makeKey(objectType, objectID, relation, subjectType, "")
+	key := usersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: schema.NoRelation,
+	}
 
 	vs, ok := u.tuples[key]
 	if !ok {
@@ -258,11 +262,11 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 }
 
 // ContainsUsersetSubjectWithin checks if a specific userset subject is in the relation.
-// Unlike ContainsDirectWithin, this is for userset subjects (with a non-empty subjectRelation).
+// Unlike ContainsDirectWithin, this is for userset subjects (with a non-zero subjectRelation).
 // Returns (found, narrowedWindow) where window.Min() == oldest time the answer is valid.
 func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
-	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName,
+	objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
+	subjectType schema.TypeID, subjectID schema.ID, subjectRelation schema.RelationID,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow) {
 	// Constrain max to replicated time
@@ -281,7 +285,13 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
+	key := usersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
+	}
 
 	vs, ok := u.tuples[key]
 	if !ok {
@@ -302,8 +312,8 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 // Returns the bitmap (possibly cloned) and narrowed window where window.Min() == store time.
 // Returns nil bitmap if no tuples exist.
 func (u *MultiversionUsersets) GetSubjectBitmapWithin(
-	objectType schema.TypeName, objectID schema.ID, relation schema.RelationName,
-	subjectType schema.TypeName, subjectRelation schema.RelationName,
+	objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
+	subjectType schema.TypeID, subjectRelation schema.RelationID,
 	window SnapshotWindow,
 ) (*roaring.Bitmap, SnapshotWindow) {
 	// Constrain max to replicated time
@@ -322,7 +332,13 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 
-	key := u.makeKey(objectType, objectID, relation, subjectType, subjectRelation)
+	key := usersetKey{
+		ObjectType:      objectType,
+		ObjectID:        objectID,
+		Relation:        relation,
+		SubjectType:     subjectType,
+		SubjectRelation: subjectRelation,
+	}
 
 	vs, ok := u.tuples[key]
 	if !ok {

@@ -13,16 +13,16 @@ import (
 // RelationCheck represents a check against a single object type's relation.
 // Used by CheckUnion to batch multiple checks with independent windows.
 type RelationCheck struct {
-	ObjectType schema.TypeName
+	ObjectType schema.TypeID
 	ObjectIDs  *roaring.Bitmap
-	Relation   schema.RelationName
+	Relation   schema.RelationID
 	Window     SnapshotWindow // Window narrowed based on reading this type's data
 }
 
 // DependentSet identifies objects that were relevant to a check result.
 type DependentSet struct {
-	ObjectType schema.TypeName
-	Relation   schema.RelationName
+	ObjectType schema.TypeID
+	Relation   schema.RelationID
 
 	// ObjectIDs identifies the specific objects that mattered.
 	// If nil, means "all objects from the corresponding input check" (optimization).
@@ -46,9 +46,9 @@ type Graph interface {
 	// detection; pass nil for a fresh query.
 	// Returns (allowed, narrowedWindow, error).
 	Check(ctx context.Context,
-		subjectType schema.TypeName, subjectID schema.ID,
-		objectType schema.TypeName, objectID schema.ID,
-		relation schema.RelationName,
+		subjectType schema.TypeID, subjectID schema.ID,
+		objectType schema.TypeID, objectID schema.ID,
+		relation schema.RelationID,
 		window SnapshotWindow, visited []VisitedKey,
 	) (bool, SnapshotWindow, error)
 
@@ -61,7 +61,7 @@ type Graph interface {
 	//   - DependentSets: which object sets were relevant to the decision
 	//   - Window: combined snapshot window for the result
 	CheckUnion(ctx context.Context,
-		subjectType schema.TypeName, subjectID schema.ID,
+		subjectType schema.TypeID, subjectID schema.ID,
 		checks []RelationCheck,
 		visited []VisitedKey,
 	) (CheckResult, error)
@@ -172,9 +172,9 @@ func (g *LocalGraph) Schema() *schema.Schema {
 
 // Check determines if subject has relation on object.
 func (g *LocalGraph) Check(ctx context.Context,
-	subjectType schema.TypeName, subjectID schema.ID,
-	objectType schema.TypeName, objectID schema.ID,
-	relation schema.RelationName,
+	subjectType schema.TypeID, subjectID schema.ID,
+	objectType schema.TypeID, objectID schema.ID,
+	relation schema.RelationID,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
 	g.assertWindowWithinReplicated(window)
@@ -199,7 +199,7 @@ func (g *LocalGraph) Check(ctx context.Context,
 
 // CheckUnion checks if subject is in the union of all the given usersets.
 func (g *LocalGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeName, subjectID schema.ID,
+	subjectType schema.TypeID, subjectID schema.ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
 ) (CheckResult, error) {

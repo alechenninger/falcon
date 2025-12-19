@@ -276,20 +276,32 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 func TestCheck_UnknownObjectType(t *testing.T) {
 	s := testSchema()
 	g := graph.NewTestGraph(s)
+	defer g.Close()
 
-	_, _, err := g.Check(ctx, "user", 1, "unknown_type", 100, "viewer")
+	// Use an invalid TypeID (255 is reserved/invalid in the test schema)
+	_, _, err := g.LocalGraph.Check(ctx,
+		s.GetTypeID("user"), 1,
+		schema.TypeID(255), 100, // invalid type ID
+		schema.RelationID(1),
+		graph.MaxSnapshotWindow, nil)
 	if err == nil {
-		t.Error("expected error for unknown object type")
+		t.Error("expected error for unknown object type ID")
 	}
 }
 
 func TestCheck_UnknownRelation(t *testing.T) {
 	s := testSchema()
 	g := graph.NewTestGraph(s)
+	defer g.Close()
 
-	_, _, err := g.Check(ctx, "user", 1, "document", 100, "unknown_relation")
+	// Use an invalid RelationID (255 is reserved/invalid in the test schema)
+	_, _, err := g.LocalGraph.Check(ctx,
+		s.GetTypeID("user"), 1,
+		s.GetTypeID("document"), 100,
+		schema.RelationID(255), // invalid relation ID
+		graph.MaxSnapshotWindow, nil)
 	if err == nil {
-		t.Error("expected error for unknown relation")
+		t.Error("expected error for unknown relation ID")
 	}
 }
 

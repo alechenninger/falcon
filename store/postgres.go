@@ -10,14 +10,16 @@ import (
 )
 
 // Schema is the SQL DDL for the tuples table.
+// Uses compact integer types for type/relation IDs (SMALLINT = 2 bytes, supports 0-255).
+// OID is used for object/subject IDs (4 bytes, unsigned 32-bit).
 const Schema = `
 CREATE TABLE IF NOT EXISTS tuples (
-    object_type      TEXT NOT NULL,
+    object_type      SMALLINT NOT NULL,
     object_id        OID NOT NULL,
-    relation         TEXT NOT NULL,
-    subject_type     TEXT NOT NULL,
+    relation         SMALLINT NOT NULL,
+    subject_type     SMALLINT NOT NULL,
     subject_id       OID NOT NULL,
-    subject_relation TEXT NOT NULL DEFAULT '',
+    subject_relation SMALLINT NOT NULL DEFAULT 0,
     PRIMARY KEY (object_type, object_id, relation, subject_type, subject_id, subject_relation)
 );
 `
@@ -67,7 +69,7 @@ func (s *PostgresStore) WriteTuple(ctx context.Context, t Tuple) error {
 		INSERT INTO tuples (object_type, object_id, relation, subject_type, subject_id, subject_relation)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT DO NOTHING
-	`, string(t.ObjectType), uint32(t.ObjectID), string(t.Relation), string(t.SubjectType), uint32(t.SubjectID), string(t.SubjectRelation))
+	`, int16(t.ObjectType), uint32(t.ObjectID), int16(t.Relation), int16(t.SubjectType), uint32(t.SubjectID), int16(t.SubjectRelation))
 	if err != nil {
 		return fmt.Errorf("failed to write tuple: %w", err)
 	}
@@ -80,7 +82,7 @@ func (s *PostgresStore) DeleteTuple(ctx context.Context, t Tuple) error {
 		DELETE FROM tuples
 		WHERE object_type = $1 AND object_id = $2 AND relation = $3 
 		  AND subject_type = $4 AND subject_id = $5 AND subject_relation = $6
-	`, string(t.ObjectType), uint32(t.ObjectID), string(t.Relation), string(t.SubjectType), uint32(t.SubjectID), string(t.SubjectRelation))
+	`, int16(t.ObjectType), uint32(t.ObjectID), int16(t.Relation), int16(t.SubjectType), uint32(t.SubjectID), int16(t.SubjectRelation))
 	if err != nil {
 		return fmt.Errorf("failed to delete tuple: %w", err)
 	}
@@ -117,12 +119,12 @@ func (it *pgxRowsIterator) Next() bool {
 	}
 
 	var (
-		objectType      string
+		objectType      int16
 		objectID        uint32
-		relation        string
-		subjectType     string
+		relation        int16
+		subjectType     int16
 		subjectID       uint32
-		subjectRelation string
+		subjectRelation int16
 	)
 	it.err = it.rows.Scan(&objectType, &objectID, &relation, &subjectType, &subjectID, &subjectRelation)
 	if it.err != nil {
@@ -130,12 +132,12 @@ func (it *pgxRowsIterator) Next() bool {
 	}
 
 	it.current = Tuple{
-		ObjectType:      schema.TypeName(objectType),
+		ObjectType:      schema.TypeID(objectType),
 		ObjectID:        schema.ID(objectID),
-		Relation:        schema.RelationName(relation),
-		SubjectType:     schema.TypeName(subjectType),
+		Relation:        schema.RelationID(relation),
+		SubjectType:     schema.TypeID(subjectType),
 		SubjectID:       schema.ID(subjectID),
-		SubjectRelation: schema.RelationName(subjectRelation),
+		SubjectRelation: schema.RelationID(subjectRelation),
 	}
 	return true
 }

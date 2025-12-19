@@ -18,12 +18,12 @@ type MemoryStore struct {
 
 // tupleKey is the map key for deduplication.
 type tupleKey struct {
-	ObjectType      schema.TypeName
+	ObjectType      schema.TypeID
 	ObjectID        schema.ID
-	Relation        schema.RelationName
-	SubjectType     schema.TypeName
+	Relation        schema.RelationID
+	SubjectType     schema.TypeID
 	SubjectID       schema.ID
-	SubjectRelation schema.RelationName
+	SubjectRelation schema.RelationID
 }
 
 func toKey(t Tuple) tupleKey {

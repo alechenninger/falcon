@@ -190,14 +190,15 @@ func TestDataSchema() *schema.Schema {
 //   - Each group has UsersPerGroup users
 //   - Each top-level folder has AccessTuplesPerTenant group viewer/editor tuples
 //   - Each leaf folder has exactly one document
-func GenerateTestData(cfg TestDataConfig) []store.Tuple {
-	gen := &testDataGenerator{cfg: cfg}
+func GenerateTestData(cfg TestDataConfig, s *schema.Schema) []store.Tuple {
+	gen := &testDataGenerator{cfg: cfg, schema: s}
 	return gen.generate()
 }
 
 // testDataGenerator holds state during generation.
 type testDataGenerator struct {
 	cfg        TestDataConfig
+	schema     *schema.Schema
 	tuples     []store.Tuple
 	nextDoc    schema.ID
 	nextFolder schema.ID
@@ -274,12 +275,12 @@ func (g *testDataGenerator) generateGroups(tenant int) {
 		for userIdx := 0; userIdx < g.cfg.UsersPerGroup; userIdx++ {
 			userID := userBase + schema.ID(groupIdx*g.cfg.UsersPerGroup+userIdx)
 			g.tuples = append(g.tuples, store.Tuple{
-				ObjectType:      "group",
+				ObjectType:      g.schema.GetTypeID("group"),
 				ObjectID:        groupID,
-				Relation:        "member",
-				SubjectType:     "user",
+				Relation:        g.schema.GetRelationID("group", "member"),
+				SubjectType:     g.schema.GetTypeID("user"),
 				SubjectID:       userID,
-				SubjectRelation: "",
+				SubjectRelation: schema.NoRelation,
 			})
 		}
 	}
@@ -292,18 +293,18 @@ func (g *testDataGenerator) generateAccessTuples(tenant int, rootFolderID schema
 
 	for i := 0; i < g.cfg.AccessTuplesPerTenant; i++ {
 		groupID := groupBase + schema.ID(i%g.cfg.GroupsPerTenant)
-		relation := schema.RelationName("viewer")
+		relationName := schema.RelationName("viewer")
 		if i%2 == 1 {
-			relation = "editor"
+			relationName = "editor"
 		}
 
 		g.tuples = append(g.tuples, store.Tuple{
-			ObjectType:      "folder",
+			ObjectType:      g.schema.GetTypeID("folder"),
 			ObjectID:        rootFolderID,
-			Relation:        relation,
-			SubjectType:     "group",
+			Relation:        g.schema.GetRelationID("folder", relationName),
+			SubjectType:     g.schema.GetTypeID("group"),
 			SubjectID:       groupID,
-			SubjectRelation: "member",
+			SubjectRelation: g.schema.GetRelationID("group", "member"),
 		})
 	}
 }
@@ -320,12 +321,12 @@ func (g *testDataGenerator) generateFolderTree(parentID schema.ID, depth int) {
 		g.nextDoc++
 
 		g.tuples = append(g.tuples, store.Tuple{
-			ObjectType:      "document",
+			ObjectType:      g.schema.GetTypeID("document"),
 			ObjectID:        docID,
-			Relation:        "parent",
-			SubjectType:     "folder",
+			Relation:        g.schema.GetRelationID("document", "parent"),
+			SubjectType:     g.schema.GetTypeID("folder"),
 			SubjectID:       parentID,
-			SubjectRelation: "",
+			SubjectRelation: schema.NoRelation,
 		})
 		return
 	}
@@ -337,12 +338,12 @@ func (g *testDataGenerator) generateFolderTree(parentID schema.ID, depth int) {
 
 		// folder:child#parent@folder:parent
 		g.tuples = append(g.tuples, store.Tuple{
-			ObjectType:      "folder",
+			ObjectType:      g.schema.GetTypeID("folder"),
 			ObjectID:        childID,
-			Relation:        "parent",
-			SubjectType:     "folder",
+			Relation:        g.schema.GetRelationID("folder", "parent"),
+			SubjectType:     g.schema.GetTypeID("folder"),
 			SubjectID:       parentID,
-			SubjectRelation: "",
+			SubjectRelation: schema.NoRelation,
 		})
 
 		// Recurse
@@ -352,19 +353,26 @@ func (g *testDataGenerator) generateFolderTree(parentID schema.ID, depth int) {
 
 // TestDataRouter returns a Router function that implements the sharding strategy
 // described in the plan: folders/documents by ID, users/groups co-located by tenant.
-func TestDataRouter(numShards int) Router {
-	return func(objectType schema.TypeName, objectID schema.ID) ShardID {
+// Uses TypeID for efficient routing.
+func TestDataRouter(numShards int, s *schema.Schema) Router {
+	// Pre-lookup type IDs for efficient comparison
+	folderID := s.GetTypeID("folder")
+	documentID := s.GetTypeID("document")
+	userID := s.GetTypeID("user")
+	groupID := s.GetTypeID("group")
+
+	return func(objectType schema.TypeID, objectID schema.ID) ShardID {
 		switch objectType {
-		case "folder", "document":
+		case folderID, documentID:
 			// Spread folders/docs across all shards by ID
 			shardNum := int(objectID) % numShards
 			return ShardID(shardIDString(shardNum))
-		case "user", "group":
+		case userID, groupID:
 			// Co-locate users with their groups (same tenant)
 			// Groups: [tenant*100 + 1, tenant*100 + 100]
 			// Users: [tenant*1_000_000 + 1, tenant*1_000_000 + ...]
 			var tenantID int
-			if objectType == "group" {
+			if objectType == groupID {
 				tenantID = (int(objectID) - 1) / 100
 			} else { // user
 				tenantID = (int(objectID) - 1) / 1_000_000
