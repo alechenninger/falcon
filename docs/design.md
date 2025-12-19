@@ -59,6 +59,15 @@ Postgres acts as:
 3. **The Event Bus:** Uses **Logical Replication Slots** (pgoutput) to stream ordered updates to workers.
 4. **The Directory:** Maps Objects to Shard Roots.
 
+## Context / Numbers / Scaling goals
+
+- 100 million objects with modest infrastructure e.g. ~4gb pods
+- 100s of millions of tuples (relationships) (e.g. 500 million)
+- 1000-2000 QPS peaks on the high end, very read heavy
+- 10s of millions of tenants (50 million on the high end)
+- Millions of active users (and so several million active objects)
+- Shard movement rare (if container based) or ~never (if tenant based)
+- Commodity database (postgres) without significant operational burden
 
 ## Techniques-for-semantics:
 
@@ -90,7 +99,44 @@ Postgres acts as:
   - Tuple store uses integers (faster hydration, denser storage)
 - Hydration from snapshot + logical replication on startup: This gives us snapshot isolation during rebalancing.
 - Follower nodes: When assigning shards, also assign a follower node which can be used for queries and can quickly become a leader (already hydrated).
-  - Q: Can follower nodes use replication shot or do they need to stream from leader to have exact same LSNs?
+
+### Challenges
+
+- ID dictionary size: should be solvable (tiny set of active objects)
+  - The dictionary (bi-map) is something like 56mb per million objects. At 100 million objects that's 5-6 gb. If we were to cache everything, we'd have to distribute it.
+    - Distributing it is a bit hard because of batching needs, but could be done.
+  - On the other hand, the amount of active objects should be a tiny fraction of this. Maybe a few million. That's really nothing.
+  - We should probably keep a SIEVE-style cache which could be even a few million, and possibly distribute that across nodes if we really wanted to.
+  - Hitting the DB should be relatively quick when we have cache miss. Simple string -> int / int -> string lookups.
+- ID space, ID density, & routing: 
+  - Roaring bitmaps really love dense IDs. But, to provision dense IDs, we need to carve out ID space per root. Each tenants gets ID 1, 2, 3... but users are carved into, say, 256-integer chunks. With 32 bit IDs, that means our worst case (each tenant has single user) only allows 16 million users. This is probably not enough head room as there are probably going to be a very long tail of small tenants, but we still want the big ones to be dense.
+  - This relates to routing because of the relationship to sharding.
+  - Note: making a shard root immutable dramatically simplifies routing, reduces blast radius of individual pod issues, probably reduces latencies, probably reduces memory needs, but is more likely to create hot spots. Do we have a solution for hot spots? Yes, we can load balance individual shards, and still get linearizability with "max shard" reads. The biggest challenge is disproportionately huge shards. E.g. the biggest tenant has to be isolated. 
+  - Options:
+    1. Carve smaller buckets. Buckets of 16 leave 268 million users. Much more tolerable. What about large tenants? Give them more buckets. When we get a new user tuple, we get the shard root, and we try to provision its ID in its root space. If not enough, we need to "claim" another bucket for that root. I guess we'd need a mapping between blocks and roots.
+    2. Make IDs unique per shard (with ≤32 bit shard ID). This leaves the full ID space per shard. This should be plenty. However this sacrifices locality. Another problem is the cost of movement. In this option we can't really ever change the "physical" root of an object, because doing so might introduce ID collisions. It effectively becomes a new object, which would require updating all pointers to it. But I think this is essentially what needs to happen when routing changes no matter what, just with the added complexity of a new ID, also. With the snapshot window protocol, this may be doable actually.
+    3. Use 64 bit IDs. We could potentially do a hybrid, in this case, of carving a bucket per root, but then also have enough bits left to encode routing information in the ID. This is essentially what we'd have to do to have dense IDs anyway. 
+    4. Unique 32b ID per shard & type, bucketed by root. In this case we have a sequence per root _within a shard_. So each shard gets a 32b space, but we still partition that by root for density.
+  - Can we change IDs?
+    - We can make identity (ID, LSN window). The challenge is the dictionary. But, if we keep moves in a shard's history, it can redirect.
+  - 
+- Routing table size
+  - How do we know where to route queries to? We need to be able to look this up for any object.
+  - Several ID options above essentially make routing information travel with object identity. This is nice because it makes routing stateless. Routing information will always cost extra memory. So if not that, then we need some other mapping of ID->shard. This can potentially be smaller by using 16b instead of 32b shard root identifier.
+
+All together...
+
+| Option                                           | Routing                                        | Memory                                                  | Bitmap density                                        |
+|--------------------------------------------------|------------------------------------------------|---------------------------------------------------------|-------------------------------------------------------|
+| Unique 32b ID per type. Smaller buckets.         | Page-based w/ exception table. Better if re-id | Exceptions (minimal if re-id)                           | Okay (bucket-based), better if re-ID                  |
+| Unique 32b ID per root & type.                   | Stateless.                                     | 32b grouped by 32b root. Multiple roots inefficient.    | High.                                                 |
+| Unique 64b ID per type. Bucketed by root.        | Page-based w/ exception table. Better if re-id | Exceptions, and cost of 64b IDs everywhere.             | ? (higher order 32bits may ruin lower 32 continuity)  |
+| Unique 32b ID per shard & type.                  | Stateless.                                     | 32b grouped by 16-32b shard.                            | Low (IDs per shard; random)                           |
+| Unique 32b ID per shard & type, bucketed by root | Stateless.                                     | 32b grouped by 16-32b shard.                            | High                                                  |
+
+Shard = 
+
+
 
 ### All query options & guarantees
 
@@ -105,6 +151,17 @@ Postgres acts as:
 - Secondary reads:
   1. None – guarantees monotonic reads w/ minimum read repair
   2. Allowed - monotonic only w/ read repair
+
+Combinations (reads):
+
+| Reliability | Speed | Monotonic | Linearizable         | Read repair | Secondary reads | Summary           |
+|-------------|-------|-----------|----------------------|-------------|-----------------|-------------------|
+| Max         | Max   | No        | If cluster write ack | Minimum     | Allowed         | Non-monotonic fast
+| Min         | Max   | Yes       | If cluster write ack | Minimum     | None            | Primarily only fast (not monotonic)
+| Max         | Med   | Yes       | If shard write ack'd | Max shard   | Allowed         | Default
+| Med         | Min   | Yes       | Always               | Db sync     | Allowed         | Fully consistent  
+
+Other options don't make sense (sacrifice w/ no gain).
 
 So you get:
 
@@ -128,7 +185,9 @@ So you get:
 - Read repair on cache miss for shard owner: if a request comes to a shard which doesn't know it is the new owner yet, it waits for replication (within some timeout?) to see the object.
   - In the synchronous RAM-write model, this was: "Lazy hydration of new object owners: Supports atomic shard moves (owner invalidates, next state must go to new owner)"
 
-### Caching optimizations?
+### Possible optimizations
+
+See TODO.md
 
 - We can cache bitmaps for a relation at a **range** of LSNs, and discard then when we truncate those snapshots. This provides a form of hotspot caching. We don't need to perform the userset lookup again for an LSN range!
 
