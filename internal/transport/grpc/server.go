@@ -3,9 +3,9 @@ package grpc
 import (
 	"context"
 
-	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 	"github.com/alechenninger/falcon/internal/domain"
 	infragrpc "github.com/alechenninger/falcon/internal/infrastructure/grpc"
+	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 )
 
 // Server implements the gRPC GraphServiceServer interface by delegating
