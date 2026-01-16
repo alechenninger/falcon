@@ -173,6 +173,7 @@ So you get:
   1. There are no secondary replicas for a shard.
   - If there are secondaries, then you can read from node 1, get max 100, then read from node 2, get max 99
   2. You use any of the techniques to get linearizability (above)
+  3. TODO: Something about rebalance has to be considered here. If a shard moves – what?
 - Causal consistency, always
 
 
@@ -226,6 +227,7 @@ See TODO.md
   - Two (possibly three) LSN values are included in requests and responses between pointer hops across the query (this happens regardless of whether the hop is within the same node or not): 
     1. A maximum LSN. This is the maximum LSN we would like to be considered. The value comes from our Replicated LSN. It is what we are sure we are up to already, and therefore don't need to wait for.
     2. A minimum requested LSN. This is the minimum LSN we would like to be considered. The value comes from the **latest** state of the tuple which we are traversing, no higher than the maximum LSN.
+      - NOTE: We can go further back in the snapshots of a set if it does not change the answer.
     3. [Optional, more advanced, not sure if worth it] A minimum historical LSN. This would be as far back as we could go for the query without aborting. This could be use to retry the query at an _earlier_ snapshot.
   - When receiving a query, we determine an LSN range for the query. If LSN range is specified (which it always is if coming from a peer node), we constrain our range to that under these rules.
     - We try to serve the latest object state no greater than the maximum LSN. We bump our own minimum LSN if we pick a state GREATER than the minimum LSN. You can serve an object state LESSER than the minimum LSN, but the minimum LSN never decreases; it is max(state lsn, minimum LSN).

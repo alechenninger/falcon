@@ -52,6 +52,7 @@ At some point we need to introduce intersections, lists, and reverse lookups, th
 - We could use the type/relation IDs internally in more places vs names
 - We could use a sync.pool of undo entries possibly to avoid allocation & GC costs
   - Perhaps we could combine this with a global entry limit that automatically GC'd old entries as new ones were added
+  - Regardless of how, it would be nice to try to have a predictable memory bound by capping the number of deltas globally. For correctness, we cannot cap the number of tuplesets. This will always grow unbounded. But, we could try to keep less history to dynamically keep memory in check. You'd pay with latency, but better than getting OOM killed. You'd definitely want memory usage alerts regardless in order to know when to grow the cluster (much like db disk usage alerts).
 - Zerolog apparently performs much better than slog
 
 ## Thoughts / Maybe bad ideas

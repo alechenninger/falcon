@@ -872,3 +872,23 @@ func BenchmarkCheckThroughput(b *testing.B) {
 	}
 	b.ReportMetric(float64(b.N), "checks")
 }
+
+// BenchmarkGCIteration measures the cost of iterating over all usersets,
+// approximating the lower bound for garbage collection of old deltas.
+func BenchmarkGCIteration(b *testing.B) {
+	for _, sc := range scaleConfigs {
+		b.Run(sc.name, func(b *testing.B) {
+			pg := buildLargeGraph(sc.cfg)
+			usersetCount := len(pg.Graph.usersets.tuples)
+			b.Logf("Tuples: %d, Usersets: %d", pg.TotalTuples, usersetCount)
+
+			// Cutoff of 0 keeps all history but still iterates every userset
+			cutoff := store.StoreTime(0)
+
+			b.ResetTimer()
+			for b.Loop() {
+				pg.Graph.usersets.TruncateHistory(cutoff)
+			}
+		})
+	}
+}
