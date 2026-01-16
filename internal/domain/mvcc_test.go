@@ -1,15 +1,14 @@
-package graph
+package domain
 
 import (
 	"testing"
 
 	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
 )
 
 // TestVersionedSet_Add tests basic add operations.
 func TestVersionedSet_Add(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Add an ID
 	vs.Add(1, 10)
@@ -39,7 +38,7 @@ func TestVersionedSet_Add(t *testing.T) {
 
 // TestVersionedSet_Remove tests basic remove operations.
 func TestVersionedSet_Remove(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Add then remove
 	vs.Add(1, 10)
@@ -61,10 +60,10 @@ func TestVersionedSet_Remove(t *testing.T) {
 
 // TestVersionedSet_DeltaChainInvariants verifies the delta chain is computed correctly.
 func TestVersionedSet_DeltaChainInvariants(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Add entries at known times
-	times := []store.StoreTime{100, 200, 350, 500, 750}
+	times := []StoreTime{100, 200, 350, 500, 750}
 	for i, time := range times {
 		vs.Add(schema.ID(i+1), time)
 	}
@@ -99,7 +98,7 @@ func TestVersionedSet_DeltaChainInvariants(t *testing.T) {
 
 // TestVersionedSet_Truncate tests that old undo entries are removed.
 func TestVersionedSet_Truncate(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Build history at times 10, 20, 30, 40
 	vs.Add(1, 10)
@@ -135,7 +134,7 @@ func TestVersionedSet_Truncate(t *testing.T) {
 
 // TestVersionedSet_EmptySet tests behavior with no changes.
 func TestVersionedSet_EmptySet(t *testing.T) {
-	vs := newVersionedSet(100)
+	vs := NewVersionedSet(100)
 
 	if vs.Contains(1) {
 		t.Error("empty set should not contain any IDs")
@@ -177,7 +176,7 @@ func TestVersionedSet_EmptySet(t *testing.T) {
 
 // TestVersionedSet_AddRemoveAdd tests re-adding a removed ID.
 func TestVersionedSet_AddRemoveAdd(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	vs.Add(1, 10)    // Add
 	vs.Remove(1, 20) // Remove
@@ -190,9 +189,9 @@ func TestVersionedSet_AddRemoveAdd(t *testing.T) {
 
 	// Historical queries using ContainsWithin
 	tests := []struct {
-		maxTime   store.StoreTime
+		maxTime   StoreTime
 		wantFound bool
-		wantTime  store.StoreTime
+		wantTime  StoreTime
 	}{
 		{10, true, 10},  // at add time
 		{15, true, 10},  // between add and remove (uses state at t=10)
@@ -214,7 +213,7 @@ func TestVersionedSet_AddRemoveAdd(t *testing.T) {
 
 // TestVersionedSet_MultipleIDs tests operations with multiple IDs.
 func TestVersionedSet_MultipleIDs(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Interleaved operations on multiple IDs
 	vs.Add(1, 10)
@@ -225,7 +224,7 @@ func TestVersionedSet_MultipleIDs(t *testing.T) {
 	vs.Add(1, 60) // Re-add 1
 
 	tests := []struct {
-		maxTime  store.StoreTime
+		maxTime  StoreTime
 		expected []schema.ID
 		absent   []schema.ID
 	}{
@@ -257,11 +256,11 @@ func TestVersionedSet_MultipleIDs(t *testing.T) {
 
 // TestVersionedSet_HeadUndoIsSet verifies that headUndo is always set after changes.
 func TestVersionedSet_HeadUndoIsSet(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Add multiple entries
 	for i := 1; i <= 5; i++ {
-		vs.Add(schema.ID(i), store.StoreTime(i*100))
+		vs.Add(schema.ID(i), StoreTime(i*100))
 
 		// After each add, headUndo should be set
 		vs.mu.RLock()
@@ -280,10 +279,10 @@ func TestVersionedSet_HeadUndoIsSet(t *testing.T) {
 // TestVersionedSet_DeltaChainReconstruction verifies that we can reconstruct
 // all historical times by walking the delta chain.
 func TestVersionedSet_DeltaChainReconstruction(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Add entries at specific times
-	times := []store.StoreTime{100, 250, 400, 600, 1000}
+	times := []StoreTime{100, 250, 400, 600, 1000}
 	for i, time := range times {
 		vs.Add(schema.ID(i+1), time)
 	}
@@ -314,7 +313,7 @@ func TestVersionedSet_DeltaChainReconstruction(t *testing.T) {
 
 // TestVersionedSet_LargeDelta tests that large time gaps work correctly.
 func TestVersionedSet_LargeDelta(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Use times with large gaps (but still fitting in uint32 delta)
 	vs.Add(1, 1_000_000)
@@ -342,7 +341,7 @@ func TestVersionedSet_LargeDelta(t *testing.T) {
 
 // TestVersionedSet_HeadTimeQuery tests querying at exactly headTime.
 func TestVersionedSet_HeadTimeQuery(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	vs.Add(1, 10)
 	vs.Add(2, 20)
@@ -373,7 +372,7 @@ func TestVersionedSet_HeadTimeQuery(t *testing.T) {
 
 // TestVersionedSet_QueryFutureTime tests querying at a time after headTime.
 func TestVersionedSet_QueryFutureTime(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	vs.Add(1, 10)
 	vs.Add(2, 20)
@@ -396,7 +395,7 @@ func TestVersionedSet_QueryFutureTime(t *testing.T) {
 
 // TestVersionedSet_ContainsWithin tests the combined query and state time lookup.
 func TestVersionedSet_ContainsWithin(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Build history: add 1 at t=10, add 2 at t=20, remove 1 at t=30
 	vs.Add(1, 10)
@@ -406,9 +405,9 @@ func TestVersionedSet_ContainsWithin(t *testing.T) {
 	tests := []struct {
 		name          string
 		id            schema.ID
-		maxTime       store.StoreTime
+		maxTime       StoreTime
 		wantFound     bool
-		wantStateTime store.StoreTime
+		wantStateTime StoreTime
 	}{
 		// max >= head: returns oldest time where the answer is valid
 		{"id1 max=100", 1, 100, false, 30}, // removed at 30, oldest "not found" time is 30
@@ -442,7 +441,7 @@ func TestVersionedSet_ContainsWithin(t *testing.T) {
 
 // TestVersionedSet_SnapshotWithin tests the combined snapshot and state time lookup.
 func TestVersionedSet_SnapshotWithin(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Build history: add 1,2,3 at t=10,20,30, remove 1 at t=40
 	vs.Add(1, 10)
@@ -452,9 +451,9 @@ func TestVersionedSet_SnapshotWithin(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		maxTime       store.StoreTime
+		maxTime       StoreTime
 		wantIDs       []schema.ID
-		wantStateTime store.StoreTime
+		wantStateTime StoreTime
 	}{
 		{"max=100", 100, []schema.ID{2, 3}, 40},
 		{"max=40", 40, []schema.ID{2, 3}, 40},
@@ -493,7 +492,7 @@ func TestVersionedSet_SnapshotWithin(t *testing.T) {
 // always returns the LATEST time <= maxTime, NOT the oldest. This is because
 // snapshots return actual data, which would change if we went further back.
 func TestVersionedSet_SnapshotWithin_ReturnsLatestTime(t *testing.T) {
-	vs := newVersionedSet(0)
+	vs := NewVersionedSet(0)
 
 	// Add IDs at different times
 	vs.Add(1, 10)
@@ -530,7 +529,7 @@ func TestVersionedSet_SnapshotWithin_ReturnsLatestTime(t *testing.T) {
 // the oldest stateTime that gives the same answer, maximizing snapshot window width.
 func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 	t.Run("always negative returns oldest snapshot", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 
 		// Add some IDs, but never add ID 99
 		vs.Add(1, 10)
@@ -549,7 +548,7 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 	})
 
 	t.Run("always positive returns oldest snapshot", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 
 		// Add ID 1 at time 10, then add unrelated IDs
 		vs.Add(1, 10)
@@ -568,7 +567,7 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 	})
 
 	t.Run("found at 10 not at 9 uses 10", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 
 		// Create state at time 9 (ID 1 not present)
 		vs.Add(2, 9) // unrelated, creates a snapshot at time 9
@@ -597,7 +596,7 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 	})
 
 	t.Run("not found at 10 or 9 but found at 8 uses 9", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 
 		// ID 1: add at 8, remove at 9
 		vs.Add(1, 8)
@@ -625,7 +624,7 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 	})
 
 	t.Run("add remove add sequence", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 
 		// ID 1: add at 10, remove at 20, add at 30
 		vs.Add(1, 10)
@@ -661,7 +660,7 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 	})
 
 	t.Run("multiple unrelated changes preserve oldest time", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 
 		// ID 1 added at time 10
 		vs.Add(1, 10)
@@ -697,7 +696,7 @@ func TestVersionedSet_ContainsWithin_OldestTime(t *testing.T) {
 // Regression test for bug where resultTime==0 was incorrectly treated as "no state available".
 func TestVersionedSet_ContainsWithin_TimeZero(t *testing.T) {
 	t.Run("data_added_at_time_zero_is_found", func(t *testing.T) {
-		vs := newVersionedSet(0)
+		vs := NewVersionedSet(0)
 		vs.Add(1, 0)
 		vs.Add(2, 0)
 		vs.Add(3, 0)
@@ -728,8 +727,8 @@ func TestVersionedSet_ContainsWithin_TimeZero(t *testing.T) {
 	})
 
 	t.Run("multiple_ids_added_at_time_zero", func(t *testing.T) {
-		vs := newVersionedSet(0)
-		
+		vs := NewVersionedSet(0)
+
 		// Simulate hydration: many IDs added at time 0
 		for i := schema.ID(1); i <= 100; i++ {
 			vs.Add(i, 0)
@@ -754,14 +753,14 @@ func TestVersionedSet_ContainsWithin_TimeZero(t *testing.T) {
 	})
 
 	t.Run("time_zero_with_later_changes", func(t *testing.T) {
-		vs := newVersionedSet(0)
-		
+		vs := NewVersionedSet(0)
+
 		// Add at time 0
 		vs.Add(1, 0)
-		
+
 		// Remove at time 10
 		vs.Remove(1, 10)
-		
+
 		// Add back at time 20
 		vs.Add(1, 20)
 

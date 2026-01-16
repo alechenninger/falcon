@@ -83,54 +83,8 @@ func (c ScaleConfig) Describe() string {
 		totalFolders, c.FolderDepth, numDocs, c.NumGroups, c.NumUsers, c.TupleCount())
 }
 
-// BenchGraph wraps a LocalGraph with direct population methods for benchmarking.
-// This bypasses the store/observer machinery to enable fast bulk loading.
-type BenchGraph struct {
-	usersets *MultiversionUsersets
-	graph    *LocalGraph
-	time     store.StoreTime // Simple incrementing counter for populating
-}
-
-// NewBenchGraph creates a graph for benchmarking with direct population.
-func NewBenchGraph(s *schema.Schema) *BenchGraph {
-	usersets := NewMultiversionUsersets(s)
-	// Create a minimal LocalGraph with nil store/stream (won't be used for bench loading)
-	graph := &LocalGraph{
-		usersets: usersets,
-		observer: NoOpUsersetsObserver{},
-	}
-	return &BenchGraph{
-		usersets: usersets,
-		graph:    graph,
-		time:     1,
-	}
-}
-
-// Check delegates to the underlying LocalGraph.
-// Takes string names for convenience and converts to IDs internally.
-func (bg *BenchGraph) Check(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
-	s := bg.graph.Schema()
-	ok, window, err := bg.graph.Check(ctx,
-		s.GetTypeID(subjectType), subjectID,
-		s.GetTypeID(objectType), objectID,
-		s.GetRelationID(objectType, relation),
-		MaxSnapshotWindow, nil)
-	return ok, window.Max(), err
-}
-
-// AddDirect adds a tuple directly to the graph's in-memory state.
-func (bg *BenchGraph) AddDirect(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) {
-	s := bg.usersets.Schema()
-	bg.usersets.applyAdd(store.Tuple{
-		ObjectType:      s.GetTypeID(objectType),
-		ObjectID:        objectID,
-		Relation:        s.GetRelationID(objectType, relation),
-		SubjectType:     s.GetTypeID(subjectType),
-		SubjectID:       subjectID,
-		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
-	}, bg.time)
-	bg.time++
-}
+// BenchGraph is re-exported from domain package for backward compatibility.
+// Use NewBenchGraph(s) to create a new instance.
 
 // benchSchema creates a schema for scale testing with deep hierarchies and groups.
 // Type IDs: user=1, group=2, folder=3, document=4
@@ -372,7 +326,7 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 	result.NumDocs = int(nextDocID - 1)
 
 	// Calculate total tuples
-	result.TotalTuples = int64(g.time - 1)
+	result.TotalTuples = g.TupleCount()
 
 	// Generate query fixtures
 
@@ -879,7 +833,7 @@ func BenchmarkGCIteration(b *testing.B) {
 	for _, sc := range scaleConfigs {
 		b.Run(sc.name, func(b *testing.B) {
 			pg := buildLargeGraph(sc.cfg)
-			usersetCount := len(pg.Graph.usersets.tuples)
+			usersetCount := pg.Graph.UsersetCount()
 			b.Logf("Tuples: %d, Usersets: %d", pg.TotalTuples, usersetCount)
 
 			// Cutoff of 0 keeps all history but still iterates every userset
@@ -887,7 +841,7 @@ func BenchmarkGCIteration(b *testing.B) {
 
 			b.ResetTimer()
 			for b.Loop() {
-				pg.Graph.usersets.TruncateHistory(cutoff)
+				pg.Graph.TruncateHistory(cutoff)
 			}
 		})
 	}

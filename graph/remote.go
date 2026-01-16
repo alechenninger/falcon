@@ -1,238 +1,53 @@
 package graph
 
 import (
-	"context"
-	"math"
-
-	"github.com/RoaringBitmap/roaring"
+	infragrpc "github.com/alechenninger/falcon/internal/infrastructure/grpc"
 	graphpb "github.com/alechenninger/falcon/graph/proto"
 	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
 )
 
 // RemoteGraph implements the Graph interface by delegating to a remote
-// gRPC GraphService. It is used by ShardedGraph to communicate with
-// remote shards.
-//
-// RemoteGraph does NOT implement GraphService (no Start method) since
-// it doesn't manage local state - it's a pure client.
-type RemoteGraph struct {
-	client graphpb.GraphServiceClient
-	schema *schema.Schema
-}
+// gRPC GraphService.
+// Deprecated: Use infragrpc.RemoteGraph instead.
+type RemoteGraph = infragrpc.RemoteGraph
 
 // NewRemoteGraph creates a new RemoteGraph that delegates to the given gRPC client.
-// The schema is required for the Schema() method.
+// Deprecated: Use infragrpc.NewRemoteGraph instead.
 func NewRemoteGraph(client graphpb.GraphServiceClient, s *schema.Schema) *RemoteGraph {
-	return &RemoteGraph{
-		client: client,
-		schema: s,
-	}
+	return infragrpc.NewRemoteGraph(client, s)
 }
 
-// Check delegates to the remote GraphService.Check RPC.
-func (g *RemoteGraph) Check(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
-	window SnapshotWindow, visited []VisitedKey,
-) (bool, SnapshotWindow, error) {
-	req := &graphpb.CheckRequest{
-		SubjectTypeId: uint32(subjectType),
-		SubjectId:     uint32(subjectID),
-		ObjectTypeId:  uint32(objectType),
-		ObjectId:      uint32(objectID),
-		RelationId:    uint32(relation),
-		Window:        snapshotWindowToProto(window),
-		Visited:       visitedKeysToProto(visited),
-	}
-
-	resp, err := g.client.Check(ctx, req)
-	if err != nil {
-		return false, window, err
-	}
-
-	return resp.Allowed, snapshotWindowFromProto(resp.Window), nil
-}
-
-// CheckUnion delegates to the remote GraphService.CheckUnion RPC.
-func (g *RemoteGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	checks []RelationCheck,
-	visited []VisitedKey,
-) (CheckResult, error) {
-	if len(checks) == 0 {
-		return CheckResult{}, nil
-	}
-
-	req := &graphpb.CheckUnionRequest{
-		SubjectTypeId: uint32(subjectType),
-		SubjectId:     uint32(subjectID),
-		Checks:        relationChecksToProto(checks),
-		Visited:       visitedKeysToProto(visited),
-	}
-
-	resp, err := g.client.CheckUnion(ctx, req)
-	if err != nil {
-		return CheckResult{}, err
-	}
-
-	return checkResultFromProto(resp), nil
-}
-
-// checkResultFromProto converts a proto CheckUnionResponse to CheckResult.
-func checkResultFromProto(resp *graphpb.CheckUnionResponse) CheckResult {
-	return CheckResult{
-		Found:         resp.Allowed,
-		DependentSets: dependentSetsFromProto(resp.DependentSets),
-		Window:        snapshotWindowFromProto(resp.Window),
-	}
-}
-
-// dependentSetsToProto converts DependentSets to proto representation.
-func dependentSetsToProto(sets []DependentSet) []*graphpb.DependentSet {
-	if sets == nil {
-		return nil
-	}
-	result := make([]*graphpb.DependentSet, len(sets))
-	for i, s := range sets {
-		var objectIDs []byte
-		if s.ObjectIDs != nil {
-			objectIDs, _ = s.ObjectIDs.ToBytes()
-		}
-		result[i] = &graphpb.DependentSet{
-			ObjectTypeId: uint32(s.ObjectType),
-			RelationId:   uint32(s.Relation),
-			ObjectIds:    objectIDs,
-		}
-	}
-	return result
-}
-
-// dependentSetsFromProto converts proto DependentSets to Go type.
-func dependentSetsFromProto(sets []*graphpb.DependentSet) []DependentSet {
-	if sets == nil {
-		return nil
-	}
-	result := make([]DependentSet, len(sets))
-	for i, s := range sets {
-		var bitmap *roaring.Bitmap
-		if len(s.ObjectIds) > 0 {
-			bitmap = roaring.New()
-			bitmap.FromBuffer(s.ObjectIds)
-		}
-		result[i] = DependentSet{
-			ObjectType: schema.TypeID(s.ObjectTypeId),
-			Relation:   schema.RelationID(s.RelationId),
-			ObjectIDs:  bitmap,
-		}
-	}
-	return result
-}
-
-// Schema returns the authorization schema.
-func (g *RemoteGraph) Schema() *schema.Schema {
-	return g.schema
-}
-
-// Compile-time interface check
-var _ Graph = (*RemoteGraph)(nil)
+// Re-export proto conversion functions for backward compatibility.
+// These are used by server.go.
 
 // snapshotWindowToProto converts a SnapshotWindow to its proto representation.
-func snapshotWindowToProto(w SnapshotWindow) *graphpb.SnapshotWindow {
-	return &graphpb.SnapshotWindow{
-		Min: uint64(w.Min()),
-		Max: uint64(w.Max()),
-	}
-}
+// Deprecated: Use infragrpc.SnapshotWindowToProto instead.
+var snapshotWindowToProto = infragrpc.SnapshotWindowToProto
 
 // snapshotWindowFromProto converts a proto SnapshotWindow to the Go type.
-// Handles the special case of MaxSnapshotWindow (min=0, max=MaxUint64).
-// If the window is nil or has zero values, defaults to MaxSnapshotWindow.
-func snapshotWindowFromProto(w *graphpb.SnapshotWindow) SnapshotWindow {
-	if w == nil {
-		return MaxSnapshotWindow
-	}
-	// Detect MaxSnapshotWindow: min=0 and max=MaxUint64
-	// Can't use NewSnapshotWindow for this because delta would overflow
-	if w.Min == 0 && w.Max == math.MaxUint64 {
-		return MaxSnapshotWindow
-	}
-	// TODO: reconsider this
-	// Zero window (min=0, max=0) also means "use MaxSnapshotWindow"
-	// since proto3 doesn't distinguish between "not set" and "zero"
-	if w.Min == 0 && w.Max == 0 {
-		return MaxSnapshotWindow
-	}
-	return NewSnapshotWindow(store.StoreTime(w.Min), store.StoreTime(w.Max))
-}
+// Deprecated: Use infragrpc.SnapshotWindowFromProto instead.
+var snapshotWindowFromProto = infragrpc.SnapshotWindowFromProto
 
 // visitedKeysToProto converts a slice of VisitedKey to proto representation.
-func visitedKeysToProto(visited []VisitedKey) []*graphpb.VisitedNode {
-	if visited == nil {
-		return nil
-	}
-	result := make([]*graphpb.VisitedNode, len(visited))
-	for i, v := range visited {
-		result[i] = &graphpb.VisitedNode{
-			ObjectTypeId: uint32(v.ObjectType),
-			ObjectId:     uint32(v.ObjectID),
-			RelationId:   uint32(v.Relation),
-		}
-	}
-	return result
-}
+// Deprecated: Use infragrpc.VisitedKeysToProto instead.
+var visitedKeysToProto = infragrpc.VisitedKeysToProto
 
 // visitedKeysFromProto converts proto VisitedNodes to a slice of VisitedKey.
-func visitedKeysFromProto(visited []*graphpb.VisitedNode) []VisitedKey {
-	if visited == nil {
-		return nil
-	}
-	result := make([]VisitedKey, len(visited))
-	for i, v := range visited {
-		result[i] = VisitedKey{
-			ObjectType: schema.TypeID(v.ObjectTypeId),
-			ObjectID:   schema.ID(v.ObjectId),
-			Relation:   schema.RelationID(v.RelationId),
-		}
-	}
-	return result
-}
+// Deprecated: Use infragrpc.VisitedKeysFromProto instead.
+var visitedKeysFromProto = infragrpc.VisitedKeysFromProto
 
 // relationChecksToProto converts a slice of RelationCheck to proto representation.
-func relationChecksToProto(checks []RelationCheck) []*graphpb.RelationCheck {
-	result := make([]*graphpb.RelationCheck, len(checks))
-	for i, c := range checks {
-		var objectIDs []byte
-		if c.ObjectIDs != nil {
-			objectIDs, _ = c.ObjectIDs.ToBytes()
-		}
-		result[i] = &graphpb.RelationCheck{
-			ObjectTypeId: uint32(c.ObjectType),
-			ObjectIds:    objectIDs,
-			RelationId:   uint32(c.Relation),
-			Window:       snapshotWindowToProto(c.Window),
-		}
-	}
-	return result
-}
+// Deprecated: Use infragrpc.RelationChecksToProto instead.
+var relationChecksToProto = infragrpc.RelationChecksToProto
 
 // relationChecksFromProto converts proto RelationChecks to a slice of RelationCheck.
-func relationChecksFromProto(checks []*graphpb.RelationCheck) ([]RelationCheck, error) {
-	result := make([]RelationCheck, len(checks))
-	for i, c := range checks {
-		bitmap := roaring.New()
-		if len(c.ObjectIds) > 0 {
-			if _, err := bitmap.FromBuffer(c.ObjectIds); err != nil {
-				return nil, err
-			}
-		}
-		result[i] = RelationCheck{
-			ObjectType: schema.TypeID(c.ObjectTypeId),
-			ObjectIDs:  bitmap,
-			Relation:   schema.RelationID(c.RelationId),
-			Window:     snapshotWindowFromProto(c.Window),
-		}
-	}
-	return result, nil
-}
+// Deprecated: Use infragrpc.RelationChecksFromProto instead.
+var relationChecksFromProto = infragrpc.RelationChecksFromProto
+
+// dependentSetsToProto converts DependentSets to proto representation.
+// Deprecated: Use infragrpc.DependentSetsToProto instead.
+var dependentSetsToProto = infragrpc.DependentSetsToProto
+
+// dependentSetsFromProto converts proto DependentSets to Go type.
+// Deprecated: Use infragrpc.DependentSetsFromProto instead.
+var dependentSetsFromProto = infragrpc.DependentSetsFromProto

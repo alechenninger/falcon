@@ -128,7 +128,7 @@ func (tg *TestGraph) CheckAt(ctx context.Context, subjectType schema.TypeName, s
 
 // TruncateHistory is a test helper for MVCC garbage collection tests.
 func (tg *TestGraph) TruncateHistory(minTime store.StoreTime) {
-	tg.LocalGraph.usersets.TruncateHistory(minTime)
+	tg.LocalGraph.TruncateHistory(minTime)
 }
 
 // Close stops the subscription.
