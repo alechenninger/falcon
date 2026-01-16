@@ -3,7 +3,7 @@ package domain
 import (
 	"testing"
 
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // TestVersionedSet_Add tests basic add operations.
@@ -65,7 +65,7 @@ func TestVersionedSet_DeltaChainInvariants(t *testing.T) {
 	// Add entries at known times
 	times := []StoreTime{100, 200, 350, 500, 750}
 	for i, time := range times {
-		vs.Add(schema.ID(i+1), time)
+		vs.Add(ID(i+1), time)
 	}
 
 	// Verify we can reconstruct all times correctly via OldestTime
@@ -82,13 +82,13 @@ func TestVersionedSet_DeltaChainInvariants(t *testing.T) {
 	// Verify ContainsWithin works correctly for each time
 	for i, time := range times {
 		// ID should be present at its add time
-		found, stateTime := vs.ContainsWithin(schema.ID(i+1), time)
+		found, stateTime := vs.ContainsWithin(ID(i+1), time)
 		if !found || stateTime != time {
 			t.Errorf("ID %d should be present at time %d (got found=%v, stateTime=%d)", i+1, time, found, stateTime)
 		}
 		// ID should not be present just before its add time
 		if time > 0 {
-			found, _ := vs.ContainsWithin(schema.ID(i+1), time-1)
+			found, _ := vs.ContainsWithin(ID(i+1), time-1)
 			if found {
 				t.Errorf("ID %d should NOT be present at time %d", i+1, time-1)
 			}
@@ -225,17 +225,17 @@ func TestVersionedSet_MultipleIDs(t *testing.T) {
 
 	tests := []struct {
 		maxTime  StoreTime
-		expected []schema.ID
-		absent   []schema.ID
+		expected []ID
+		absent   []ID
 	}{
-		{5, nil, []schema.ID{1, 2, 3}}, // No state available
-		{10, []schema.ID{1}, []schema.ID{2, 3}},
-		{20, []schema.ID{1, 2}, []schema.ID{3}},
-		{30, []schema.ID{2}, []schema.ID{1, 3}},
-		{40, []schema.ID{2, 3}, []schema.ID{1}},
-		{50, []schema.ID{3}, []schema.ID{1, 2}},
-		{60, []schema.ID{1, 3}, []schema.ID{2}},
-		{100, []schema.ID{1, 3}, []schema.ID{2}},
+		{5, nil, []ID{1, 2, 3}}, // No state available
+		{10, []ID{1}, []ID{2, 3}},
+		{20, []ID{1, 2}, []ID{3}},
+		{30, []ID{2}, []ID{1, 3}},
+		{40, []ID{2, 3}, []ID{1}},
+		{50, []ID{3}, []ID{1, 2}},
+		{60, []ID{1, 3}, []ID{2}},
+		{100, []ID{1, 3}, []ID{2}},
 	}
 
 	for _, tt := range tests {
@@ -260,7 +260,7 @@ func TestVersionedSet_HeadUndoIsSet(t *testing.T) {
 
 	// Add multiple entries
 	for i := 1; i <= 5; i++ {
-		vs.Add(schema.ID(i), StoreTime(i*100))
+		vs.Add(ID(i), StoreTime(i*100))
 
 		// After each add, headUndo should be set
 		vs.mu.RLock()
@@ -284,7 +284,7 @@ func TestVersionedSet_DeltaChainReconstruction(t *testing.T) {
 	// Add entries at specific times
 	times := []StoreTime{100, 250, 400, 600, 1000}
 	for i, time := range times {
-		vs.Add(schema.ID(i+1), time)
+		vs.Add(ID(i+1), time)
 	}
 
 	// Walk the delta chain and verify we can reconstruct each time
@@ -404,7 +404,7 @@ func TestVersionedSet_ContainsWithin(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		id            schema.ID
+		id            ID
 		maxTime       StoreTime
 		wantFound     bool
 		wantStateTime StoreTime
@@ -452,14 +452,14 @@ func TestVersionedSet_SnapshotWithin(t *testing.T) {
 	tests := []struct {
 		name          string
 		maxTime       StoreTime
-		wantIDs       []schema.ID
+		wantIDs       []ID
 		wantStateTime StoreTime
 	}{
-		{"max=100", 100, []schema.ID{2, 3}, 40},
-		{"max=40", 40, []schema.ID{2, 3}, 40},
-		{"max=35", 35, []schema.ID{1, 2, 3}, 30},
-		{"max=25", 25, []schema.ID{1, 2}, 20},
-		{"max=15", 15, []schema.ID{1}, 10},
+		{"max=100", 100, []ID{2, 3}, 40},
+		{"max=40", 40, []ID{2, 3}, 40},
+		{"max=35", 35, []ID{1, 2, 3}, 30},
+		{"max=25", 25, []ID{1, 2}, 20},
+		{"max=15", 15, []ID{1}, 10},
 		{"max=5", 5, nil, 0}, // No state available
 	}
 
@@ -730,12 +730,12 @@ func TestVersionedSet_ContainsWithin_TimeZero(t *testing.T) {
 		vs := NewVersionedSet(0)
 
 		// Simulate hydration: many IDs added at time 0
-		for i := schema.ID(1); i <= 100; i++ {
+		for i := ID(1); i <= 100; i++ {
 			vs.Add(i, 0)
 		}
 
 		// Verify all IDs are found
-		for i := schema.ID(1); i <= 100; i++ {
+		for i := ID(1); i <= 100; i++ {
 			found, stateTime := vs.ContainsWithin(i, 1000)
 			if !found {
 				t.Errorf("expected ID %d to be found", i)

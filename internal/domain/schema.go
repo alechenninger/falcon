@@ -1,7 +1,4 @@
-// Package schema defines types for representing a Zanzibar-style authorization
-// schema in code. A schema describes object types and their relations, including
-// how relations are computed from other relations or by traversing the graph.
-package schema
+package domain
 
 // TypeName identifies an object type (e.g., "document", "folder", "user").
 // This is used for both object types and subject types.

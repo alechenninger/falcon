@@ -3,10 +3,9 @@ package grpc
 import (
 	"context"
 
+	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 	"github.com/alechenninger/falcon/internal/domain"
 	infragrpc "github.com/alechenninger/falcon/internal/infrastructure/grpc"
-	graphpb "github.com/alechenninger/falcon/graph/proto"
-	"github.com/alechenninger/falcon/schema"
 )
 
 // Server implements the gRPC GraphServiceServer interface by delegating
@@ -14,7 +13,7 @@ import (
 type Server struct {
 	graphpb.UnimplementedGraphServiceServer
 	graph  domain.Graph
-	schema *schema.Schema
+	schema *domain.Schema
 }
 
 // NewServer creates a new Server wrapping the given Graph.
@@ -31,11 +30,11 @@ func (s *Server) Check(ctx context.Context, req *graphpb.CheckRequest) (*graphpb
 	visited := infragrpc.VisitedKeysFromProto(req.Visited)
 
 	allowed, resultWindow, err := s.graph.Check(ctx,
-		schema.TypeID(req.SubjectTypeId),
-		schema.ID(req.SubjectId),
-		schema.TypeID(req.ObjectTypeId),
-		schema.ID(req.ObjectId),
-		schema.RelationID(req.RelationId),
+		domain.TypeID(req.SubjectTypeId),
+		domain.ID(req.SubjectId),
+		domain.TypeID(req.ObjectTypeId),
+		domain.ID(req.ObjectId),
+		domain.RelationID(req.RelationId),
 		window,
 		visited,
 	)
@@ -58,8 +57,8 @@ func (s *Server) CheckUnion(ctx context.Context, req *graphpb.CheckUnionRequest)
 	visited := infragrpc.VisitedKeysFromProto(req.Visited)
 
 	result, err := s.graph.CheckUnion(ctx,
-		schema.TypeID(req.SubjectTypeId),
-		schema.ID(req.SubjectId),
+		domain.TypeID(req.SubjectTypeId),
+		domain.ID(req.SubjectId),
 		checks,
 		visited,
 	)

@@ -1,32 +1,32 @@
-package store
+package memory
 
 import (
 	"context"
 	"sync"
 
-	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/internal/domain"
 )
 
-// MemoryStore implements Store and ChangeStream for testing.
+// Store implements domain.Store and domain.ChangeStream for testing.
 // Writes immediately emit changes to subscribers with sequential times.
-type MemoryStore struct {
+type Store struct {
 	mu          sync.RWMutex
 	tuples      map[tupleKey]struct{}
-	nextTime    StoreTime
-	subscribers []chan Change
+	nextTime    domain.StoreTime
+	subscribers []chan domain.Change
 }
 
 // tupleKey is the map key for deduplication.
 type tupleKey struct {
-	ObjectType      schema.TypeID
-	ObjectID        schema.ID
-	Relation        schema.RelationID
-	SubjectType     schema.TypeID
-	SubjectID       schema.ID
-	SubjectRelation schema.RelationID
+	ObjectType      domain.TypeID
+	ObjectID        domain.ID
+	Relation        domain.RelationID
+	SubjectType     domain.TypeID
+	SubjectID       domain.ID
+	SubjectRelation domain.RelationID
 }
 
-func toKey(t Tuple) tupleKey {
+func toKey(t domain.Tuple) tupleKey {
 	return tupleKey{
 		ObjectType:      t.ObjectType,
 		ObjectID:        t.ObjectID,
@@ -37,16 +37,16 @@ func toKey(t Tuple) tupleKey {
 	}
 }
 
-// NewMemoryStore creates a new in-memory store.
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{
+// NewStore creates a new in-memory store.
+func NewStore() *Store {
+	return &Store{
 		tuples:   make(map[tupleKey]struct{}),
 		nextTime: 1, // Start at 1 so 0 means "from beginning"
 	}
 }
 
 // WriteTuple adds a tuple to the store and emits a change to subscribers.
-func (s *MemoryStore) WriteTuple(ctx context.Context, t Tuple) error {
+func (s *Store) WriteTuple(ctx context.Context, t domain.Tuple) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -60,7 +60,7 @@ func (s *MemoryStore) WriteTuple(ctx context.Context, t Tuple) error {
 	s.nextTime++
 	s.tuples[key] = struct{}{}
 
-	change := Change{Time: time, Op: OpInsert, Tuple: t}
+	change := domain.Change{Time: time, Op: domain.OpInsert, Tuple: t}
 	for _, ch := range s.subscribers {
 		select {
 		case ch <- change:
@@ -73,7 +73,7 @@ func (s *MemoryStore) WriteTuple(ctx context.Context, t Tuple) error {
 }
 
 // DeleteTuple removes a tuple from the store and emits a change to subscribers.
-func (s *MemoryStore) DeleteTuple(ctx context.Context, t Tuple) error {
+func (s *Store) DeleteTuple(ctx context.Context, t domain.Tuple) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -87,7 +87,7 @@ func (s *MemoryStore) DeleteTuple(ctx context.Context, t Tuple) error {
 	s.nextTime++
 	delete(s.tuples, key)
 
-	change := Change{Time: time, Op: OpDelete, Tuple: t}
+	change := domain.Change{Time: time, Op: domain.OpDelete, Tuple: t}
 	for _, ch := range s.subscribers {
 		select {
 		case ch <- change:
@@ -99,23 +99,30 @@ func (s *MemoryStore) DeleteTuple(ctx context.Context, t Tuple) error {
 }
 
 // LoadAll returns an iterator over all tuples currently in the store.
-func (s *MemoryStore) LoadAll(ctx context.Context) (TupleIterator, error) {
+func (s *Store) LoadAll(ctx context.Context) (domain.TupleIterator, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make([]Tuple, 0, len(s.tuples))
+	result := make([]domain.Tuple, 0, len(s.tuples))
 	for key := range s.tuples {
 		result = append(result, keyToTuple(key))
 	}
-	return NewSliceIterator(result), nil
+	return domain.NewSliceIterator(result), nil
 }
 
-func keyToTuple(k tupleKey) Tuple {
-	return Tuple(k)
+func keyToTuple(k tupleKey) domain.Tuple {
+	return domain.Tuple{
+		ObjectType:      k.ObjectType,
+		ObjectID:        k.ObjectID,
+		Relation:        k.Relation,
+		SubjectType:     k.SubjectType,
+		SubjectID:       k.SubjectID,
+		SubjectRelation: k.SubjectRelation,
+	}
 }
 
 // Close is a no-op for the in-memory store.
-func (s *MemoryStore) Close() error {
+func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -129,12 +136,12 @@ func (s *MemoryStore) Close() error {
 
 // Subscribe returns a channel that receives changes after the given time.
 // The channel is closed when Close() is called or the context is canceled.
-func (s *MemoryStore) Subscribe(ctx context.Context, after StoreTime) (<-chan Change, <-chan error) {
+func (s *Store) Subscribe(ctx context.Context, after domain.StoreTime) (<-chan domain.Change, <-chan error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// Buffer some changes to avoid blocking writers
-	ch := make(chan Change, 100)
+	ch := make(chan domain.Change, 100)
 	errCh := make(chan error, 1)
 	s.subscribers = append(s.subscribers, ch)
 
@@ -157,7 +164,7 @@ func (s *MemoryStore) Subscribe(ctx context.Context, after StoreTime) (<-chan Ch
 }
 
 // CurrentTime returns the latest time (the next time minus 1).
-func (s *MemoryStore) CurrentTime(ctx context.Context) (StoreTime, error) {
+func (s *Store) CurrentTime(ctx context.Context) (domain.StoreTime, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.nextTime == 1 {
@@ -168,6 +175,6 @@ func (s *MemoryStore) CurrentTime(ctx context.Context) (StoreTime, error) {
 
 // Compile-time interface checks
 var (
-	_ Store        = (*MemoryStore)(nil)
-	_ ChangeStream = (*MemoryStore)(nil)
+	_ domain.Store        = (*Store)(nil)
+	_ domain.ChangeStream = (*Store)(nil)
 )

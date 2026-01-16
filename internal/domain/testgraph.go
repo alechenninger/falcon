@@ -1,35 +1,42 @@
-package graph
+package domain
 
 import (
 	"context"
 
-	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
+	
 )
 
-// TestGraph wraps a LocalGraph with a MemoryStore for testing.
+// TestStore is an interface for stores that can be used with TestGraph.
+// It combines Store and ChangeStream with CurrentTime for test synchronization.
+type TestStore interface {
+	Store
+	ChangeStream
+	CurrentTime(ctx context.Context) (StoreTime, error)
+}
+
+// TestGraph wraps a LocalGraph with a store for testing.
 // It provides synchronization via SignalingObserver to wait for
 // writes to be applied.
 type TestGraph struct {
 	*LocalGraph
-	store    *store.MemoryStore
+	store    TestStore
 	observer *SignalingObserver
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
-// NewTestGraph creates a LocalGraph with a MemoryStore for testing.
+// NewTestGraph creates a LocalGraph with the provided store for testing.
 // Call Close() when done to stop the subscription.
-func NewTestGraph(s *schema.Schema) *TestGraph {
+func NewTestGraph(s *Schema, store TestStore) *TestGraph {
 	ctx, cancel := context.WithCancel(context.Background())
-	ms := store.NewMemoryStore()
 	observer := NewSignalingObserver()
 
-	g := NewLocalGraph(s, ms, ms).WithUsersetsObserver(observer)
+	g := NewLocalGraph(s, store, store)
+	g.SetUsersetsObserver(observer)
 
 	tg := &TestGraph{
 		LocalGraph: g,
-		store:      ms,
+		store:      store,
 		observer:   observer,
 		ctx:        ctx,
 		cancel:     cancel,
@@ -48,13 +55,13 @@ func NewTestGraph(s *schema.Schema) *TestGraph {
 
 // WriteTuple validates and writes a tuple, waiting for it to be replicated.
 // Takes string names for convenience and converts to IDs internally.
-func (tg *TestGraph) WriteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
+func (tg *TestGraph) WriteTuple(ctx context.Context, objectType TypeName, objectID ID, relation RelationName, subjectType TypeName, subjectID ID, subjectRelation RelationName) error {
 	if err := tg.LocalGraph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
 		return err
 	}
 
 	s := tg.Schema()
-	if err := tg.store.WriteTuple(ctx, store.Tuple{
+	if err := tg.store.WriteTuple(ctx, Tuple{
 		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
@@ -73,13 +80,13 @@ func (tg *TestGraph) WriteTuple(ctx context.Context, objectType schema.TypeName,
 
 // DeleteTuple validates and removes a tuple, waiting for it to be replicated.
 // Takes string names for convenience and converts to IDs internally.
-func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
+func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType TypeName, objectID ID, relation RelationName, subjectType TypeName, subjectID ID, subjectRelation RelationName) error {
 	if err := tg.LocalGraph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
 		return err
 	}
 
 	s := tg.Schema()
-	if err := tg.store.DeleteTuple(ctx, store.Tuple{
+	if err := tg.store.DeleteTuple(ctx, Tuple{
 		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
@@ -96,15 +103,15 @@ func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName
 	return nil
 }
 
-// Store returns the underlying MemoryStore.
-func (tg *TestGraph) Store() *store.MemoryStore {
+// Store returns the underlying store.
+func (tg *TestGraph) Store() TestStore {
 	return tg.store
 }
 
 // Check is a convenience wrapper that calls Check with MaxSnapshotWindow and nil visited.
 // Most tests don't care about the snapshot window or cycle detection setup.
 // Takes string names for convenience and converts to IDs internally.
-func (tg *TestGraph) Check(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, store.StoreTime, error) {
+func (tg *TestGraph) Check(ctx context.Context, subjectType TypeName, subjectID ID, objectType TypeName, objectID ID, relation RelationName) (bool, StoreTime, error) {
 	s := tg.Schema()
 	ok, window, err := tg.LocalGraph.Check(ctx,
 		s.GetTypeID(subjectType), subjectID,
@@ -117,18 +124,13 @@ func (tg *TestGraph) Check(ctx context.Context, subjectType schema.TypeName, sub
 // CheckAt is a test helper that checks with a specific snapshot window.
 // This is used for MVCC tests that need to verify historical state.
 // Takes string names for convenience and converts to IDs internally.
-func (tg *TestGraph) CheckAt(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, window *SnapshotWindow) (bool, SnapshotWindow, error) {
+func (tg *TestGraph) CheckAt(ctx context.Context, subjectType TypeName, subjectID ID, objectType TypeName, objectID ID, relation RelationName, window *SnapshotWindow) (bool, SnapshotWindow, error) {
 	s := tg.Schema()
 	return tg.LocalGraph.Check(ctx,
 		s.GetTypeID(subjectType), subjectID,
 		s.GetTypeID(objectType), objectID,
 		s.GetRelationID(objectType, relation),
 		*window, nil)
-}
-
-// TruncateHistory is a test helper for MVCC garbage collection tests.
-func (tg *TestGraph) TruncateHistory(minTime store.StoreTime) {
-	tg.LocalGraph.TruncateHistory(minTime)
 }
 
 // Close stops the subscription.

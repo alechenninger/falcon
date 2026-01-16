@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // StoreTime represents a timestamp encoded as uint64.
@@ -57,12 +57,12 @@ func (a *AtomicStoreTime) Store(t StoreTime) {
 // For userset subjects: object_type:object_id#relation@subject_type:subject_id#subject_relation
 // Example: document:100#viewer@group:1#member (all members of group 1 are viewers)
 type Tuple struct {
-	ObjectType      schema.TypeID
-	ObjectID        schema.ID
-	Relation        schema.RelationID
-	SubjectType     schema.TypeID
-	SubjectID       schema.ID
-	SubjectRelation schema.RelationID // Optional: NoRelation for direct subjects
+	ObjectType      TypeID
+	ObjectID        ID
+	Relation        RelationID
+	SubjectType     TypeID
+	SubjectID       ID
+	SubjectRelation RelationID // Optional: NoRelation for direct subjects
 }
 
 // ChangeOp represents the type of change (insert or delete).

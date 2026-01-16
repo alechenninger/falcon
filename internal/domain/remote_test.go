@@ -1,4 +1,4 @@
-package graph_test
+package domain_test
 
 import (
 	"context"
@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/graph"
-	graphpb "github.com/alechenninger/falcon/graph/proto"
-	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/internal/domain"
+	infragrpc "github.com/alechenninger/falcon/internal/infrastructure/grpc"
+	transportgrpc "github.com/alechenninger/falcon/internal/transport/grpc"
+	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
+	
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -18,15 +20,15 @@ const bufSize = 1024 * 1024
 
 // setupTestServer creates a LocalGraph with test data and serves it via gRPC over bufconn.
 // Returns the listener, cleanup function, and the underlying LocalGraph for verification.
-func setupTestServer(t *testing.T, s *schema.Schema) (*bufconn.Listener, func(), *graph.TestGraph) {
+func setupTestServer(t *testing.T, s *domain.Schema) (*bufconn.Listener, func(), *domain.TestGraph) {
 	t.Helper()
 
 	lis := bufconn.Listen(bufSize)
 
-	tg := graph.NewTestGraph(s)
+	tg := newTestGraph(s)
 
 	server := grpc.NewServer()
-	graphpb.RegisterGraphServiceServer(server, graph.NewGraphServer(tg.LocalGraph))
+	graphpb.RegisterGraphServiceServer(server, transportgrpc.NewServer(tg.LocalGraph))
 
 	go func() {
 		if err := server.Serve(lis); err != nil {
@@ -61,12 +63,12 @@ func dialBufconn(t *testing.T, lis *bufconn.Listener) *grpc.ClientConn {
 }
 
 // remoteCheck is a test helper that calls Check with type names and converts to IDs.
-func remoteCheck(ctx context.Context, remote *graph.RemoteGraph, s *schema.Schema,
-	subjectType schema.TypeName, subjectID schema.ID,
-	objectType schema.TypeName, objectID schema.ID,
-	relation schema.RelationName,
-	window graph.SnapshotWindow, visited []graph.VisitedKey,
-) (bool, graph.SnapshotWindow, error) {
+func remoteCheck(ctx context.Context, remote *infragrpc.RemoteGraph, s *domain.Schema,
+	subjectType domain.TypeName, subjectID domain.ID,
+	objectType domain.TypeName, objectID domain.ID,
+	relation domain.RelationName,
+	window domain.SnapshotWindow, visited []domain.VisitedKey,
+) (bool, domain.SnapshotWindow, error) {
 	return remote.Check(ctx,
 		s.GetTypeID(subjectType), subjectID,
 		s.GetTypeID(objectType), objectID,
@@ -75,16 +77,16 @@ func remoteCheck(ctx context.Context, remote *graph.RemoteGraph, s *schema.Schem
 }
 
 // remoteCheckUnion is a test helper that calls CheckUnion with type names and converts to IDs.
-func remoteCheckUnion(ctx context.Context, remote *graph.RemoteGraph, s *schema.Schema,
-	subjectType schema.TypeName, subjectID schema.ID,
-	objectType schema.TypeName, objectIDs *roaring.Bitmap,
-	relation schema.RelationName,
-) (graph.CheckResult, error) {
-	checks := []graph.RelationCheck{{
-		ObjectType: s.GetTypeID(objectType),
+func remoteCheckUnion(ctx context.Context, remote *infragrpc.RemoteGraph, s *domain.Schema,
+	subjectType domain.TypeName, subjectID domain.ID,
+	objectType domain.TypeName, objectIDs *roaring.Bitmap,
+	relation domain.RelationName,
+) (domain.CheckResult, error) {
+	checks := []domain.RelationCheck{{
+	ObjectType: s.GetTypeID(objectType),
 		ObjectIDs:  objectIDs,
 		Relation:   s.GetRelationID(objectType, relation),
-		Window:     graph.MaxSnapshotWindow,
+		Window:     domain.MaxSnapshotWindow,
 	}}
 	return remote.CheckUnion(ctx,
 		s.GetTypeID(subjectType), subjectID,
@@ -101,7 +103,7 @@ func TestRemoteGraph_Check(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1  = 1
@@ -115,7 +117,7 @@ func TestRemoteGraph_Check(t *testing.T) {
 	}
 
 	// Check via remote - user1 should be a viewer
-	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", graph.MaxSnapshotWindow, nil)
+	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", domain.MaxSnapshotWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -123,13 +125,13 @@ func TestRemoteGraph_Check(t *testing.T) {
 		t.Error("expected user1 to be viewer of doc100")
 	}
 	// Window should be narrowed to the single tuple's time [1, 1]
-	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	expectedWindow := domain.NewSnapshotWindow(1, 1)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
 
 	// Check via remote - user2 should NOT be a viewer
-	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", user2, "document", doc100, "viewer", graph.MaxSnapshotWindow, nil)
+	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", user2, "document", doc100, "viewer", domain.MaxSnapshotWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -138,7 +140,7 @@ func TestRemoteGraph_Check(t *testing.T) {
 	}
 	// TODO: Window COULD be [1, 1], if we kept history past truncation
 	// See TODO in MultiversionUsersets.ContainsWithin
-	expectedNotFound := graph.NewSnapshotWindow(1, 1)
+	expectedNotFound := domain.NewSnapshotWindow(1, 1)
 	if resultWindow != expectedNotFound {
 		t.Errorf("expected window %v, got %v", expectedNotFound, resultWindow)
 	}
@@ -154,7 +156,7 @@ func TestRemoteGraph_CheckUnion(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1    = 1
@@ -184,7 +186,7 @@ func TestRemoteGraph_CheckUnion(t *testing.T) {
 		t.Error("expected CheckUnion to find user1 as viewer")
 	}
 	// Window should be narrowed to the single tuple's time [1, 1]
-	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	expectedWindow := domain.NewSnapshotWindow(1, 1)
 	if result.Window != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, result.Window)
 	}
@@ -202,7 +204,7 @@ func TestRemoteGraph_CheckUnion(t *testing.T) {
 	// However, we would have to track the first time a tuple was added to the set,
 	// and know that it's not just that history was trunacated,
 	// in which case we have complete history and can go all the way back to 0.
-	expectedNotFound := graph.NewSnapshotWindow(1, 1)
+	expectedNotFound := domain.NewSnapshotWindow(1, 1)
 	if result.Window != expectedNotFound {
 		t.Errorf("expected window %v, got %v", expectedNotFound, result.Window)
 	}
@@ -218,7 +220,7 @@ func TestRemoteGraph_CheckWithArrow(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1    = 1
@@ -237,7 +239,7 @@ func TestRemoteGraph_CheckWithArrow(t *testing.T) {
 	}
 
 	// Check via remote - user1 should be viewer of doc100 via parent folder
-	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", graph.MaxSnapshotWindow, nil)
+	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", domain.MaxSnapshotWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -246,7 +248,7 @@ func TestRemoteGraph_CheckWithArrow(t *testing.T) {
 	}
 	// Window narrowed to [2, 2]: min raised to newest accessed tuple (viewer at time 2),
 	// max narrowed to replicated time (2)
-	expectedWindow := graph.NewSnapshotWindow(2, 2)
+	expectedWindow := domain.NewSnapshotWindow(2, 2)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
@@ -262,7 +264,7 @@ func TestRemoteGraph_CheckWithUserset(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		alice  = 1
@@ -282,7 +284,7 @@ func TestRemoteGraph_CheckWithUserset(t *testing.T) {
 	}
 
 	// Check via remote - alice should be viewer via group membership
-	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", alice, "document", doc100, "viewer", graph.MaxSnapshotWindow, nil)
+	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", alice, "document", doc100, "viewer", domain.MaxSnapshotWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -290,13 +292,13 @@ func TestRemoteGraph_CheckWithUserset(t *testing.T) {
 		t.Error("expected alice to be viewer of doc100 via group membership")
 	}
 	// Window should be [2, 2]: min raised to newest accessed tuple (userset relation at time 2)
-	expectedWindow := graph.NewSnapshotWindow(2, 2)
+	expectedWindow := domain.NewSnapshotWindow(2, 2)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
 
 	// Check via remote - bob should NOT be viewer
-	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", bob, "document", doc100, "viewer", graph.MaxSnapshotWindow, nil)
+	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", bob, "document", doc100, "viewer", domain.MaxSnapshotWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -306,7 +308,7 @@ func TestRemoteGraph_CheckWithUserset(t *testing.T) {
 	// TODO: Window COULD be [0, 2], see TODO in MultiversionUsersets.ContainsWithin
 	// It's 2, 2 because a negative result depends on the state of all usersets
 	// And newly added usersets don't know when they didn't exist.
-	expectedNotFound := graph.NewSnapshotWindow(2, 2)
+	expectedNotFound := domain.NewSnapshotWindow(2, 2)
 	if resultWindow != expectedNotFound {
 		t.Errorf("expected window %v, got %v", expectedNotFound, resultWindow)
 	}
@@ -322,7 +324,7 @@ func TestRemoteGraph_CheckUnionEmpty(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	// CheckUnion with empty checks
 	result, err := remote.CheckUnion(ctx, s.GetTypeID("user"), 1, nil, nil)
@@ -334,7 +336,7 @@ func TestRemoteGraph_CheckUnionEmpty(t *testing.T) {
 	}
 }
 
-// TestRemoteGraph_Schema tests that Schema returns the correct schema.
+// TestRemoteGraph_Schema tests that Schema returns the correct 
 func TestRemoteGraph_Schema(t *testing.T) {
 	s := testSchema()
 	lis, cleanup, _ := setupTestServer(t, s)
@@ -344,7 +346,7 @@ func TestRemoteGraph_Schema(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	// Schema should return the schema we passed in
 	if remote.Schema() != s {
@@ -362,7 +364,7 @@ func TestRemoteGraph_WindowNarrowing(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1  = 1
@@ -375,7 +377,7 @@ func TestRemoteGraph_WindowNarrowing(t *testing.T) {
 	}
 
 	// Check with MaxSnapshotWindow - should be narrowed to [1, 1]
-	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", graph.MaxSnapshotWindow, nil)
+	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", domain.MaxSnapshotWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -384,7 +386,7 @@ func TestRemoteGraph_WindowNarrowing(t *testing.T) {
 	}
 
 	// Window should be exactly [1, 1]
-	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	expectedWindow := domain.NewSnapshotWindow(1, 1)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
@@ -400,7 +402,7 @@ func TestRemoteGraph_VisitedPropagation(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1  = 1
@@ -413,14 +415,14 @@ func TestRemoteGraph_VisitedPropagation(t *testing.T) {
 	}
 
 	// Create visited list that includes the node we're checking
-	visited := []graph.VisitedKey{{
-		ObjectType: s.GetTypeID("document"),
+	visited := []domain.VisitedKey{{
+	ObjectType: s.GetTypeID("document"),
 		ObjectID:   doc100,
 		Relation:   s.GetRelationID("document", "viewer"),
 	}}
 
 	// Check with the node already visited - should return false (cycle detection)
-	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", graph.MaxSnapshotWindow, visited)
+	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", domain.MaxSnapshotWindow, visited)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
 	}
@@ -429,8 +431,8 @@ func TestRemoteGraph_VisitedPropagation(t *testing.T) {
 	}
 	// When cycle is detected, we bail out early without accessing any tuples,
 	// so the input window is returned unchanged (MaxSnapshotWindow)
-	if resultWindow != graph.MaxSnapshotWindow {
-		t.Errorf("expected window %v, got %v", graph.MaxSnapshotWindow, resultWindow)
+	if resultWindow != domain.MaxSnapshotWindow {
+		t.Errorf("expected window %v, got %v", domain.MaxSnapshotWindow, resultWindow)
 	}
 }
 
@@ -445,7 +447,7 @@ func TestRemoteGraph_NonZeroLengthWindow(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1  = 1
@@ -478,7 +480,7 @@ func TestRemoteGraph_NonZeroLengthWindow(t *testing.T) {
 	// Test 1: Request window [1, 3] - should find user1
 	// user1 was added at time 1 and never removed, so oldest valid time is 1
 	// Max stays at our requested 3 (not replicated time 4)
-	requestWindow := graph.NewSnapshotWindow(1, 3)
+	requestWindow := domain.NewSnapshotWindow(1, 3)
 	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", requestWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -487,13 +489,13 @@ func TestRemoteGraph_NonZeroLengthWindow(t *testing.T) {
 		t.Error("expected user1 to be viewer of doc100 with window [1, 3]")
 	}
 	// Window should be [1, 3]: min=1 (oldest time user1 is viewer), max=3 (requested max)
-	expectedWindow := graph.NewSnapshotWindow(1, 3)
+	expectedWindow := domain.NewSnapshotWindow(1, 3)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
 
 	// Test 2: Request narrow window [3, 3] - should find user2 (added at time 3)
-	requestWindow2 := graph.NewSnapshotWindow(3, 3)
+	requestWindow2 := domain.NewSnapshotWindow(3, 3)
 	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", user2, "document", doc100, "viewer", requestWindow2, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -502,14 +504,14 @@ func TestRemoteGraph_NonZeroLengthWindow(t *testing.T) {
 		t.Error("expected user2 to be viewer of doc100 with window [3, 3]")
 	}
 	// Window should stay [3, 3]
-	expectedWindow2 := graph.NewSnapshotWindow(3, 3)
+	expectedWindow2 := domain.NewSnapshotWindow(3, 3)
 	if resultWindow != expectedWindow2 {
 		t.Errorf("expected window %v, got %v", expectedWindow2, resultWindow)
 	}
 
 	// Test 3: Request window [1, 2] with max=2 which is less than current replicated time (4)
 	// This tests that max is respected through serialization - we need historical snapshot
-	requestWindow3 := graph.NewSnapshotWindow(1, 2)
+	requestWindow3 := domain.NewSnapshotWindow(1, 2)
 	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", requestWindow3, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -518,7 +520,7 @@ func TestRemoteGraph_NonZeroLengthWindow(t *testing.T) {
 		t.Error("expected user1 to be viewer of doc100 with window [1, 2]")
 	}
 	// Window should be [1, 2]: historical snapshot at time 1, max stays at requested 2
-	expectedWindow3 := graph.NewSnapshotWindow(1, 2)
+	expectedWindow3 := domain.NewSnapshotWindow(1, 2)
 	if resultWindow != expectedWindow3 {
 		t.Errorf("expected window %v, got %v", expectedWindow3, resultWindow)
 	}
@@ -535,7 +537,7 @@ func TestRemoteGraph_WindowMinRespected(t *testing.T) {
 	defer conn.Close()
 
 	client := graphpb.NewGraphServiceClient(conn)
-	remote := graph.NewRemoteGraph(client, s)
+	remote := infragrpc.NewRemoteGraph(client, s)
 
 	const (
 		user1  = 1
@@ -559,7 +561,7 @@ func TestRemoteGraph_WindowMinRespected(t *testing.T) {
 	// Replicated time is now 3
 
 	// Test: Request window [1, 1] - should find user1 (existed at time 1 before deletion)
-	requestWindow := graph.NewSnapshotWindow(1, 1)
+	requestWindow := domain.NewSnapshotWindow(1, 1)
 	ok, resultWindow, err := remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", requestWindow, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -567,13 +569,13 @@ func TestRemoteGraph_WindowMinRespected(t *testing.T) {
 	if !ok {
 		t.Error("expected user1 to be viewer at time 1 (before deletion)")
 	}
-	expectedWindow := graph.NewSnapshotWindow(1, 1)
+	expectedWindow := domain.NewSnapshotWindow(1, 1)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
 
 	// Test: Request window [2, 2] - should NOT find user1 (deleted at time 2)
-	requestWindow2 := graph.NewSnapshotWindow(2, 2)
+	requestWindow2 := domain.NewSnapshotWindow(2, 2)
 	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", requestWindow2, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -582,13 +584,13 @@ func TestRemoteGraph_WindowMinRespected(t *testing.T) {
 		t.Error("expected user1 to NOT be viewer at time 2 (after deletion)")
 	}
 	// Window should be [2, 2] - we accessed the set at that time
-	expectedWindow2 := graph.NewSnapshotWindow(2, 2)
+	expectedWindow2 := domain.NewSnapshotWindow(2, 2)
 	if resultWindow != expectedWindow2 {
 		t.Errorf("expected window %v, got %v", expectedWindow2, resultWindow)
 	}
 
 	// Test: Request window [3, 3] - should find user1 (re-added at time 3)
-	requestWindow3 := graph.NewSnapshotWindow(3, 3)
+	requestWindow3 := domain.NewSnapshotWindow(3, 3)
 	ok, resultWindow, err = remoteCheck(ctx, remote, s, "user", user1, "document", doc100, "viewer", requestWindow3, nil)
 	if err != nil {
 		t.Fatalf("Check failed: %v", err)
@@ -596,7 +598,7 @@ func TestRemoteGraph_WindowMinRespected(t *testing.T) {
 	if !ok {
 		t.Error("expected user1 to be viewer at time 3 (re-added)")
 	}
-	expectedWindow3 := graph.NewSnapshotWindow(3, 3)
+	expectedWindow3 := domain.NewSnapshotWindow(3, 3)
 	if resultWindow != expectedWindow3 {
 		t.Errorf("expected window %v, got %v", expectedWindow3, resultWindow)
 	}

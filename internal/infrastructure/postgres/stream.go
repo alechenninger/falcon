@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/alechenninger/falcon/internal/domain"
-	"github.com/alechenninger/falcon/schema"
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
@@ -322,12 +321,12 @@ func (s *Stream) decodeTuple(rel *pglogrepl.RelationMessage, tuple *pglogrepl.Tu
 	}
 
 	return &domain.Tuple{
-		ObjectType:      schema.TypeID(objectType),
-		ObjectID:        schema.ID(objectID),
-		Relation:        schema.RelationID(relation),
-		SubjectType:     schema.TypeID(subjectType),
-		SubjectID:       schema.ID(subjectID),
-		SubjectRelation: schema.RelationID(subjectRelation),
+		ObjectType:      domain.TypeID(objectType),
+		ObjectID:        domain.ID(objectID),
+		Relation:        domain.RelationID(relation),
+		SubjectType:     domain.TypeID(subjectType),
+		SubjectID:       domain.ID(subjectID),
+		SubjectRelation: domain.RelationID(subjectRelation),
 	}, nil
 }
 

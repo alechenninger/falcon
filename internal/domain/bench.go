@@ -3,7 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // BenchGraph wraps a LocalGraph with direct population methods for benchmarking.
@@ -16,7 +16,7 @@ type BenchGraph struct {
 }
 
 // NewBenchGraph creates a graph for benchmarking with direct population.
-func NewBenchGraph(s *schema.Schema) *BenchGraph {
+func NewBenchGraph(s *Schema) *BenchGraph {
 	usersets := NewMultiversionUsersets(s)
 	// Create a minimal LocalGraph for benchmarking
 	graph := &LocalGraph{
@@ -34,7 +34,7 @@ func NewBenchGraph(s *schema.Schema) *BenchGraph {
 
 // Check delegates to the underlying LocalGraph.
 // Takes string names for convenience and converts to IDs internally.
-func (bg *BenchGraph) Check(ctx context.Context, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, StoreTime, error) {
+func (bg *BenchGraph) Check(ctx context.Context, subjectType TypeName, subjectID ID, objectType TypeName, objectID ID, relation RelationName) (bool, StoreTime, error) {
 	s := bg.Graph.Schema()
 	ok, window, err := bg.Graph.Check(ctx,
 		s.GetTypeID(subjectType), subjectID,
@@ -46,7 +46,7 @@ func (bg *BenchGraph) Check(ctx context.Context, subjectType schema.TypeName, su
 
 // AddDirect adds a tuple directly to the graph's in-memory state.
 // Takes string names for convenience and converts to IDs internally.
-func (bg *BenchGraph) AddDirect(objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) {
+func (bg *BenchGraph) AddDirect(objectType TypeName, objectID ID, relation RelationName, subjectType TypeName, subjectID ID, subjectRelation RelationName) {
 	s := bg.usersets.Schema()
 	bg.usersets.applyAdd(Tuple{
 		ObjectType:      s.GetTypeID(objectType),

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/alechenninger/falcon/internal/domain"
-	"github.com/alechenninger/falcon/schema"
 )
 
 // RequestIDKey is the context key for request IDs.
@@ -67,7 +66,7 @@ func (o *UsersetsObserver) GetSubjectBitmapStarted(key domain.UsersetKey, window
 }
 
 // ContainsDirectStarted logs the start of a direct contains check.
-func (o *UsersetsObserver) ContainsDirectStarted(key domain.UsersetKey, subjectID schema.ID, window domain.SnapshotWindow) domain.ContainsReadProbe {
+func (o *UsersetsObserver) ContainsDirectStarted(key domain.UsersetKey, subjectID domain.ID, window domain.SnapshotWindow) domain.ContainsReadProbe {
 	return &containsReadProbe{
 		logger:    o.logger,
 		key:       key,
@@ -79,7 +78,7 @@ func (o *UsersetsObserver) ContainsDirectStarted(key domain.UsersetKey, subjectI
 }
 
 // ContainsUsersetSubjectStarted logs the start of a userset subject contains check.
-func (o *UsersetsObserver) ContainsUsersetSubjectStarted(key domain.UsersetKey, subjectID schema.ID, window domain.SnapshotWindow) domain.ContainsReadProbe {
+func (o *UsersetsObserver) ContainsUsersetSubjectStarted(key domain.UsersetKey, subjectID domain.ID, window domain.SnapshotWindow) domain.ContainsReadProbe {
 	return &containsReadProbe{
 		logger:    o.logger,
 		key:       key,
@@ -163,7 +162,7 @@ type containsReadProbe struct {
 	domain.NoOpContainsReadProbe
 	logger    *slog.Logger
 	key       domain.UsersetKey
-	subjectID schema.ID
+	subjectID domain.ID
 	window    domain.SnapshotWindow
 	startTime time.Time
 	direct    bool
@@ -216,9 +215,9 @@ func NewShardedGraphObserver(logger *slog.Logger) *ShardedGraphObserver {
 
 // CheckStarted logs the start of a Check operation.
 func (o *ShardedGraphObserver) CheckStarted(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
+	subjectType domain.TypeID, subjectID domain.ID,
+	objectType domain.TypeID, objectID domain.ID,
+	relation domain.RelationID,
 ) (context.Context, domain.ShardedCheckProbe) {
 	return ctx, &shardedCheckProbe{
 		logger:      o.logger,
@@ -233,7 +232,7 @@ func (o *ShardedGraphObserver) CheckStarted(ctx context.Context,
 }
 
 // CheckUnionStarted logs the start of a CheckUnion operation.
-func (o *ShardedGraphObserver) CheckUnionStarted(ctx context.Context, subjectType schema.TypeID, subjectID schema.ID) (context.Context, domain.CheckUnionProbe) {
+func (o *ShardedGraphObserver) CheckUnionStarted(ctx context.Context, subjectType domain.TypeID, subjectID domain.ID) (context.Context, domain.CheckUnionProbe) {
 	return ctx, &checkUnionProbe{
 		logger:      o.logger,
 		ctx:         ctx,
@@ -247,11 +246,11 @@ type shardedCheckProbe struct {
 	domain.NoOpShardedCheckProbe
 	logger      *slog.Logger
 	ctx         context.Context
-	subjectType schema.TypeID
-	subjectID   schema.ID
-	objectType  schema.TypeID
-	objectID    schema.ID
-	relation    schema.RelationID
+	subjectType domain.TypeID
+	subjectID   domain.ID
+	objectType  domain.TypeID
+	objectID    domain.ID
+	relation    domain.RelationID
 	startTime   time.Time
 	local       bool
 	remoteShard domain.ShardID
@@ -330,8 +329,8 @@ type checkUnionProbe struct {
 	domain.NoOpCheckUnionProbe
 	logger      *slog.Logger
 	ctx         context.Context
-	subjectType schema.TypeID
-	subjectID   schema.ID
+	subjectType domain.TypeID
+	subjectID   domain.ID
 	startTime   time.Time
 	found       bool
 	window      domain.SnapshotWindow
@@ -437,9 +436,9 @@ func NewCheckObserver(logger *slog.Logger) *CheckObserver {
 
 // CheckStarted logs the start of a check operation.
 func (o *CheckObserver) CheckStarted(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
+	subjectType domain.TypeID, subjectID domain.ID,
+	objectType domain.TypeID, objectID domain.ID,
+	relation domain.RelationID,
 ) (context.Context, domain.CheckProbe) {
 	if o.logger.Enabled(ctx, slog.LevelDebug) {
 		o.logger.LogAttrs(ctx, slog.LevelDebug, "check started",
@@ -466,18 +465,18 @@ type checkProbe struct {
 	domain.NoOpCheckProbe
 	logger      *slog.Logger
 	ctx         context.Context
-	subjectType schema.TypeID
-	subjectID   schema.ID
-	objectType  schema.TypeID
-	objectID    schema.ID
-	relation    schema.RelationID
+	subjectType domain.TypeID
+	subjectID   domain.ID
+	objectType  domain.TypeID
+	objectID    domain.ID
+	relation    domain.RelationID
 	startTime   time.Time
 	found       bool
 	window      domain.SnapshotWindow
 	err         error
 }
 
-func (p *checkProbe) RelationEntered(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID) {
+func (p *checkProbe) RelationEntered(objectType domain.TypeID, objectID domain.ID, relation domain.RelationID) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -499,7 +498,7 @@ func (p *checkProbe) CycleDetected(key domain.VisitedKey) {
 		slog.Any("relation", key.Relation))
 }
 
-func (p *checkProbe) UsersetChecking(userset *schema.Userset) {
+func (p *checkProbe) UsersetChecking(userset *domain.Userset) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -509,7 +508,7 @@ func (p *checkProbe) UsersetChecking(userset *schema.Userset) {
 }
 
 // usersetType returns a string describing the userset variant.
-func usersetType(us *schema.Userset) string {
+func usersetType(us *domain.Userset) string {
 	if us.TupleToUserset != nil {
 		return "arrow"
 	}
@@ -522,7 +521,7 @@ func usersetType(us *schema.Userset) string {
 	return "unknown"
 }
 
-func (p *checkProbe) DirectLookup(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID, subjectType schema.TypeID) {
+func (p *checkProbe) DirectLookup(objectType domain.TypeID, objectID domain.ID, relation domain.RelationID, subjectType domain.TypeID) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -545,7 +544,7 @@ func (p *checkProbe) DirectLookupResult(found bool, window domain.SnapshotWindow
 		slog.Uint64("window_max", uint64(window.Max())))
 }
 
-func (p *checkProbe) ArrowTraversal(tuplesetRelation, computedRelation schema.RelationName) {
+func (p *checkProbe) ArrowTraversal(tuplesetRelation, computedRelation domain.RelationName) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -555,9 +554,9 @@ func (p *checkProbe) ArrowTraversal(tuplesetRelation, computedRelation schema.Re
 		slog.String("computed_relation", string(computedRelation)))
 }
 
-func (p *checkProbe) RecursiveCheck(subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID, depth int) {
+func (p *checkProbe) RecursiveCheck(subjectType domain.TypeID, subjectID domain.ID,
+	objectType domain.TypeID, objectID domain.ID,
+	relation domain.RelationID, depth int) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -635,9 +634,9 @@ func NewLocalGraphObserver(logger *slog.Logger) *LocalGraphObserver {
 
 // CheckStarted logs the start of a LocalGraph.Check operation.
 func (o *LocalGraphObserver) CheckStarted(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
+	subjectType domain.TypeID, subjectID domain.ID,
+	objectType domain.TypeID, objectID domain.ID,
+	relation domain.RelationID,
 ) (context.Context, domain.LocalCheckProbe) {
 	return ctx, &localCheckProbe{
 		logger:      o.logger,
@@ -653,7 +652,7 @@ func (o *LocalGraphObserver) CheckStarted(ctx context.Context,
 
 // CheckUnionStarted logs the start of a LocalGraph.CheckUnion operation.
 func (o *LocalGraphObserver) CheckUnionStarted(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
+	subjectType domain.TypeID, subjectID domain.ID,
 	numChecks int,
 ) (context.Context, domain.LocalCheckUnionProbe) {
 	return ctx, &localCheckUnionProbe{
@@ -670,11 +669,11 @@ type localCheckProbe struct {
 	domain.NoOpLocalCheckProbe
 	logger      *slog.Logger
 	ctx         context.Context
-	subjectType schema.TypeID
-	subjectID   schema.ID
-	objectType  schema.TypeID
-	objectID    schema.ID
-	relation    schema.RelationID
+	subjectType domain.TypeID
+	subjectID   domain.ID
+	objectType  domain.TypeID
+	objectID    domain.ID
+	relation    domain.RelationID
 	startTime   time.Time
 	found       bool
 	window      domain.SnapshotWindow
@@ -723,16 +722,16 @@ type localCheckUnionProbe struct {
 	domain.NoOpLocalCheckUnionProbe
 	logger      *slog.Logger
 	ctx         context.Context
-	subjectType schema.TypeID
-	subjectID   schema.ID
+	subjectType domain.TypeID
+	subjectID   domain.ID
 	numChecks   int
 	startTime   time.Time
 	result      domain.CheckResult
 	err         error
 }
 
-func (p *localCheckUnionProbe) BitmapLookup(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-	subjectType schema.TypeID, subjectRelation schema.RelationID) {
+func (p *localCheckUnionProbe) BitmapLookup(objectType domain.TypeID, objectID domain.ID, relation domain.RelationID,
+	subjectType domain.TypeID, subjectRelation domain.RelationID) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -756,8 +755,8 @@ func (p *localCheckUnionProbe) BitmapLookupResult(size int, window domain.Snapsh
 		slog.Uint64("window_max", uint64(window.Max())))
 }
 
-func (p *localCheckUnionProbe) ContainsCheck(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-	subjectType schema.TypeID, subjectID schema.ID) {
+func (p *localCheckUnionProbe) ContainsCheck(objectType domain.TypeID, objectID domain.ID, relation domain.RelationID,
+	subjectType domain.TypeID, subjectID domain.ID) {
 	if !p.logger.Enabled(p.ctx, slog.LevelDebug) {
 		return
 	}
@@ -830,7 +829,7 @@ func NewMVCCObserver(logger *slog.Logger) *MVCCObserver {
 }
 
 // ContainsWithinStarted logs the start of a ContainsWithin operation.
-func (o *MVCCObserver) ContainsWithinStarted(id schema.ID, maxTime domain.StoreTime) domain.MVCCProbe {
+func (o *MVCCObserver) ContainsWithinStarted(id domain.ID, maxTime domain.StoreTime) domain.MVCCProbe {
 	return &mvccProbe{
 		logger:    o.logger,
 		operation: "contains_within",
@@ -852,7 +851,7 @@ type mvccProbe struct {
 	domain.NoOpMVCCProbe
 	logger       *slog.Logger
 	operation    string
-	id           schema.ID
+	id           domain.ID
 	maxTime      domain.StoreTime
 	historyDepth int
 	undoCount    int

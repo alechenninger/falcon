@@ -24,8 +24,8 @@ import (
 	_ "net/http/pprof" // Register pprof handlers
 	"os"
 
-	"github.com/alechenninger/falcon/graph"
-	"github.com/alechenninger/falcon/server"
+	"github.com/alechenninger/falcon/internal/domain"
+	transportgrpc "github.com/alechenninger/falcon/internal/transport/grpc"
 )
 
 func main() {
@@ -65,21 +65,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	peerMap, err := server.ParsePeers(*peers)
+	peerMap, err := transportgrpc.ParsePeers(*peers)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error parsing peers: %v\n", err)
 		os.Exit(1)
 	}
 
-	testDataCfg := graph.DefaultTestDataConfig()
+	testDataCfg := domain.DefaultTestDataConfig()
 	if *small {
-		testDataCfg = graph.SmallTestDataConfig()
+		testDataCfg = domain.SmallTestDataConfig()
 	} else if *medium {
-		testDataCfg = graph.MediumTestDataConfig()
+		testDataCfg = domain.MediumTestDataConfig()
 	}
 
-	cfg := server.Config{
-		ShardID:        graph.ShardID(*shardID),
+	cfg := transportgrpc.Config{
+		ShardID:        domain.ShardID(*shardID),
 		ListenAddr:     *listen,
 		Peers:          peerMap,
 		NumShards:      *numShards,
@@ -90,7 +90,7 @@ func main() {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 
 	ctx := context.Background()
-	if err := server.Run(ctx, cfg); err != nil {
+	if err := transportgrpc.Run(ctx, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

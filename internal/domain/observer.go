@@ -4,16 +4,16 @@ import (
 	"context"
 	"sync"
 
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // UsersetKey identifies a userset for observation purposes using type/relation IDs.
 type UsersetKey struct {
-	ObjectType      schema.TypeID
-	ObjectID        schema.ID
-	Relation        schema.RelationID
-	SubjectType     schema.TypeID
-	SubjectRelation schema.RelationID
+	ObjectType      TypeID
+	ObjectID        ID
+	Relation        RelationID
+	SubjectType     TypeID
+	SubjectRelation RelationID
 }
 
 // UsersetsObserver is called at key points during MultiversionUsersets operations.
@@ -32,10 +32,10 @@ type UsersetsObserver interface {
 	GetSubjectBitmapStarted(key UsersetKey, window SnapshotWindow) BitmapReadProbe
 
 	// ContainsDirectStarted is called when ContainsDirectWithin begins.
-	ContainsDirectStarted(key UsersetKey, subjectID schema.ID, window SnapshotWindow) ContainsReadProbe
+	ContainsDirectStarted(key UsersetKey, subjectID ID, window SnapshotWindow) ContainsReadProbe
 
 	// ContainsUsersetSubjectStarted is called when ContainsUsersetSubjectWithin begins.
-	ContainsUsersetSubjectStarted(key UsersetKey, subjectID schema.ID, window SnapshotWindow) ContainsReadProbe
+	ContainsUsersetSubjectStarted(key UsersetKey, subjectID ID, window SnapshotWindow) ContainsReadProbe
 }
 
 // BitmapReadProbe tracks a GetSubjectBitmapWithin operation.
@@ -89,12 +89,12 @@ func (NoOpUsersetsObserver) GetSubjectBitmapStarted(_ UsersetKey, _ SnapshotWind
 }
 
 // ContainsDirectStarted returns a no-op probe.
-func (NoOpUsersetsObserver) ContainsDirectStarted(_ UsersetKey, _ schema.ID, _ SnapshotWindow) ContainsReadProbe {
+func (NoOpUsersetsObserver) ContainsDirectStarted(_ UsersetKey, _ ID, _ SnapshotWindow) ContainsReadProbe {
 	return NoOpContainsReadProbe{}
 }
 
 // ContainsUsersetSubjectStarted returns a no-op probe.
-func (NoOpUsersetsObserver) ContainsUsersetSubjectStarted(_ UsersetKey, _ schema.ID, _ SnapshotWindow) ContainsReadProbe {
+func (NoOpUsersetsObserver) ContainsUsersetSubjectStarted(_ UsersetKey, _ ID, _ SnapshotWindow) ContainsReadProbe {
 	return NoOpContainsReadProbe{}
 }
 
@@ -130,14 +130,14 @@ type ShardedGraphObserver interface {
 	// CheckStarted is called when Check begins.
 	// Returns a potentially modified context and a probe to track the operation lifecycle.
 	CheckStarted(ctx context.Context,
-		subjectType schema.TypeID, subjectID schema.ID,
-		objectType schema.TypeID, objectID schema.ID,
-		relation schema.RelationID,
+		subjectType TypeID, subjectID ID,
+		objectType TypeID, objectID ID,
+		relation RelationID,
 	) (context.Context, ShardedCheckProbe)
 
 	// CheckUnionStarted is called when CheckUnion begins.
 	// Returns a potentially modified context and a probe to track the operation lifecycle.
-	CheckUnionStarted(ctx context.Context, subjectType schema.TypeID, subjectID schema.ID) (context.Context, CheckUnionProbe)
+	CheckUnionStarted(ctx context.Context, subjectType TypeID, subjectID ID) (context.Context, CheckUnionProbe)
 }
 
 // ShardedCheckProbe tracks a ShardedGraph.Check invocation lifecycle.
@@ -196,15 +196,15 @@ type NoOpShardedGraphObserver struct{}
 
 // CheckStarted returns the context unchanged and a no-op probe.
 func (NoOpShardedGraphObserver) CheckStarted(ctx context.Context,
-	_ schema.TypeID, _ schema.ID,
-	_ schema.TypeID, _ schema.ID,
-	_ schema.RelationID,
+	_ TypeID, _ ID,
+	_ TypeID, _ ID,
+	_ RelationID,
 ) (context.Context, ShardedCheckProbe) {
 	return ctx, NoOpShardedCheckProbe{}
 }
 
 // CheckUnionStarted returns the context unchanged and a no-op probe.
-func (NoOpShardedGraphObserver) CheckUnionStarted(ctx context.Context, _ schema.TypeID, _ schema.ID) (context.Context, CheckUnionProbe) {
+func (NoOpShardedGraphObserver) CheckUnionStarted(ctx context.Context, _ TypeID, _ ID) (context.Context, CheckUnionProbe) {
 	return ctx, NoOpCheckUnionProbe{}
 }
 
@@ -327,9 +327,9 @@ type CheckObserver interface {
 	// CheckStarted is called when a top-level check begins.
 	// Returns a potentially modified context and a probe to track the operation.
 	CheckStarted(ctx context.Context,
-		subjectType schema.TypeID, subjectID schema.ID,
-		objectType schema.TypeID, objectID schema.ID,
-		relation schema.RelationID,
+		subjectType TypeID, subjectID ID,
+		objectType TypeID, objectID ID,
+		relation RelationID,
 	) (context.Context, CheckProbe)
 }
 
@@ -337,27 +337,27 @@ type CheckObserver interface {
 // Implementations should embed NoOpCheckProbe for forward compatibility.
 type CheckProbe interface {
 	// RelationEntered is called when entering a relation check.
-	RelationEntered(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID)
+	RelationEntered(objectType TypeID, objectID ID, relation RelationID)
 
 	// CycleDetected is called when a cycle is detected and we return false.
 	CycleDetected(key VisitedKey)
 
 	// UsersetChecking is called before checking each userset variant in a union.
-	UsersetChecking(userset *schema.Userset)
+	UsersetChecking(userset *Userset)
 
 	// DirectLookup is called when checking direct membership.
-	DirectLookup(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID, subjectType schema.TypeID)
+	DirectLookup(objectType TypeID, objectID ID, relation RelationID, subjectType TypeID)
 
 	// DirectLookupResult is called when a direct lookup completes.
 	DirectLookupResult(found bool, window SnapshotWindow)
 
 	// ArrowTraversal is called when following an arrow (computed userset).
-	ArrowTraversal(tuplesetRelation, computedRelation schema.RelationName)
+	ArrowTraversal(tuplesetRelation, computedRelation RelationName)
 
 	// RecursiveCheck is called when making a recursive check call.
-	RecursiveCheck(subjectType schema.TypeID, subjectID schema.ID,
-		objectType schema.TypeID, objectID schema.ID,
-		relation schema.RelationID, depth int)
+	RecursiveCheck(subjectType TypeID, subjectID ID,
+		objectType TypeID, objectID ID,
+		relation RelationID, depth int)
 
 	// UnionBranchFound is called when a union branch matches.
 	UnionBranchFound(branchIndex int)
@@ -378,9 +378,9 @@ type NoOpCheckObserver struct{}
 
 // CheckStarted returns the context unchanged and a no-op probe.
 func (NoOpCheckObserver) CheckStarted(ctx context.Context,
-	_ schema.TypeID, _ schema.ID,
-	_ schema.TypeID, _ schema.ID,
-	_ schema.RelationID,
+	_ TypeID, _ ID,
+	_ TypeID, _ ID,
+	_ RelationID,
 ) (context.Context, CheckProbe) {
 	return ctx, NoOpCheckProbe{}
 }
@@ -389,13 +389,13 @@ func (NoOpCheckObserver) CheckStarted(ctx context.Context,
 // Embed this in custom probes for forward compatibility with new methods.
 type NoOpCheckProbe struct{}
 
-func (NoOpCheckProbe) RelationEntered(schema.TypeID, schema.ID, schema.RelationID)             {}
+func (NoOpCheckProbe) RelationEntered(TypeID, ID, RelationID)             {}
 func (NoOpCheckProbe) CycleDetected(VisitedKey)                                                {}
-func (NoOpCheckProbe) UsersetChecking(*schema.Userset)                                         {}
-func (NoOpCheckProbe) DirectLookup(schema.TypeID, schema.ID, schema.RelationID, schema.TypeID) {}
+func (NoOpCheckProbe) UsersetChecking(*Userset)                                         {}
+func (NoOpCheckProbe) DirectLookup(TypeID, ID, RelationID, TypeID) {}
 func (NoOpCheckProbe) DirectLookupResult(bool, SnapshotWindow)                                 {}
-func (NoOpCheckProbe) ArrowTraversal(schema.RelationName, schema.RelationName)                 {}
-func (NoOpCheckProbe) RecursiveCheck(schema.TypeID, schema.ID, schema.TypeID, schema.ID, schema.RelationID, int) {
+func (NoOpCheckProbe) ArrowTraversal(RelationName, RelationName)                 {}
+func (NoOpCheckProbe) RecursiveCheck(TypeID, ID, TypeID, ID, RelationID, int) {
 }
 func (NoOpCheckProbe) UnionBranchFound(int)        {}
 func (NoOpCheckProbe) Result(bool, SnapshotWindow) {}
@@ -412,14 +412,14 @@ func (NoOpCheckProbe) End()                        {}
 type LocalGraphObserver interface {
 	// CheckStarted is called when LocalGraph.Check begins.
 	CheckStarted(ctx context.Context,
-		subjectType schema.TypeID, subjectID schema.ID,
-		objectType schema.TypeID, objectID schema.ID,
-		relation schema.RelationID,
+		subjectType TypeID, subjectID ID,
+		objectType TypeID, objectID ID,
+		relation RelationID,
 	) (context.Context, LocalCheckProbe)
 
 	// CheckUnionStarted is called when LocalGraph.CheckUnion begins.
 	CheckUnionStarted(ctx context.Context,
-		subjectType schema.TypeID, subjectID schema.ID,
+		subjectType TypeID, subjectID ID,
 		numChecks int,
 	) (context.Context, LocalCheckUnionProbe)
 }
@@ -441,15 +441,15 @@ type LocalCheckProbe interface {
 // Implementations should embed NoOpLocalCheckUnionProbe for forward compatibility.
 type LocalCheckUnionProbe interface {
 	// BitmapLookup is called when looking up subjects in a userset.
-	BitmapLookup(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-		subjectType schema.TypeID, subjectRelation schema.RelationID)
+	BitmapLookup(objectType TypeID, objectID ID, relation RelationID,
+		subjectType TypeID, subjectRelation RelationID)
 
 	// BitmapLookupResult is called when a bitmap lookup completes.
 	BitmapLookupResult(size int, window SnapshotWindow)
 
 	// ContainsCheck is called when checking if a subject is in a set.
-	ContainsCheck(objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-		subjectType schema.TypeID, subjectID schema.ID)
+	ContainsCheck(objectType TypeID, objectID ID, relation RelationID,
+		subjectType TypeID, subjectID ID)
 
 	// ContainsCheckResult is called when a contains check completes.
 	ContainsCheckResult(found bool, window SnapshotWindow)
@@ -470,16 +470,16 @@ type NoOpLocalGraphObserver struct{}
 
 // CheckStarted returns the context unchanged and a no-op probe.
 func (NoOpLocalGraphObserver) CheckStarted(ctx context.Context,
-	_ schema.TypeID, _ schema.ID,
-	_ schema.TypeID, _ schema.ID,
-	_ schema.RelationID,
+	_ TypeID, _ ID,
+	_ TypeID, _ ID,
+	_ RelationID,
 ) (context.Context, LocalCheckProbe) {
 	return ctx, NoOpLocalCheckProbe{}
 }
 
 // CheckUnionStarted returns the context unchanged and a no-op probe.
 func (NoOpLocalGraphObserver) CheckUnionStarted(ctx context.Context,
-	_ schema.TypeID, _ schema.ID,
+	_ TypeID, _ ID,
 	_ int,
 ) (context.Context, LocalCheckUnionProbe) {
 	return ctx, NoOpLocalCheckUnionProbe{}
@@ -497,10 +497,10 @@ func (NoOpLocalCheckProbe) End()                        {}
 // Embed this in custom probes for forward compatibility with new methods.
 type NoOpLocalCheckUnionProbe struct{}
 
-func (NoOpLocalCheckUnionProbe) BitmapLookup(schema.TypeID, schema.ID, schema.RelationID, schema.TypeID, schema.RelationID) {
+func (NoOpLocalCheckUnionProbe) BitmapLookup(TypeID, ID, RelationID, TypeID, RelationID) {
 }
 func (NoOpLocalCheckUnionProbe) BitmapLookupResult(int, SnapshotWindow) {}
-func (NoOpLocalCheckUnionProbe) ContainsCheck(schema.TypeID, schema.ID, schema.RelationID, schema.TypeID, schema.ID) {
+func (NoOpLocalCheckUnionProbe) ContainsCheck(TypeID, ID, RelationID, TypeID, ID) {
 }
 func (NoOpLocalCheckUnionProbe) ContainsCheckResult(bool, SnapshotWindow) {}
 func (NoOpLocalCheckUnionProbe) Result(CheckResult)                       {}
@@ -516,7 +516,7 @@ func (NoOpLocalCheckUnionProbe) End()                                     {}
 // with new methods added to this interface.
 type MVCCObserver interface {
 	// ContainsWithinStarted is called when ContainsWithin begins.
-	ContainsWithinStarted(id schema.ID, maxTime StoreTime) MVCCProbe
+	ContainsWithinStarted(id ID, maxTime StoreTime) MVCCProbe
 
 	// SnapshotWithinStarted is called when SnapshotWithin begins.
 	SnapshotWithinStarted(maxTime StoreTime) MVCCProbe
@@ -548,7 +548,7 @@ type MVCCProbe interface {
 type NoOpMVCCObserver struct{}
 
 // ContainsWithinStarted returns a no-op probe.
-func (NoOpMVCCObserver) ContainsWithinStarted(_ schema.ID, _ StoreTime) MVCCProbe {
+func (NoOpMVCCObserver) ContainsWithinStarted(_ ID, _ StoreTime) MVCCProbe {
 	return NoOpMVCCProbe{}
 }
 

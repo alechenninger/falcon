@@ -1,8 +1,7 @@
-package graph
+package domain
 
 import (
-	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
+	
 )
 
 // TestDataConfig configures the deterministic graph generator.
@@ -82,23 +81,23 @@ func MediumTestDataConfig() TestDataConfig {
 //	group: member=1
 //	folder: parent=1, viewer=2, editor=3
 //	document: parent=1, viewer=2, editor=3
-func TestDataSchema() *schema.Schema {
-	s := &schema.Schema{
-		Types: map[schema.TypeName]*schema.ObjectType{
+func TestDataSchema() *Schema {
+	s := &Schema{
+		Types: map[TypeName]*ObjectType{
 			"user": {
 				ID:        1,
 				Name:      "user",
-				Relations: map[schema.RelationName]*schema.Relation{},
+				Relations: map[RelationName]*Relation{},
 			},
 			"group": {
 				ID:   2,
 				Name: "group",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[RelationName]*Relation{
 					"member": {
 						ID:   1,
 						Name: "member",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("user")),
+						Usersets: []Userset{
+							Direct(Ref("user")),
 						},
 					},
 				},
@@ -106,34 +105,34 @@ func TestDataSchema() *schema.Schema {
 			"folder": {
 				ID:   3,
 				Name: "folder",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[RelationName]*Relation{
 					"parent": {
 						ID:   1,
 						Name: "parent",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("folder")),
+						Usersets: []Userset{
+							Direct(Ref("folder")),
 						},
 					},
 					"viewer": {
 						ID:   2,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "viewer"),
+							Arrow("parent", "viewer"),
 						},
 					},
 					"editor": {
 						ID:   3,
 						Name: "editor",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "editor"),
+							Arrow("parent", "editor"),
 						},
 					},
 				},
@@ -141,34 +140,34 @@ func TestDataSchema() *schema.Schema {
 			"document": {
 				ID:   4,
 				Name: "document",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[RelationName]*Relation{
 					"parent": {
 						ID:   1,
 						Name: "parent",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("folder")),
+						Usersets: []Userset{
+							Direct(Ref("folder")),
 						},
 					},
 					"viewer": {
 						ID:   2,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "viewer"),
+							Arrow("parent", "viewer"),
 						},
 					},
 					"editor": {
 						ID:   3,
 						Name: "editor",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "editor"),
+							Arrow("parent", "editor"),
 						},
 					},
 				},
@@ -190,7 +189,7 @@ func TestDataSchema() *schema.Schema {
 //   - Each group has UsersPerGroup users
 //   - Each top-level folder has AccessTuplesPerTenant group viewer/editor tuples
 //   - Each leaf folder has exactly one document
-func GenerateTestData(cfg TestDataConfig, s *schema.Schema) []store.Tuple {
+func GenerateTestData(cfg TestDataConfig, s *Schema) []Tuple {
 	gen := &testDataGenerator{cfg: cfg, schema: s}
 	return gen.generate()
 }
@@ -198,19 +197,19 @@ func GenerateTestData(cfg TestDataConfig, s *schema.Schema) []store.Tuple {
 // testDataGenerator holds state during generation.
 type testDataGenerator struct {
 	cfg        TestDataConfig
-	schema     *schema.Schema
-	tuples     []store.Tuple
-	nextDoc    schema.ID
-	nextFolder schema.ID
+	schema     *Schema
+	tuples     []Tuple
+	nextDoc    ID
+	nextFolder ID
 }
 
-func (g *testDataGenerator) generate() []store.Tuple {
+func (g *testDataGenerator) generate() []Tuple {
 	// Pre-allocate slice (rough estimate)
 	estimated := g.estimateTupleCount()
-	g.tuples = make([]store.Tuple, 0, estimated)
+	g.tuples = make([]Tuple, 0, estimated)
 	g.nextDoc = 1
 	// Start folder IDs after root folders (IDs 1..NumTenants are roots)
-	g.nextFolder = schema.ID(g.cfg.NumTenants + 1)
+	g.nextFolder = ID(g.cfg.NumTenants + 1)
 
 	// Generate each tenant
 	for tenant := 0; tenant < g.cfg.NumTenants; tenant++ {
@@ -248,7 +247,7 @@ func (g *testDataGenerator) estimateTupleCount() int {
 
 func (g *testDataGenerator) generateTenant(tenant int) {
 	// Root folder ID for this tenant (1-based)
-	rootFolderID := schema.ID(tenant + 1)
+	rootFolderID := ID(tenant + 1)
 
 	// Generate groups and their members
 	g.generateGroups(tenant)
@@ -266,21 +265,21 @@ func (g *testDataGenerator) generateTenant(tenant int) {
 //   - Groups: [tenant*100 + 1, tenant*100 + GroupsPerTenant]
 //   - Users: [tenant*1_000_000 + 1, tenant*1_000_000 + GroupsPerTenant*UsersPerGroup]
 func (g *testDataGenerator) generateGroups(tenant int) {
-	groupBase := schema.ID(tenant*100 + 1)
-	userBase := schema.ID(tenant*1_000_000 + 1)
+	groupBase := ID(tenant*100 + 1)
+	userBase := ID(tenant*1_000_000 + 1)
 
 	for groupIdx := 0; groupIdx < g.cfg.GroupsPerTenant; groupIdx++ {
-		groupID := groupBase + schema.ID(groupIdx)
+		groupID := groupBase + ID(groupIdx)
 
 		for userIdx := 0; userIdx < g.cfg.UsersPerGroup; userIdx++ {
-			userID := userBase + schema.ID(groupIdx*g.cfg.UsersPerGroup+userIdx)
-			g.tuples = append(g.tuples, store.Tuple{
+			userID := userBase + ID(groupIdx*g.cfg.UsersPerGroup+userIdx)
+			g.tuples = append(g.tuples, Tuple{
 				ObjectType:      g.schema.GetTypeID("group"),
 				ObjectID:        groupID,
 				Relation:        g.schema.GetRelationID("group", "member"),
 				SubjectType:     g.schema.GetTypeID("user"),
 				SubjectID:       userID,
-				SubjectRelation: schema.NoRelation,
+				SubjectRelation: NoRelation,
 			})
 		}
 	}
@@ -288,17 +287,17 @@ func (g *testDataGenerator) generateGroups(tenant int) {
 
 // generateAccessTuples creates group -> folder access tuples for a tenant.
 // Half are viewer, half are editor.
-func (g *testDataGenerator) generateAccessTuples(tenant int, rootFolderID schema.ID) {
-	groupBase := schema.ID(tenant*100 + 1)
+func (g *testDataGenerator) generateAccessTuples(tenant int, rootFolderID ID) {
+	groupBase := ID(tenant*100 + 1)
 
 	for i := 0; i < g.cfg.AccessTuplesPerTenant; i++ {
-		groupID := groupBase + schema.ID(i%g.cfg.GroupsPerTenant)
-		relationName := schema.RelationName("viewer")
+		groupID := groupBase + ID(i%g.cfg.GroupsPerTenant)
+		relationName := RelationName("viewer")
 		if i%2 == 1 {
 			relationName = "editor"
 		}
 
-		g.tuples = append(g.tuples, store.Tuple{
+		g.tuples = append(g.tuples, Tuple{
 			ObjectType:      g.schema.GetTypeID("folder"),
 			ObjectID:        rootFolderID,
 			Relation:        g.schema.GetRelationID("folder", relationName),
@@ -314,19 +313,19 @@ func (g *testDataGenerator) generateAccessTuples(tenant int, rootFolderID schema
 // Leaf folders (depth == FolderDepth) each get one document.
 //
 // Folder IDs are assigned sequentially to ensure uniqueness and spread across shards.
-func (g *testDataGenerator) generateFolderTree(parentID schema.ID, depth int) {
+func (g *testDataGenerator) generateFolderTree(parentID ID, depth int) {
 	if depth >= g.cfg.FolderDepth {
 		// Leaf folder - create a document
 		docID := g.nextDoc
 		g.nextDoc++
 
-		g.tuples = append(g.tuples, store.Tuple{
+		g.tuples = append(g.tuples, Tuple{
 			ObjectType:      g.schema.GetTypeID("document"),
 			ObjectID:        docID,
 			Relation:        g.schema.GetRelationID("document", "parent"),
 			SubjectType:     g.schema.GetTypeID("folder"),
 			SubjectID:       parentID,
-			SubjectRelation: schema.NoRelation,
+			SubjectRelation: NoRelation,
 		})
 		return
 	}
@@ -337,13 +336,13 @@ func (g *testDataGenerator) generateFolderTree(parentID schema.ID, depth int) {
 		g.nextFolder++
 
 		// folder:child#parent@folder:parent
-		g.tuples = append(g.tuples, store.Tuple{
+		g.tuples = append(g.tuples, Tuple{
 			ObjectType:      g.schema.GetTypeID("folder"),
 			ObjectID:        childID,
 			Relation:        g.schema.GetRelationID("folder", "parent"),
 			SubjectType:     g.schema.GetTypeID("folder"),
 			SubjectID:       parentID,
-			SubjectRelation: schema.NoRelation,
+			SubjectRelation: NoRelation,
 		})
 
 		// Recurse
@@ -354,14 +353,14 @@ func (g *testDataGenerator) generateFolderTree(parentID schema.ID, depth int) {
 // TestDataRouter returns a Router function that implements the sharding strategy
 // described in the plan: folders/documents by ID, users/groups co-located by tenant.
 // Uses TypeID for efficient routing.
-func TestDataRouter(numShards int, s *schema.Schema) Router {
+func TestDataRouter(numShards int, s *Schema) Router {
 	// Pre-lookup type IDs for efficient comparison
 	folderID := s.GetTypeID("folder")
 	documentID := s.GetTypeID("document")
 	userID := s.GetTypeID("user")
 	groupID := s.GetTypeID("group")
 
-	return func(objectType schema.TypeID, objectID schema.ID) ShardID {
+	return func(objectType TypeID, objectID ID) ShardID {
 		switch objectType {
 		case folderID, documentID:
 			// Spread folders/docs across all shards by ID
@@ -414,8 +413,8 @@ func itoa(n int) string {
 }
 
 // FilterTuplesForShard filters tuples to only those owned by the given shard.
-func FilterTuplesForShard(tuples []store.Tuple, shardID ShardID, router Router) []store.Tuple {
-	result := make([]store.Tuple, 0, len(tuples)/2) // Rough estimate
+func FilterTuplesForShard(tuples []Tuple, shardID ShardID, router Router) []Tuple {
+	result := make([]Tuple, 0, len(tuples)/2) // Rough estimate
 	for _, t := range tuples {
 		if router(t.ObjectType, t.ObjectID) == shardID {
 			result = append(result, t)
@@ -426,17 +425,17 @@ func FilterTuplesForShard(tuples []store.Tuple, shardID ShardID, router Router) 
 
 // GetTestUser returns a user ID that is a member of groups for the given tenant.
 // userIndex should be in [0, GroupsPerTenant*UsersPerGroup).
-func GetTestUser(tenant, userIndex int) schema.ID {
-	return schema.ID(tenant*1_000_000 + 1 + userIndex)
+func GetTestUser(tenant, userIndex int) ID {
+	return ID(tenant*1_000_000 + 1 + userIndex)
 }
 
 // GetTestGroup returns a group ID for the given tenant.
 // groupIndex should be in [0, GroupsPerTenant).
-func GetTestGroup(tenant, groupIndex int) schema.ID {
-	return schema.ID(tenant*100 + 1 + groupIndex)
+func GetTestGroup(tenant, groupIndex int) ID {
+	return ID(tenant*100 + 1 + groupIndex)
 }
 
 // GetRootFolder returns the root folder ID for the given tenant.
-func GetRootFolder(tenant int) schema.ID {
-	return schema.ID(tenant + 1)
+func GetRootFolder(tenant int) ID {
+	return ID(tenant + 1)
 }

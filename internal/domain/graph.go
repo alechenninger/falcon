@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // ShardID identifies a shard in a distributed graph.
@@ -12,21 +12,21 @@ type ShardID string
 
 // Router determines which shard owns a given object.
 // This is called during Check and CheckUnion to route requests.
-type Router func(objectType schema.TypeID, objectID schema.ID) ShardID
+type Router func(objectType TypeID, objectID ID) ShardID
 
 // RelationCheck represents a check against a single object type's relation.
 // Used by CheckUnion to batch multiple checks with independent windows.
 type RelationCheck struct {
-	ObjectType schema.TypeID
+	ObjectType TypeID
 	ObjectIDs  *roaring.Bitmap
-	Relation   schema.RelationID
+	Relation   RelationID
 	Window     SnapshotWindow // Window narrowed based on reading this type's data
 }
 
 // DependentSet identifies objects that were relevant to a check result.
 type DependentSet struct {
-	ObjectType schema.TypeID
-	Relation   schema.RelationID
+	ObjectType TypeID
+	Relation   RelationID
 
 	// ObjectIDs identifies the specific objects that mattered.
 	// If nil, means "all objects from the corresponding input check" (optimization).
@@ -43,9 +43,9 @@ type CheckResult struct {
 
 // VisitedKey tracks nodes visited during graph traversal for cycle detection.
 type VisitedKey struct {
-	ObjectType schema.TypeID
-	ObjectID   schema.ID
-	Relation   schema.RelationID
+	ObjectType TypeID
+	ObjectID   ID
+	Relation   RelationID
 }
 
 // Graph provides core authorization check operations.
@@ -57,9 +57,9 @@ type Graph interface {
 	// detection; pass nil for a fresh query.
 	// Returns (allowed, narrowedWindow, error).
 	Check(ctx context.Context,
-		subjectType schema.TypeID, subjectID schema.ID,
-		objectType schema.TypeID, objectID schema.ID,
-		relation schema.RelationID,
+		subjectType TypeID, subjectID ID,
+		objectType TypeID, objectID ID,
+		relation RelationID,
 		window SnapshotWindow, visited []VisitedKey,
 	) (bool, SnapshotWindow, error)
 
@@ -72,13 +72,13 @@ type Graph interface {
 	//   - DependentSets: which object sets were relevant to the decision
 	//   - Window: combined snapshot window for the result
 	CheckUnion(ctx context.Context,
-		subjectType schema.TypeID, subjectID schema.ID,
+		subjectType TypeID, subjectID ID,
 		checks []RelationCheck,
 		visited []VisitedKey,
 	) (CheckResult, error)
 
-	// Schema returns the authorization schema.
-	Schema() *schema.Schema
+	// Schema returns the authorization 
+	Schema() *Schema
 }
 
 // GraphService extends Graph with lifecycle management.

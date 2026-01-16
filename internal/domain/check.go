@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // Check is the core walk algorithm. It's a standalone function that takes
@@ -15,9 +15,9 @@ func Check(
 	graph Graph,
 	usersets *MultiversionUsersets,
 	observer CheckObserver,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	relation RelationID,
 	window SnapshotWindow,
 	visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
@@ -61,9 +61,9 @@ func checkRelation(
 	graph Graph,
 	usersets *MultiversionUsersets,
 	probe CheckProbe,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	rel *schema.Relation,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	rel *Relation,
 	visited map[VisitedKey]bool,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
@@ -115,10 +115,10 @@ func checkUserset(
 	graph Graph,
 	usersets *MultiversionUsersets,
 	probe CheckProbe,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	rel *schema.Relation,
-	us schema.Userset,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	rel *Relation,
+	us Userset,
 	visited map[VisitedKey]bool,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
@@ -157,10 +157,10 @@ func checkDirectAndUserset(
 	graph Graph,
 	usersets *MultiversionUsersets,
 	probe CheckProbe,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
-	targetTypes []schema.SubjectRef,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	relation RelationID,
+	targetTypes []SubjectRef,
 	visited map[VisitedKey]bool,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
@@ -236,7 +236,7 @@ func checkDirectAndUserset(
 				// Look up when each of these subjects was added to our local userset
 				iter := objectsToCheck.Iterator()
 				for iter.HasNext() {
-					objID := schema.ID(iter.Next())
+					objID := ID(iter.Next())
 					_, tupleWindow := usersets.ContainsUsersetSubjectWithin(
 						objectType, objectID, relation,
 						dep.ObjectType, objID, dep.Relation,
@@ -269,9 +269,9 @@ func checkArrow(
 	graph Graph,
 	usersets *MultiversionUsersets,
 	probe CheckProbe,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	arrow *schema.TupleToUserset,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	arrow *TupleToUserset,
 	visited map[VisitedKey]bool,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow, error) {
@@ -321,7 +321,7 @@ func checkArrow(
 
 		// Read data for this type from original window - each type gets independent narrowing
 		bitmap, typeWindow := usersets.GetSubjectBitmapWithin(
-			objectType, objectID, tuplesetRel.ID, targetOT.ID, schema.NoRelation, window)
+			objectType, objectID, tuplesetRel.ID, targetOT.ID, NoRelation, window)
 		if bitmap == nil || bitmap.IsEmpty() {
 			continue
 		}
@@ -366,7 +366,7 @@ func checkArrow(
 				// For arrows, these are direct subjects (not usersets)
 				iter := objectsToCheck.Iterator()
 				for iter.HasNext() {
-					targetID := schema.ID(iter.Next())
+					targetID := ID(iter.Next())
 					_, tupleWindow := usersets.ContainsDirectWithin(
 						objectType, objectID, tuplesetRel.ID,
 						dep.ObjectType, targetID,

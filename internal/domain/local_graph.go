@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // LocalGraph is a single-node Graph implementation.
@@ -19,7 +19,7 @@ type LocalGraph struct {
 }
 
 // NewLocalGraph creates a new LocalGraph.
-func NewLocalGraph(s *schema.Schema, stream ChangeStream, st Store) *LocalGraph {
+func NewLocalGraph(s *Schema, stream ChangeStream, st Store) *LocalGraph {
 	return &LocalGraph{
 		usersets:      NewMultiversionUsersets(s),
 		stream:        stream,
@@ -43,6 +43,15 @@ func (g *LocalGraph) WithUsersetsObserver(obs UsersetsObserver) *LocalGraph {
 		checkObserver: g.checkObserver,
 		localObserver: g.localObserver,
 	}
+}
+
+// SetUsersetsObserver sets the UsersetsObserver for instrumentation.
+// This mutates the receiver in place (useful for test setup).
+func (g *LocalGraph) SetUsersetsObserver(obs UsersetsObserver) {
+	if obs == nil {
+		obs = NoOpUsersetsObserver{}
+	}
+	g.observer = obs
 }
 
 // WithCheckObserver returns a copy with the given CheckObserver for instrumentation.
@@ -92,16 +101,16 @@ func (g *LocalGraph) Start(ctx context.Context) error {
 	return g.usersets.Subscribe(ctx, g.stream, g.observer)
 }
 
-// Schema returns the authorization schema.
-func (g *LocalGraph) Schema() *schema.Schema {
+// Schema returns the authorization 
+func (g *LocalGraph) Schema() *Schema {
 	return g.usersets.Schema()
 }
 
 // Check determines if subject has relation on object.
 func (g *LocalGraph) Check(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	relation RelationID,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
 	g.assertWindowWithinReplicated(window)
@@ -126,7 +135,7 @@ func (g *LocalGraph) Check(ctx context.Context,
 
 // CheckUnion checks if subject is in the union of all the given usersets.
 func (g *LocalGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
+	subjectType TypeID, subjectID ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
 ) (CheckResult, error) {
@@ -153,7 +162,7 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
-			objectID := schema.ID(iter.Next())
+			objectID := ID(iter.Next())
 
 			ok, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
@@ -216,8 +225,8 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 	return result, nil
 }
 
-// ValidateTuple checks if a tuple is valid according to the schema.
-func (g *LocalGraph) ValidateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
+// ValidateTuple checks if a tuple is valid according to the 
+func (g *LocalGraph) ValidateTuple(objectType TypeName, relation RelationName, subjectType TypeName, subjectRelation RelationName) error {
 	return g.usersets.ValidateTuple(objectType, relation, subjectType, subjectRelation)
 }
 

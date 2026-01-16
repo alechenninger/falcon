@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // usersetKey uniquely identifies a set of subjects for a given object, relation,
@@ -15,11 +15,11 @@ import (
 // Uses compact TypeID/RelationID instead of strings for memory efficiency.
 // Total size: 8 bytes (vs ~72 bytes with strings).
 type usersetKey struct {
-	ObjectType      schema.TypeID     // 1 byte
-	Relation        schema.RelationID // 1 byte
-	SubjectType     schema.TypeID     // 1 byte
-	SubjectRelation schema.RelationID // 1 byte (0 = no relation)
-	ObjectID        schema.ID         // 4 bytes
+	ObjectType      TypeID     // 1 byte
+	Relation        RelationID // 1 byte
+	SubjectType     TypeID     // 1 byte
+	SubjectRelation RelationID // 1 byte (0 = no relation)
+	ObjectID        ID         // 4 bytes
 }
 
 // tupleToKey converts a Tuple directly to a usersetKey.
@@ -44,7 +44,7 @@ func tupleToKey(t Tuple) usersetKey {
 // This is the core data structure - it does not contain query logic.
 // The Graph interface wraps this with the check algorithm.
 type MultiversionUsersets struct {
-	schema *schema.Schema
+	schema *Schema
 
 	mu     sync.RWMutex
 	tuples map[usersetKey]*VersionedSet
@@ -58,8 +58,8 @@ type MultiversionUsersets struct {
 	observer UsersetsObserver
 }
 
-// NewMultiversionUsersets creates a new MultiversionUsersets with the given schema.
-func NewMultiversionUsersets(s *schema.Schema) *MultiversionUsersets {
+// NewMultiversionUsersets creates a new MultiversionUsersets with the given 
+func NewMultiversionUsersets(s *Schema) *MultiversionUsersets {
 	return &MultiversionUsersets{
 		schema:   s,
 		tuples:   make(map[usersetKey]*VersionedSet),
@@ -77,7 +77,7 @@ func (u *MultiversionUsersets) SetObserver(obs UsersetsObserver) {
 }
 
 // Schema returns the schema for this userset store.
-func (u *MultiversionUsersets) Schema() *schema.Schema {
+func (u *MultiversionUsersets) Schema() *Schema {
 	return u.schema
 }
 
@@ -211,8 +211,8 @@ func (u *MultiversionUsersets) applyRemove(t Tuple, time StoreTime) {
 // Only constrains result by window.Max(); result min is the actual store time of accessed data.
 // Returns (found, narrowedWindow) where window.Min() == oldest time the answer is valid.
 func (u *MultiversionUsersets) ContainsDirectWithin(
-	objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-	subjectType schema.TypeID, subjectID schema.ID,
+	objectType TypeID, objectID ID, relation RelationID,
+	subjectType TypeID, subjectID ID,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow) {
 	// Constrain max to replicated time
@@ -223,7 +223,7 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 		ObjectID:        objectID,
 		Relation:        relation,
 		SubjectType:     subjectType,
-		SubjectRelation: schema.NoRelation,
+		SubjectRelation: NoRelation,
 	}
 	probe := u.observer.ContainsDirectStarted(obsKey, subjectID, window)
 	defer probe.End()
@@ -236,7 +236,7 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 		ObjectID:        objectID,
 		Relation:        relation,
 		SubjectType:     subjectType,
-		SubjectRelation: schema.NoRelation,
+		SubjectRelation: NoRelation,
 	}
 
 	vs, ok := u.tuples[key]
@@ -259,8 +259,8 @@ func (u *MultiversionUsersets) ContainsDirectWithin(
 // Unlike ContainsDirectWithin, this is for userset subjects (with a non-zero subjectRelation).
 // Returns (found, narrowedWindow) where window.Min() == oldest time the answer is valid.
 func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
-	objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-	subjectType schema.TypeID, subjectID schema.ID, subjectRelation schema.RelationID,
+	objectType TypeID, objectID ID, relation RelationID,
+	subjectType TypeID, subjectID ID, subjectRelation RelationID,
 	window SnapshotWindow,
 ) (bool, SnapshotWindow) {
 	// Constrain max to replicated time
@@ -306,8 +306,8 @@ func (u *MultiversionUsersets) ContainsUsersetSubjectWithin(
 // Returns the bitmap (possibly cloned) and narrowed window where window.Min() == store time.
 // Returns nil bitmap if no tuples exist.
 func (u *MultiversionUsersets) GetSubjectBitmapWithin(
-	objectType schema.TypeID, objectID schema.ID, relation schema.RelationID,
-	subjectType schema.TypeID, subjectRelation schema.RelationID,
+	objectType TypeID, objectID ID, relation RelationID,
+	subjectType TypeID, subjectRelation RelationID,
 	window SnapshotWindow,
 ) (*roaring.Bitmap, SnapshotWindow) {
 	// Constrain max to replicated time
@@ -362,8 +362,8 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 }
 
 // ValidateTuple checks that the object type, relation, and subject reference
-// are valid according to the schema.
-func (u *MultiversionUsersets) ValidateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
+// are valid according to the 
+func (u *MultiversionUsersets) ValidateTuple(objectType TypeName, relation RelationName, subjectType TypeName, subjectRelation RelationName) error {
 	ot, ok := u.schema.Types[objectType]
 	if !ok {
 		return fmt.Errorf("unknown object type: %s", objectType)

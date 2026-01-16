@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package falcon.graph;
+package falcon.infrastructure.graph;
 
-option go_package = "github.com/alechenninger/falcon/graph/proto;graphpb";
+option go_package = "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto;graphpb";
 
 // GraphService provides cross-node graph query operations.
 // These RPCs mirror the Graph interface methods for distributed execution.

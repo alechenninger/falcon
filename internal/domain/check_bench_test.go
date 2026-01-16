@@ -1,4 +1,4 @@
-package graph
+package domain
 
 import (
 	"context"
@@ -7,8 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
+	
 )
 
 // ScaleConfig defines parameters for building a large-scale authorization graph.
@@ -89,23 +88,23 @@ func (c ScaleConfig) Describe() string {
 // benchSchema creates a schema for scale testing with deep hierarchies and groups.
 // Type IDs: user=1, group=2, folder=3, document=4
 // Relation IDs: member=1, parent=1, viewer=2, editor=3
-func benchSchema() *schema.Schema {
-	s := &schema.Schema{
-		Types: map[schema.TypeName]*schema.ObjectType{
+func benchSchema() *Schema {
+	s := &Schema{
+		Types: map[TypeName]*ObjectType{
 			"user": {
 				ID:        1,
 				Name:      "user",
-				Relations: map[schema.RelationName]*schema.Relation{},
+				Relations: map[RelationName]*Relation{},
 			},
 			"group": {
 				ID:   2,
 				Name: "group",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[RelationName]*Relation{
 					"member": {
 						ID:   1,
 						Name: "member",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("user")),
+						Usersets: []Userset{
+							Direct(Ref("user")),
 						},
 					},
 				},
@@ -113,34 +112,34 @@ func benchSchema() *schema.Schema {
 			"folder": {
 				ID:   3,
 				Name: "folder",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[RelationName]*Relation{
 					"parent": {
 						ID:   1,
 						Name: "parent",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("folder")),
+						Usersets: []Userset{
+							Direct(Ref("folder")),
 						},
 					},
 					"viewer": {
 						ID:   2,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "viewer"),
+							Arrow("parent", "viewer"),
 						},
 					},
 					"editor": {
 						ID:   3,
 						Name: "editor",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "editor"),
+							Arrow("parent", "editor"),
 						},
 					},
 				},
@@ -148,35 +147,35 @@ func benchSchema() *schema.Schema {
 			"document": {
 				ID:   4,
 				Name: "document",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[RelationName]*Relation{
 					"parent": {
 						ID:   1,
 						Name: "parent",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("folder")),
+						Usersets: []Userset{
+							Direct(Ref("folder")),
 						},
 					},
 					"viewer": {
 						ID:   2,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Computed("editor"),
-							schema.Arrow("parent", "viewer"),
+							Computed("editor"),
+							Arrow("parent", "viewer"),
 						},
 					},
 					"editor": {
 						ID:   3,
 						Name: "editor",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),
-								schema.RefWithRelation("group", "member"),
+						Usersets: []Userset{
+							Direct(
+								Ref("user"),
+								RefWithRelation("group", "member"),
 							),
-							schema.Arrow("parent", "editor"),
+							Arrow("parent", "editor"),
 						},
 					},
 				},
@@ -209,11 +208,11 @@ type PopulatedGraph struct {
 
 // CheckQuery represents a single check query for benchmarking.
 type CheckQuery struct {
-	SubjectType schema.TypeName
-	SubjectID   schema.ID
-	ObjectType  schema.TypeName
-	ObjectID    schema.ID
-	Relation    schema.RelationName
+	SubjectType TypeName
+	SubjectID   ID
+	ObjectType  TypeName
+	ObjectID    ID
+	Relation    RelationName
 	Expected    bool // For validation
 }
 
@@ -230,11 +229,11 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 
 	// Track folder IDs at each level for hierarchy building
 	// Level 0 = root folders, Level N = leaf folders
-	foldersByLevel := make([][]schema.ID, cfg.FolderDepth+1)
-	nextFolderID := schema.ID(1)
+	foldersByLevel := make([][]ID, cfg.FolderDepth+1)
+	nextFolderID := ID(1)
 
 	// Create root folders
-	foldersByLevel[0] = make([]schema.ID, cfg.FoldersPerLevel)
+	foldersByLevel[0] = make([]ID, cfg.FoldersPerLevel)
 	for i := 0; i < cfg.FoldersPerLevel; i++ {
 		foldersByLevel[0][i] = nextFolderID
 		nextFolderID++
@@ -244,7 +243,7 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 	// Build folder hierarchy level by level
 	for level := 1; level <= cfg.FolderDepth; level++ {
 		parentFolders := foldersByLevel[level-1]
-		childFolders := make([]schema.ID, 0, len(parentFolders)*cfg.FoldersPerLevel)
+		childFolders := make([]ID, 0, len(parentFolders)*cfg.FoldersPerLevel)
 
 		for _, parentID := range parentFolders {
 			for i := 0; i < cfg.FoldersPerLevel; i++ {
@@ -271,39 +270,39 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 	}
 
 	// Create groups and populate with users
-	userAssignments := make([][]schema.ID, cfg.NumGroups) // groupID -> userIDs
-	for groupID := schema.ID(1); groupID <= schema.ID(cfg.NumGroups); groupID++ {
-		userAssignments[groupID-1] = make([]schema.ID, 0, cfg.UsersPerGroup)
+	userAssignments := make([][]ID, cfg.NumGroups) // groupID -> userIDs
+	for groupID := ID(1); groupID <= ID(cfg.NumGroups); groupID++ {
+		userAssignments[groupID-1] = make([]ID, 0, cfg.UsersPerGroup)
 		for i := 0; i < cfg.UsersPerGroup; i++ {
-			userID := schema.ID(rng.Intn(cfg.NumUsers) + 1)
+			userID := ID(rng.Intn(cfg.NumUsers) + 1)
 			g.AddDirect("group", groupID, "member", "user", userID, "")
 			userAssignments[groupID-1] = append(userAssignments[groupID-1], userID)
 		}
 	}
 
 	// Add viewers to folders (both groups and direct users)
-	allFolders := make([]schema.ID, 0, result.NumFolders)
+	allFolders := make([]ID, 0, result.NumFolders)
 	for _, level := range foldersByLevel {
 		allFolders = append(allFolders, level...)
 	}
 
-	folderViewerGroups := make(map[schema.ID][]schema.ID) // folderID -> groupIDs with access
-	folderViewerUsers := make(map[schema.ID][]schema.ID)  // folderID -> direct userIDs
+	folderViewerGroups := make(map[ID][]ID) // folderID -> groupIDs with access
+	folderViewerUsers := make(map[ID][]ID)  // folderID -> direct userIDs
 
 	for _, folderID := range allFolders {
 		// Add group viewers
-		groupsForFolder := make([]schema.ID, 0, cfg.GroupsPerFolder)
+		groupsForFolder := make([]ID, 0, cfg.GroupsPerFolder)
 		for i := 0; i < cfg.GroupsPerFolder; i++ {
-			groupID := schema.ID(rng.Intn(cfg.NumGroups) + 1)
+			groupID := ID(rng.Intn(cfg.NumGroups) + 1)
 			g.AddDirect("folder", folderID, "viewer", "group", groupID, "member")
 			groupsForFolder = append(groupsForFolder, groupID)
 		}
 		folderViewerGroups[folderID] = groupsForFolder
 
 		// Add direct viewers
-		directUsers := make([]schema.ID, 0, cfg.DirectViewersPerFolder)
+		directUsers := make([]ID, 0, cfg.DirectViewersPerFolder)
 		for i := 0; i < cfg.DirectViewersPerFolder; i++ {
-			userID := schema.ID(rng.Intn(cfg.NumUsers) + 1)
+			userID := ID(rng.Intn(cfg.NumUsers) + 1)
 			g.AddDirect("folder", folderID, "viewer", "user", userID, "")
 			directUsers = append(directUsers, userID)
 		}
@@ -312,8 +311,8 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 
 	// Create documents in leaf folders
 	leafFolders := foldersByLevel[cfg.FolderDepth]
-	nextDocID := schema.ID(1)
-	docParents := make(map[schema.ID]schema.ID) // docID -> parent folderID
+	nextDocID := ID(1)
+	docParents := make(map[ID]ID) // docID -> parent folderID
 
 	for _, folderID := range leafFolders {
 		for i := 0; i < cfg.DocumentsPerFolder; i++ {
@@ -342,7 +341,7 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 			// For simplicity, use leaf folder docs
 			if cfg.DocumentsPerFolder > 0 && len(leafFolders) > 0 {
 				leafFolder := leafFolders[rng.Intn(len(leafFolders))]
-				docID := schema.ID(rng.Intn(cfg.DocumentsPerFolder) + 1)
+				docID := ID(rng.Intn(cfg.DocumentsPerFolder) + 1)
 				// Adjust doc ID based on which leaf folder
 				leafIdx := 0
 				for j, lf := range leafFolders {
@@ -351,13 +350,13 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 						break
 					}
 				}
-				docID = schema.ID(leafIdx*cfg.DocumentsPerFolder + int(docID))
-				if docID <= schema.ID(result.NumDocs) {
+				docID = ID(leafIdx*cfg.DocumentsPerFolder + int(docID))
+				if docID <= ID(result.NumDocs) {
 					userID := directUsers[rng.Intn(len(directUsers))]
 					result.DirectUserDocs = append(result.DirectUserDocs, CheckQuery{
 						SubjectType: "user",
 						SubjectID:   userID,
-						ObjectType:  "document",
+	ObjectType:  "document",
 						ObjectID:    docID,
 						Relation:    "viewer",
 						Expected:    true,
@@ -386,13 +385,13 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 						break
 					}
 				}
-				docID := schema.ID(leafIdx*cfg.DocumentsPerFolder + rng.Intn(cfg.DocumentsPerFolder) + 1)
-				if docID <= schema.ID(result.NumDocs) {
+				docID := ID(leafIdx*cfg.DocumentsPerFolder + rng.Intn(cfg.DocumentsPerFolder) + 1)
+				if docID <= ID(result.NumDocs) {
 					userID := users[rng.Intn(len(users))]
 					result.GroupUserDocs = append(result.GroupUserDocs, CheckQuery{
 						SubjectType: "user",
 						SubjectID:   userID,
-						ObjectType:  "document",
+	ObjectType:  "document",
 						ObjectID:    docID,
 						Relation:    "viewer",
 						Expected:    true,
@@ -409,11 +408,11 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 			directUsers := folderViewerUsers[folderID]
 			if len(directUsers) > 0 && result.NumDocs > 0 {
 				userID := directUsers[rng.Intn(len(directUsers))]
-				docID := schema.ID(rng.Intn(result.NumDocs) + 1)
+				docID := ID(rng.Intn(result.NumDocs) + 1)
 				result.ShallowArrowDocs = append(result.ShallowArrowDocs, CheckQuery{
 					SubjectType: "user",
 					SubjectID:   userID,
-					ObjectType:  "document",
+	ObjectType:  "document",
 					ObjectID:    docID,
 					Relation:    "viewer",
 					Expected:    true, // May or may not be true depending on structure
@@ -429,11 +428,11 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 			directUsers := folderViewerUsers[folderID]
 			if len(directUsers) > 0 && result.NumDocs > 0 {
 				userID := directUsers[rng.Intn(len(directUsers))]
-				docID := schema.ID(rng.Intn(result.NumDocs) + 1)
+				docID := ID(rng.Intn(result.NumDocs) + 1)
 				result.DeepArrowDocs = append(result.DeepArrowDocs, CheckQuery{
 					SubjectType: "user",
 					SubjectID:   userID,
-					ObjectType:  "document",
+	ObjectType:  "document",
 					ObjectID:    docID,
 					Relation:    "viewer",
 					Expected:    true,
@@ -445,12 +444,12 @@ func buildLargeGraph(cfg ScaleConfig) *PopulatedGraph {
 	// 5. Negative checks (users with no access)
 	for i := 0; i < 100; i++ {
 		// Use user IDs that are unlikely to have access
-		userID := schema.ID(cfg.NumUsers + 1000 + rng.Intn(1000))
-		docID := schema.ID(rng.Intn(max(1, result.NumDocs)) + 1)
+		userID := ID(cfg.NumUsers + 1000 + rng.Intn(1000))
+		docID := ID(rng.Intn(max(1, result.NumDocs)) + 1)
 		result.NegativeChecks = append(result.NegativeChecks, CheckQuery{
 			SubjectType: "user",
 			SubjectID:   userID,
-			ObjectType:  "document",
+	ObjectType:  "document",
 			ObjectID:    docID,
 			Relation:    "viewer",
 			Expected:    false,
@@ -837,7 +836,7 @@ func BenchmarkGCIteration(b *testing.B) {
 			b.Logf("Tuples: %d, Usersets: %d", pg.TotalTuples, usersetCount)
 
 			// Cutoff of 0 keeps all history but still iterates every userset
-			cutoff := store.StoreTime(0)
+			cutoff := StoreTime(0)
 
 			b.ResetTimer()
 			for b.Loop() {

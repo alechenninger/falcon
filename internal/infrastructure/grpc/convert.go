@@ -6,8 +6,7 @@ import (
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/alechenninger/falcon/internal/domain"
-	graphpb "github.com/alechenninger/falcon/graph/proto"
-	"github.com/alechenninger/falcon/schema"
+	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 )
 
 // SnapshotWindowToProto converts a domain.SnapshotWindow to its proto representation.
@@ -63,9 +62,9 @@ func VisitedKeysFromProto(visited []*graphpb.VisitedNode) []domain.VisitedKey {
 	result := make([]domain.VisitedKey, len(visited))
 	for i, v := range visited {
 		result[i] = domain.VisitedKey{
-			ObjectType: schema.TypeID(v.ObjectTypeId),
-			ObjectID:   schema.ID(v.ObjectId),
-			Relation:   schema.RelationID(v.RelationId),
+			ObjectType: domain.TypeID(v.ObjectTypeId),
+			ObjectID:   domain.ID(v.ObjectId),
+			Relation:   domain.RelationID(v.RelationId),
 		}
 	}
 	return result
@@ -100,9 +99,9 @@ func RelationChecksFromProto(checks []*graphpb.RelationCheck) ([]domain.Relation
 			}
 		}
 		result[i] = domain.RelationCheck{
-			ObjectType: schema.TypeID(c.ObjectTypeId),
+			ObjectType: domain.TypeID(c.ObjectTypeId),
 			ObjectIDs:  bitmap,
-			Relation:   schema.RelationID(c.RelationId),
+			Relation:   domain.RelationID(c.RelationId),
 			Window:     SnapshotWindowFromProto(c.Window),
 		}
 	}
@@ -142,8 +141,8 @@ func DependentSetsFromProto(sets []*graphpb.DependentSet) []domain.DependentSet 
 			bitmap.FromBuffer(s.ObjectIds)
 		}
 		result[i] = domain.DependentSet{
-			ObjectType: schema.TypeID(s.ObjectTypeId),
-			Relation:   schema.RelationID(s.RelationId),
+			ObjectType: domain.TypeID(s.ObjectTypeId),
+			Relation:   domain.RelationID(s.RelationId),
 			ObjectIDs:  bitmap,
 		}
 	}

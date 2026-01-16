@@ -1,11 +1,11 @@
-package graph_test
+package domain_test
 
 import (
 	"context"
 	"testing"
 
-	"github.com/alechenninger/falcon/graph"
-	"github.com/alechenninger/falcon/schema"
+	"github.com/alechenninger/falcon/internal/domain"
+	
 )
 
 var ctx = context.Background()
@@ -20,23 +20,23 @@ var ctx = context.Background()
 //
 // Type IDs: user=1, group=2, folder=3, document=4
 // Relation IDs: member=1, parent=1, viewer=2, editor=3
-func testSchema() *schema.Schema {
-	s := &schema.Schema{
-		Types: map[schema.TypeName]*schema.ObjectType{
+func testSchema() *domain.Schema {
+	s := &domain.Schema{
+		Types: map[domain.TypeName]*domain.ObjectType{
 			"user": {
 				ID:        1,
 				Name:      "user",
-				Relations: map[schema.RelationName]*schema.Relation{},
+				Relations: map[domain.RelationName]*domain.Relation{},
 			},
 			"group": {
 				ID:   2,
 				Name: "group",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[domain.RelationName]*domain.Relation{
 					"member": {
 						ID:   1,
 						Name: "member",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("user")), // @user:1
+						Usersets: []domain.Userset{
+							domain.Direct(domain.Ref("user")), // @user:1
 						},
 					},
 				},
@@ -44,23 +44,23 @@ func testSchema() *schema.Schema {
 			"folder": {
 				ID:   3,
 				Name: "folder",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[domain.RelationName]*domain.Relation{
 					"parent": {
 						ID:   1,
 						Name: "parent",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("folder")), // @folder:1
+						Usersets: []domain.Userset{
+							domain.Direct(domain.Ref("folder")), // @folder:1
 						},
 					},
 					"viewer": {
 						ID:   2,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),                        // @user:1
-								schema.RefWithRelation("group", "member"), // @group:1#member
+						Usersets: []domain.Userset{
+							domain.Direct(
+								domain.Ref("user"),                        // @user:1
+								domain.RefWithRelation("group", "member"), // @group:1#member
 							),
-							schema.Arrow("parent", "viewer"), // viewers of parent folder
+							domain.Arrow("parent", "viewer"), // viewers of parent folder
 						},
 					},
 				},
@@ -68,35 +68,35 @@ func testSchema() *schema.Schema {
 			"document": {
 				ID:   4,
 				Name: "document",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[domain.RelationName]*domain.Relation{
 					"parent": {
 						ID:   1,
 						Name: "parent",
-						Usersets: []schema.Userset{
-							schema.Direct(schema.Ref("folder")), // @folder:1
+						Usersets: []domain.Userset{
+							domain.Direct(domain.Ref("folder")), // @folder:1
 						},
 					},
 					"editor": {
 						ID:   3,
 						Name: "editor",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),                        // @user:1
-								schema.RefWithRelation("group", "member"), // @group:1#member
+						Usersets: []domain.Userset{
+							domain.Direct(
+								domain.Ref("user"),                        // @user:1
+								domain.RefWithRelation("group", "member"), // @group:1#member
 							),
-							schema.Arrow("parent", "editor"), // editors of parent folder
+							domain.Arrow("parent", "editor"), // editors of parent folder
 						},
 					},
 					"viewer": {
 						ID:   2,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),                        // @user:1
-								schema.RefWithRelation("group", "member"), // @group:1#member
+						Usersets: []domain.Userset{
+							domain.Direct(
+								domain.Ref("user"),                        // @user:1
+								domain.RefWithRelation("group", "member"), // @group:1#member
 							),
-							schema.Computed("editor"),        // editors can view
-							schema.Arrow("parent", "viewer"), // viewers of parent folder
+							domain.Computed("editor"),        // editors can view
+							domain.Arrow("parent", "viewer"), // viewers of parent folder
 						},
 					},
 				},
@@ -109,7 +109,7 @@ func testSchema() *schema.Schema {
 
 func TestCheck_DirectMembership(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	// Add user 1 as a direct viewer of document 100
 	const (
@@ -143,7 +143,7 @@ func TestCheck_DirectMembership(t *testing.T) {
 
 func TestCheck_ComputedRelation(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	// Add user 1 as an editor of document 100
 	const (
@@ -186,7 +186,7 @@ func TestCheck_ComputedRelation(t *testing.T) {
 
 func TestCheck_ArrowTraversal(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	// Setup: folder 10 is parent of document 100
 	// User 1 is a viewer of folder 10
@@ -228,7 +228,7 @@ func TestCheck_ArrowTraversal(t *testing.T) {
 
 func TestCheck_NestedArrowTraversal(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	// Setup: folder 20 is parent of folder 10, folder 10 is parent of document 100
 	// User 1 is a viewer of folder 20
@@ -275,39 +275,39 @@ func TestCheck_NestedArrowTraversal(t *testing.T) {
 
 func TestCheck_UnknownObjectType(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 	defer g.Close()
 
-	// Use an invalid TypeID (255 is reserved/invalid in the test schema)
+	// Use an invalid domain.TypeID (255 is reserved/invalid in the test schema)
 	_, _, err := g.LocalGraph.Check(ctx,
 		s.GetTypeID("user"), 1,
-		schema.TypeID(255), 100, // invalid type ID
-		schema.RelationID(1),
-		graph.MaxSnapshotWindow, nil)
+		domain.TypeID(255), 100, // invalid type domain.ID
+		domain.RelationID(1),
+		domain.MaxSnapshotWindow, nil)
 	if err == nil {
-		t.Error("expected error for unknown object type ID")
+		t.Error("expected error for unknown object type domain.ID")
 	}
 }
 
 func TestCheck_UnknownRelation(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 	defer g.Close()
 
-	// Use an invalid RelationID (255 is reserved/invalid in the test schema)
+	// Use an invalid domain.RelationID (255 is reserved/invalid in the test schema)
 	_, _, err := g.LocalGraph.Check(ctx,
 		s.GetTypeID("user"), 1,
 		s.GetTypeID("document"), 100,
-		schema.RelationID(255), // invalid relation ID
-		graph.MaxSnapshotWindow, nil)
+		domain.RelationID(255), // invalid relation domain.ID
+		domain.MaxSnapshotWindow, nil)
 	if err == nil {
-		t.Error("expected error for unknown relation ID")
+		t.Error("expected error for unknown relation domain.ID")
 	}
 }
 
 func TestAddTuple_UnknownObjectType(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	err := g.WriteTuple(ctx, "unknown_type", 100, "viewer", "user", 1, "")
 	if err == nil {
@@ -317,7 +317,7 @@ func TestAddTuple_UnknownObjectType(t *testing.T) {
 
 func TestAddTuple_UnknownRelation(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	err := g.WriteTuple(ctx, "document", 100, "unknown_relation", "user", 1, "")
 	if err == nil {
@@ -327,7 +327,7 @@ func TestAddTuple_UnknownRelation(t *testing.T) {
 
 func TestRemoveTuple(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		user1  = 1
@@ -365,7 +365,7 @@ func TestRemoveTuple(t *testing.T) {
 
 func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		alice   = 1
@@ -394,11 +394,11 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		subjectType schema.TypeName
-		subjectID   schema.ID
-		objectType  schema.TypeName
-		objectID    schema.ID
-		relation    schema.RelationName
+		subjectType domain.TypeName
+		subjectID   domain.ID
+		objectType  domain.TypeName
+		objectID    domain.ID
+		relation    domain.RelationName
 		want        bool
 	}{
 		{"alice can view doc1", "user", alice, "document", doc1, "viewer", true},
@@ -429,7 +429,7 @@ func TestCheck_MultipleUsersAndDocuments(t *testing.T) {
 func TestCheck_DirectRelationOnly(t *testing.T) {
 	// Test a relation with no usersets (direct-only)
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		user1   = 1
@@ -451,16 +451,16 @@ func TestCheck_DirectRelationOnly(t *testing.T) {
 	}
 }
 
-// TestCheck_SubjectTypeDistinction verifies that subjects with the same ID but
+// TestCheck_SubjectTypeDistinction verifies that subjects with the same domain.ID but
 // different subject references (type + relation) are correctly distinguished.
 func TestCheck_SubjectTypeDistinction(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		doc100 = 100
 		group1 = 1
-		alice  = 1 // Same ID as group1!
+		alice  = 1 // Same domain.ID as group1!
 	)
 
 	// Add group:1#member as viewers of doc100 (userset subject)
@@ -497,11 +497,11 @@ func TestCheck_SubjectTypeDistinction(t *testing.T) {
 // (direct) and group:1#member (userset) as viewers, and they are tracked separately.
 func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		doc100 = 100
-		id1    = 1 // Same ID for user and group
+		id1    = 1 // Same domain.ID for user and group
 	)
 
 	// Alice (user:1) is a member of group:1
@@ -559,7 +559,7 @@ func TestCheck_BothSubjectRefsWithSameID(t *testing.T) {
 // which means "all members of group 1 are viewers of document 100".
 func TestCheck_UsersetSubject(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		alice   = 1
@@ -614,7 +614,7 @@ func TestCheck_UsersetSubject(t *testing.T) {
 // TestCheck_UsersetSubject_MultipleGroups tests multiple userset subjects.
 func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		alice   = 1
@@ -674,7 +674,7 @@ func TestCheck_UsersetSubject_MultipleGroups(t *testing.T) {
 // TestCheck_UsersetAndDirectCombined tests combining direct and userset subjects.
 func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		alice   = 1
@@ -730,7 +730,7 @@ func TestCheck_UsersetAndDirectCombined(t *testing.T) {
 // TestRemoveTuple_UsersetSubject tests removing userset subject tuples.
 func TestRemoveTuple_UsersetSubject(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		alice  = 1
@@ -784,7 +784,7 @@ func TestRemoveTuple_UsersetSubject(t *testing.T) {
 // Result: alice can view document:100 via parent→viewer arrow + userset subject
 func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		alice    = 1
@@ -846,34 +846,34 @@ func TestCheck_ArrowWithUsersetSubject(t *testing.T) {
 }
 
 // TestCheck_DirectSubjectTypeCollision tests that direct subjects of different types
-// with the same ID are correctly distinguished. This uses a custom schema that allows
+// with the same domain.ID are correctly distinguished. This uses a custom schema that allows
 // multiple direct subject types (no subject relations) on the same relation.
 func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	// Create a schema where "resource" has a "viewer" relation that allows
 	// both "user" and "serviceAccount" as direct subjects
-	s := &schema.Schema{
-		Types: map[schema.TypeName]*schema.ObjectType{
+	s := &domain.Schema{
+		Types: map[domain.TypeName]*domain.ObjectType{
 			"user": {
 				ID:        1,
 				Name:      "user",
-				Relations: map[schema.RelationName]*schema.Relation{},
+				Relations: map[domain.RelationName]*domain.Relation{},
 			},
 			"serviceAccount": {
 				ID:        2,
 				Name:      "serviceAccount",
-				Relations: map[schema.RelationName]*schema.Relation{},
+				Relations: map[domain.RelationName]*domain.Relation{},
 			},
 			"resource": {
 				ID:   3,
 				Name: "resource",
-				Relations: map[schema.RelationName]*schema.Relation{
+				Relations: map[domain.RelationName]*domain.Relation{
 					"viewer": {
 						ID:   1,
 						Name: "viewer",
-						Usersets: []schema.Userset{
-							schema.Direct(
-								schema.Ref("user"),           // @user:1
-								schema.Ref("serviceAccount"), // @serviceAccount:1
+						Usersets: []domain.Userset{
+							domain.Direct(
+								domain.Ref("user"),           // @user:1
+								domain.Ref("serviceAccount"), // @serviceAccount:1
 							),
 						},
 					},
@@ -883,11 +883,11 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 	}
 	s.Compile()
 
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 
 	const (
 		resource1 = 100
-		id1       = 1 // Same ID for both user and serviceAccount
+		id1       = 1 // Same domain.ID for both user and serviceAccount
 	)
 
 	// Add serviceAccount:1 as a viewer (direct subject)
@@ -904,7 +904,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 		t.Error("expected serviceAccount:1 to be viewer")
 	}
 
-	// user:1 should NOT be a viewer (different type, same ID)
+	// user:1 should NOT be a viewer (different type, same domain.ID)
 	ok, _, err = g.Check(ctx, "user", id1, "resource", resource1, "viewer")
 	if err != nil {
 		t.Fatalf("Check (user) failed: %v", err)
@@ -962,7 +962,7 @@ func TestCheck_DirectSubjectTypeCollision(t *testing.T) {
 func TestCheck_UnionWindowNarrowing_AllFalse(t *testing.T) {
 	// Schema with a relation that has multiple userset types (direct + group member)
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 	defer g.Close()
 
 	const (
@@ -991,7 +991,7 @@ func TestCheck_UnionWindowNarrowing_AllFalse(t *testing.T) {
 
 	// Check alice (who is NOT in any relation) - should be false
 	// The window should be narrowed from all the "false" checks
-	window := graph.MaxSnapshotWindow
+	window := domain.MaxSnapshotWindow
 	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
@@ -1016,7 +1016,7 @@ func TestCheck_UnionWindowNarrowing_AllFalse(t *testing.T) {
 // a union returns true, we use that window (not affected by subsequent checks).
 func TestCheck_UnionWindowNarrowing_FirstTrue(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 	defer g.Close()
 
 	const (
@@ -1041,7 +1041,7 @@ func TestCheck_UnionWindowNarrowing_FirstTrue(t *testing.T) {
 	time3 := g.ReplicatedTime()
 
 	// Check alice - should find via direct (first userset)
-	window := graph.MaxSnapshotWindow
+	window := domain.MaxSnapshotWindow
 	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
@@ -1052,7 +1052,7 @@ func TestCheck_UnionWindowNarrowing_FirstTrue(t *testing.T) {
 
 	// The window should be from the direct check only [1, 3]
 	// Min = 1 (when direct tuple was added), Max = replicated time
-	expectedWindow := graph.NewSnapshotWindow(time1, time3)
+	expectedWindow := domain.NewSnapshotWindow(time1, time3)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}
@@ -1062,7 +1062,7 @@ func TestCheck_UnionWindowNarrowing_FirstTrue(t *testing.T) {
 // we use that window and don't include windows from prior "false" checks.
 func TestCheck_UnionWindowNarrowing_LaterTrue(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 	defer g.Close()
 
 	const (
@@ -1089,7 +1089,7 @@ func TestCheck_UnionWindowNarrowing_LaterTrue(t *testing.T) {
 	time3 := g.ReplicatedTime()
 
 	// Check alice - should NOT find via direct, but SHOULD find via group
-	window := graph.MaxSnapshotWindow
+	window := domain.MaxSnapshotWindow
 	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
@@ -1112,7 +1112,7 @@ func TestCheck_UnionWindowNarrowing_LaterTrue(t *testing.T) {
 // handles MVCC time-travel scenarios where data is added then removed.
 func TestCheck_WindowNarrowing_MVCCTimeTravel(t *testing.T) {
 	s := testSchema()
-	g := graph.NewTestGraph(s)
+	g := newTestGraph(s)
 	defer g.Close()
 
 	const (
@@ -1133,7 +1133,7 @@ func TestCheck_WindowNarrowing_MVCCTimeTravel(t *testing.T) {
 	time2 := g.ReplicatedTime()
 
 	// At current time (time 2), alice is NOT a viewer
-	window := graph.MaxSnapshotWindow
+	window := domain.MaxSnapshotWindow
 	ok, resultWindow, err := g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &window)
 	if err != nil {
 		t.Fatalf("CheckAt failed: %v", err)
@@ -1149,7 +1149,7 @@ func TestCheck_WindowNarrowing_MVCCTimeTravel(t *testing.T) {
 	}
 
 	// Time-travel to time1 - alice SHOULD be a viewer
-	windowAtTime1 := graph.NewSnapshotWindow(0, time1)
+	windowAtTime1 := domain.NewSnapshotWindow(0, time1)
 	ok, resultWindow, err = g.CheckAt(ctx, "user", alice, "document", doc100, "viewer", &windowAtTime1)
 	if err != nil {
 		t.Fatalf("CheckAt at time1 failed: %v", err)
@@ -1158,7 +1158,7 @@ func TestCheck_WindowNarrowing_MVCCTimeTravel(t *testing.T) {
 		t.Error("expected alice to be viewer at time1")
 	}
 	// Window should be [1, 1]
-	expectedWindow := graph.NewSnapshotWindow(time1, time1)
+	expectedWindow := domain.NewSnapshotWindow(time1, time1)
 	if resultWindow != expectedWindow {
 		t.Errorf("expected window %v, got %v", expectedWindow, resultWindow)
 	}

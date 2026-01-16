@@ -19,8 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GraphService_Check_FullMethodName      = "/falcon.graph.GraphService/Check"
-	GraphService_CheckUnion_FullMethodName = "/falcon.graph.GraphService/CheckUnion"
+	GraphService_Check_FullMethodName      = "/falcon.infrastructure.graph.GraphService/Check"
+	GraphService_CheckUnion_FullMethodName = "/falcon.infrastructure.graph.GraphService/CheckUnion"
 )
 
 // GraphServiceClient is the client API for GraphService service.
@@ -164,7 +164,7 @@ func _GraphService_CheckUnion_Handler(srv interface{}, ctx context.Context, dec 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var GraphService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "falcon.graph.GraphService",
+	ServiceName: "falcon.infrastructure.graph.GraphService",
 	HandlerType: (*GraphServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

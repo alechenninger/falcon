@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/alechenninger/falcon/internal/domain"
-	"github.com/alechenninger/falcon/schema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -133,12 +132,12 @@ func (it *pgxRowsIterator) Next() bool {
 	}
 
 	it.current = domain.Tuple{
-		ObjectType:      schema.TypeID(objectType),
-		ObjectID:        schema.ID(objectID),
-		Relation:        schema.RelationID(relation),
-		SubjectType:     schema.TypeID(subjectType),
-		SubjectID:       schema.ID(subjectID),
-		SubjectRelation: schema.RelationID(subjectRelation),
+		ObjectType:      domain.TypeID(objectType),
+		ObjectID:        domain.ID(objectID),
+		Relation:        domain.RelationID(relation),
+		SubjectType:     domain.TypeID(subjectType),
+		SubjectID:       domain.ID(subjectID),
+		SubjectRelation: domain.RelationID(subjectRelation),
 	}
 	return true
 }

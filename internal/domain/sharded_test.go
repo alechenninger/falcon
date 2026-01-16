@@ -1,4 +1,4 @@
-package graph_test
+package domain_test
 
 import (
 	"context"
@@ -7,47 +7,47 @@ import (
 	"testing"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/graph"
-	"github.com/alechenninger/falcon/schema"
-	"github.com/alechenninger/falcon/store"
+	"github.com/alechenninger/falcon/internal/domain"
+	"github.com/alechenninger/falcon/internal/infrastructure/memory"
+	
 )
 
 // TestShardedGraph holds multiple sharded graphs sharing a single store.
 type TestShardedGraph struct {
-	store    *store.MemoryStore
-	schema   *schema.Schema
-	shards   map[graph.ShardID]*shardedTestNode
-	assigner graph.Router
+	store    *memory.Store
+	schema   *domain.Schema
+	shards   map[domain.ShardID]*shardedTestNode
+	assigner domain.Router
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
 // shardedTestNode wraps a ShardedGraph with its observer for waiting on writes.
 type shardedTestNode struct {
-	graph    *graph.ShardedGraph
-	observer *graph.SignalingObserver
+	graph    *domain.ShardedGraph
+	observer *domain.SignalingObserver
 }
 
 // NewTestShardedGraph creates a test setup with multiple shards sharing a store.
 // The assigner function determines which shard owns each object.
-func NewTestShardedGraph(s *schema.Schema, shardIDs []graph.ShardID, router graph.Router) *TestShardedGraph {
+func NewTestShardedGraph(s *domain.Schema, shardIDs []domain.ShardID, router domain.Router) *TestShardedGraph {
 	ctx, cancel := context.WithCancel(context.Background())
-	ms := store.NewMemoryStore()
+	ms := memory.NewStore()
 
 	// Create nodes map first
-	nodes := make(map[graph.ShardID]*shardedTestNode)
+	nodes := make(map[domain.ShardID]*shardedTestNode)
 	for _, shardID := range shardIDs {
 		nodes[shardID] = &shardedTestNode{
-			observer: graph.NewSignalingObserver(),
+			observer: domain.NewSignalingObserver(),
 		}
 	}
 
 	// Create all graphs with cross-references
 	// We need to build the shard map first, then create all graphs
 	for _, shardID := range shardIDs {
-		remoteShards := make(map[graph.ShardID]graph.Graph)
+		remoteShards := make(map[domain.ShardID]domain.Graph)
 		// Remote shards will be set after all graphs are created
-		nodes[shardID].graph = graph.NewShardedGraph(shardID, s, router, remoteShards, ms, ms).
+		nodes[shardID].graph = domain.NewShardedGraph(shardID, s, router, remoteShards, ms, ms).
 			WithUsersetsObserver(nodes[shardID].observer)
 	}
 
@@ -86,14 +86,14 @@ func NewTestShardedGraph(s *schema.Schema, shardIDs []graph.ShardID, router grap
 	return tsg
 }
 
-// Shard returns the graph for the given shard ID.
-func (tsg *TestShardedGraph) Shard(id graph.ShardID) *graph.ShardedGraph {
+// Shard returns the graph for the given shard domain.ID.
+func (tsg *TestShardedGraph) Shard(id domain.ShardID) *domain.ShardedGraph {
 	return tsg.shards[id].graph
 }
 
 // WriteTuple writes a tuple and waits for all shards to apply it.
 // Takes string names for convenience and converts to IDs internally.
-func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
+func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType domain.TypeName, objectID domain.ID, relation domain.RelationName, subjectType domain.TypeName, subjectID domain.ID, subjectRelation domain.RelationName) error {
 	// Validate against any shard (they all share the schema)
 	for _, node := range tsg.shards {
 		if err := node.graph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
@@ -103,8 +103,8 @@ func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType schema.T
 	}
 
 	s := tsg.schema
-	if err := tsg.store.WriteTuple(ctx, store.Tuple{
-		ObjectType:      s.GetTypeID(objectType),
+	if err := tsg.store.WriteTuple(ctx, domain.Tuple{
+	ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
 		SubjectType:     s.GetTypeID(subjectType),
@@ -124,7 +124,7 @@ func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType schema.T
 
 // DeleteTuple deletes a tuple and waits for all shards to apply it.
 // Takes string names for convenience and converts to IDs internally.
-func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName, subjectType schema.TypeName, subjectID schema.ID, subjectRelation schema.RelationName) error {
+func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType domain.TypeName, objectID domain.ID, relation domain.RelationName, subjectType domain.TypeName, subjectID domain.ID, subjectRelation domain.RelationName) error {
 	// Validate against any shard (they all share the schema)
 	for _, node := range tsg.shards {
 		if err := node.graph.ValidateTuple(objectType, relation, subjectType, subjectRelation); err != nil {
@@ -134,8 +134,8 @@ func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType schema.
 	}
 
 	s := tsg.schema
-	if err := tsg.store.DeleteTuple(ctx, store.Tuple{
-		ObjectType:      s.GetTypeID(objectType),
+	if err := tsg.store.DeleteTuple(ctx, domain.Tuple{
+	ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
 		SubjectType:     s.GetTypeID(subjectType),
@@ -155,25 +155,25 @@ func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType schema.
 
 // Check is a convenience wrapper that calls Check with MaxSnapshotWindow and nil visited.
 // Takes string names for convenience and converts to IDs internally.
-func (tsg *TestShardedGraph) Check(ctx context.Context, shardID graph.ShardID, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectID schema.ID, relation schema.RelationName) (bool, error) {
+func (tsg *TestShardedGraph) Check(ctx context.Context, shardID domain.ShardID, subjectType domain.TypeName, subjectID domain.ID, objectType domain.TypeName, objectID domain.ID, relation domain.RelationName) (bool, error) {
 	s := tsg.shards[shardID].graph.Schema()
 	ok, _, err := tsg.shards[shardID].graph.Check(ctx,
 		s.GetTypeID(subjectType), subjectID,
 		s.GetTypeID(objectType), objectID,
 		s.GetRelationID(objectType, relation),
-		graph.MaxSnapshotWindow, nil)
+		domain.MaxSnapshotWindow, nil)
 	return ok, err
 }
 
 // CheckUnion is a convenience wrapper for CheckUnion that takes string names.
 // Takes string names for convenience and converts to IDs internally.
-func (tsg *TestShardedGraph) CheckUnion(ctx context.Context, shardID graph.ShardID, subjectType schema.TypeName, subjectID schema.ID, objectType schema.TypeName, objectIDs *roaring.Bitmap, relation schema.RelationName) (graph.CheckResult, error) {
+func (tsg *TestShardedGraph) CheckUnion(ctx context.Context, shardID domain.ShardID, subjectType domain.TypeName, subjectID domain.ID, objectType domain.TypeName, objectIDs *roaring.Bitmap, relation domain.RelationName) (domain.CheckResult, error) {
 	s := tsg.shards[shardID].graph.Schema()
-	checks := []graph.RelationCheck{{
-		ObjectType: s.GetTypeID(objectType),
+	checks := []domain.RelationCheck{{
+	ObjectType: s.GetTypeID(objectType),
 		ObjectIDs:  objectIDs,
 		Relation:   s.GetRelationID(objectType, relation),
-		Window:     graph.MaxSnapshotWindow,
+		Window:     domain.MaxSnapshotWindow,
 	}}
 	return tsg.shards[shardID].graph.CheckUnion(ctx,
 		s.GetTypeID(subjectType), subjectID,
@@ -187,21 +187,21 @@ func (tsg *TestShardedGraph) Close() {
 
 // byObjectType returns a Router that assigns shards by object type.
 // The schema is used to convert TypeNames to TypeIDs for the mapping.
-func byObjectType(s *schema.Schema, mapping map[schema.TypeName]graph.ShardID) graph.Router {
-	// Build a TypeID-based lookup
-	idMapping := make(map[schema.TypeID]graph.ShardID, len(mapping))
+func byObjectType(s *domain.Schema, mapping map[domain.TypeName]domain.ShardID) domain.Router {
+	// Build a domain.TypeID-based lookup
+	idMapping := make(map[domain.TypeID]domain.ShardID, len(mapping))
 	for typeName, shardID := range mapping {
 		idMapping[s.GetTypeID(typeName)] = shardID
 	}
-	return func(objectType schema.TypeID, objectID schema.ID) graph.ShardID {
+	return func(objectType domain.TypeID, objectID domain.ID) domain.ShardID {
 		return idMapping[objectType]
 	}
 }
 
 // testRouter creates a Router from a function that takes type name as string.
 // This is a test helper to minimize changes in test code.
-func testRouter(s *schema.Schema, fn func(typeName string, objectID schema.ID) graph.ShardID) graph.Router {
-	return func(objectType schema.TypeID, objectID schema.ID) graph.ShardID {
+func testRouter(s *domain.Schema, fn func(typeName string, objectID domain.ID) domain.ShardID) domain.Router {
+	return func(objectType domain.TypeID, objectID domain.ID) domain.ShardID {
 		ot := s.TypeByID(objectType)
 		if ot == nil {
 			return ""
@@ -215,14 +215,14 @@ func TestShardedGraph_LocalCheck(t *testing.T) {
 	s := testSchema()
 
 	// Shard by type: documents on shard1, folders on shard2
-	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[domain.TypeName]domain.ShardID{
 		"document": "shard1",
 		"folder":   "shard2",
 		"group":    "shard1",
 		"user":     "shard1",
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -260,14 +260,14 @@ func TestShardedGraph_CrossShardArrow(t *testing.T) {
 	s := testSchema()
 
 	// Shard by type: documents on shard1, folders on shard2
-	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[domain.TypeName]domain.ShardID{
 		"document": "shard1",
 		"folder":   "shard2",
 		"group":    "shard2",
 		"user":     "shard1",
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -313,14 +313,14 @@ func TestShardedGraph_CrossShardUserset(t *testing.T) {
 	s := testSchema()
 
 	// Shard by type: documents on shard1, groups on shard2
-	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[domain.TypeName]domain.ShardID{
 		"document": "shard1",
 		"folder":   "shard1",
 		"group":    "shard2",
 		"user":     "shard1",
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -364,8 +364,8 @@ func TestShardedGraph_CrossShardUserset(t *testing.T) {
 func TestShardedGraph_NestedCrossShardArrow(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding to spread folders across shards
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding to spread folders across shards
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -376,7 +376,7 @@ func TestShardedGraph_NestedCrossShardArrow(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -426,8 +426,8 @@ func TestShardedGraph_NestedCrossShardArrow(t *testing.T) {
 func TestShardedGraph_CheckUnionMultipleShards(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -437,7 +437,7 @@ func TestShardedGraph_CheckUnionMultipleShards(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -480,14 +480,14 @@ func TestShardedGraph_ArrowWithCrossShardUserset(t *testing.T) {
 	s := testSchema()
 
 	// documents on shard1, folders on shard2, groups on shard3
-	router := byObjectType(s, map[schema.TypeName]graph.ShardID{
+	router := byObjectType(s, map[domain.TypeName]domain.ShardID{
 		"document": "shard1",
 		"folder":   "shard2",
 		"group":    "shard3",
 		"user":     "shard1",
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
 
 	const (
@@ -538,8 +538,8 @@ func TestShardedGraph_ArrowWithCrossShardUserset(t *testing.T) {
 func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders: even on shard1, odd on shard2
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -549,7 +549,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -593,8 +593,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders: even on shard1, odd on shard2
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -604,7 +604,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -651,7 +651,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 
 	// The result window should have been narrowed (not be MaxSnapshotWindow anymore)
 	// Since we wrote tuples, the replicated time should be > 0
-	if result.Window.Min() == 0 && result.Window.Max() == graph.MaxSnapshotWindow.Max() {
+	if result.Window.Min() == 0 && result.Window.Max() == domain.MaxSnapshotWindow.Max() {
 		// This would mean no narrowing happened, which is wrong
 		t.Log("Warning: result window appears unchanged from MaxSnapshotWindow")
 	}
@@ -662,8 +662,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			switch objectID % 3 {
 			case 0:
@@ -677,7 +677,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
 
 	const (
@@ -727,11 +727,11 @@ func TestShardedGraph_CheckUnionWindowNarrowing_LocalOnly(t *testing.T) {
 	s := testSchema()
 
 	// All folders on shard1 (local)
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1"}, router)
 	defer tsg.Close()
 
 	const (
@@ -795,7 +795,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Positive(t *testing.T
 
 	// Folders distributed across multiple remote shards (none on shard1)
 	// folder10 -> shard2, folder11 -> shard3, folder12 -> shard2, folder13 -> shard3
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard2"
@@ -805,7 +805,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Positive(t *testing.T
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
 
 	const (
@@ -850,7 +850,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 
 	// Folders distributed across multiple remote shards (none on shard1)
 	// folder10 -> shard2, folder11 -> shard3, folder12 -> shard2, folder13 -> shard3
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard2"
@@ -860,7 +860,7 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
 
 	const (
@@ -931,8 +931,8 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -942,7 +942,7 @@ func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -978,20 +978,20 @@ func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 }
 
 // FailingGraph is a test fake that returns configurable errors for CheckUnion calls.
-// It implements the graph.Graph interface by embedding a real graph and overriding CheckUnion.
+// It implements the domain.Graph interface by embedding a real graph and overriding CheckUnion.
 type FailingGraph struct {
-	graph.Graph
+	domain.Graph
 	CheckUnionErr error
 }
 
 // CheckUnion returns the configured error if set, otherwise delegates to the embedded graph.
 func (f *FailingGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	checks []graph.RelationCheck,
-	visited []graph.VisitedKey,
-) (graph.CheckResult, error) {
+	subjectType domain.TypeID, subjectID domain.ID,
+	checks []domain.RelationCheck,
+	visited []domain.VisitedKey,
+) (domain.CheckResult, error) {
 	if f.CheckUnionErr != nil {
-		return graph.CheckResult{}, f.CheckUnionErr
+		return domain.CheckResult{}, f.CheckUnionErr
 	}
 	return f.Graph.CheckUnion(ctx, subjectType, subjectID, checks, visited)
 }
@@ -1001,8 +1001,8 @@ func (f *FailingGraph) CheckUnion(ctx context.Context,
 func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders: even on shard1, odd on shard2
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -1012,7 +1012,7 @@ func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	// Replace shard2 with a failing graph
@@ -1055,8 +1055,8 @@ func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			switch objectID % 3 {
 			case 0:
@@ -1070,7 +1070,7 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
 
 	// Replace remote shards with failing graphs
@@ -1118,8 +1118,8 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding for folders: even on shard1, odd on shard2
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding for folders: even on shard1, odd on shard2
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			if objectID%2 == 0 {
 				return "shard1"
@@ -1129,7 +1129,7 @@ func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2"}, router)
 	defer tsg.Close()
 
 	const (
@@ -1174,8 +1174,8 @@ func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 	s := testSchema()
 
-	// Use ID-based sharding: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
-	router := testRouter(s, func(typeName string, objectID schema.ID) graph.ShardID {
+	// Use domain.ID-based sharding: %3 == 0 -> shard1, %3 == 1 -> shard2, %3 == 2 -> shard3
+	router := testRouter(s, func(typeName string, objectID domain.ID) domain.ShardID {
 		if typeName == "folder" {
 			switch objectID % 3 {
 			case 0:
@@ -1189,7 +1189,7 @@ func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 		return "shard1"
 	})
 
-	tsg := NewTestShardedGraph(s, []graph.ShardID{"shard1", "shard2", "shard3"}, router)
+	tsg := NewTestShardedGraph(s, []domain.ShardID{"shard1", "shard2", "shard3"}, router)
 	defer tsg.Close()
 
 	// Only replace shard3 with a failing graph (shard2 will work)

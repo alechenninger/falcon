@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // ShardedGraph is a distributed Graph implementation that routes checks
@@ -38,7 +38,7 @@ type ShardedGraph struct {
 //   - st: store for initial hydration
 func NewShardedGraph(
 	localShardID ShardID,
-	s *schema.Schema,
+	s *Schema,
 	router Router,
 	shards map[ShardID]Graph,
 	stream ChangeStream,
@@ -138,21 +138,21 @@ func (g *ShardedGraph) Start(ctx context.Context) error {
 }
 
 // ownsObject returns true if this shard owns the given object.
-func (g *ShardedGraph) ownsObject(objectType schema.TypeID, objectID schema.ID) bool {
+func (g *ShardedGraph) ownsObject(objectType TypeID, objectID ID) bool {
 	return g.router(objectType, objectID) == g.localShardID
 }
 
-// Schema returns the authorization schema.
-func (g *ShardedGraph) Schema() *schema.Schema {
+// Schema returns the authorization 
+func (g *ShardedGraph) Schema() *Schema {
 	return g.usersets.Schema()
 }
 
 // Check determines if subject has relation on object.
 // Routes to the appropriate shard based on the object's ownership.
 func (g *ShardedGraph) Check(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
-	objectType schema.TypeID, objectID schema.ID,
-	relation schema.RelationID,
+	subjectType TypeID, subjectID ID,
+	objectType TypeID, objectID ID,
+	relation RelationID,
 	window SnapshotWindow, visited []VisitedKey,
 ) (bool, SnapshotWindow, error) {
 	ctx, probe := g.shardedObserver.CheckStarted(ctx, subjectType, subjectID, objectType, objectID, relation)
@@ -215,7 +215,7 @@ type checkUnionResult struct {
 // Remote shard checks run in parallel and cancel when any returns true.
 // If some shards error but none return true, returns an inconclusive error.
 func (g *ShardedGraph) CheckUnion(ctx context.Context,
-	subjectType schema.TypeID, subjectID schema.ID,
+	subjectType TypeID, subjectID ID,
 	checks []RelationCheck,
 	visited []VisitedKey,
 ) (CheckResult, error) {
@@ -243,7 +243,7 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
-			objectID := schema.ID(iter.Next())
+			objectID := ID(iter.Next())
 			targetShard := g.router(chk.ObjectType, objectID)
 
 			if targetShard == g.localShardID {
@@ -288,7 +288,7 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 	for _, chk := range localChecks {
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
-			objectID := schema.ID(iter.Next())
+			objectID := ID(iter.Next())
 
 			ok, resultWindow, err := Check(ctx, g, g.usersets, g.checkObserver,
 				subjectType, subjectID, chk.ObjectType, objectID, chk.Relation,
@@ -442,8 +442,8 @@ func buildNotFoundResult(checks []RelationCheck, window SnapshotWindow) CheckRes
 	}
 }
 
-// ValidateTuple checks if a tuple is valid according to the schema.
-func (g *ShardedGraph) ValidateTuple(objectType schema.TypeName, relation schema.RelationName, subjectType schema.TypeName, subjectRelation schema.RelationName) error {
+// ValidateTuple checks if a tuple is valid according to the 
+func (g *ShardedGraph) ValidateTuple(objectType TypeName, relation RelationName, subjectType TypeName, subjectRelation RelationName) error {
 	return g.usersets.ValidateTuple(objectType, relation, subjectType, subjectRelation)
 }
 
@@ -486,7 +486,7 @@ var (
 // filteringTupleIterator wraps a TupleIterator and only yields tuples matching the filter.
 type filteringTupleIterator struct {
 	inner   TupleIterator
-	include func(schema.TypeID, schema.ID) bool
+	include func(TypeID, ID) bool
 	current Tuple
 }
 
@@ -518,7 +518,7 @@ func (f *filteringTupleIterator) Close() error {
 // replicatedTime still advances, but no data is applied.
 type filteringChangeStream struct {
 	inner   ChangeStream
-	include func(schema.TypeID, schema.ID) bool
+	include func(TypeID, ID) bool
 }
 
 func (f *filteringChangeStream) Subscribe(ctx context.Context, after StoreTime) (<-chan Change, <-chan error) {

@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/RoaringBitmap/roaring"
-	"github.com/alechenninger/falcon/schema"
+	
 )
 
 // inlineThreshold is the maximum number of elements stored inline before
@@ -21,8 +21,8 @@ const bitmapMode = 255
 // In the history slice, timeDelta stores the time gap to the next (newer) entry.
 type undoEntry struct {
 	timeDelta StoreDelta   // Delta to next entry's time (0 for headUndo, computed for history)
-	added     []schema.ID  // IDs added at this time (undo = remove)
-	removed   []schema.ID  // IDs removed at this time (undo = add back)
+	added     []ID  // IDs added at this time (undo = remove)
+	removed   []ID  // IDs removed at this time (undo = add back)
 }
 
 // VersionedSet stores a set of IDs with MVCC support via undo chains.
@@ -43,7 +43,7 @@ type VersionedSet struct {
 
 	// Small set storage (inline mode): count is 0-3, elements in inline[0:count]
 	// Large set storage (bitmap mode): count is bitmapMode (255), elements in head
-	inline [inlineThreshold]schema.ID
+	inline [inlineThreshold]ID
 	count  uint8 // 0-3 = inline mode, bitmapMode = use bitmap
 
 	head     *roaring.Bitmap // Only allocated when count == bitmapMode
@@ -70,7 +70,7 @@ func (v *VersionedSet) isInlineMode() bool {
 
 // inlineContains checks if the ID is in the inline array.
 // Must be called with at least a read lock held.
-func (v *VersionedSet) inlineContains(id schema.ID) bool {
+func (v *VersionedSet) inlineContains(id ID) bool {
 	for i := uint8(0); i < v.count; i++ {
 		if v.inline[i] == id {
 			return true
@@ -82,7 +82,7 @@ func (v *VersionedSet) inlineContains(id schema.ID) bool {
 // inlineAdd adds an ID to the inline array if space available.
 // Returns true if added, false if already present or no space.
 // Must be called with write lock held.
-func (v *VersionedSet) inlineAdd(id schema.ID) bool {
+func (v *VersionedSet) inlineAdd(id ID) bool {
 	// Check if already present
 	for i := uint8(0); i < v.count; i++ {
 		if v.inline[i] == id {
@@ -101,7 +101,7 @@ func (v *VersionedSet) inlineAdd(id schema.ID) bool {
 // inlineRemove removes an ID from the inline array.
 // Returns true if removed, false if not present.
 // Must be called with write lock held.
-func (v *VersionedSet) inlineRemove(id schema.ID) bool {
+func (v *VersionedSet) inlineRemove(id ID) bool {
 	for i := uint8(0); i < v.count; i++ {
 		if v.inline[i] == id {
 			// Shift remaining elements
@@ -130,7 +130,7 @@ func (v *VersionedSet) promoteToBitmap() {
 
 // Add adds an ID to the set at the given time.
 // If the ID already exists, this is a no-op.
-func (v *VersionedSet) Add(id schema.ID, t StoreTime) {
+func (v *VersionedSet) Add(id ID, t StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -151,7 +151,7 @@ func (v *VersionedSet) Add(id schema.ID, t StoreTime) {
 	}
 
 	// Record undo: this was an add, so undo = remove
-	v.recordUndo(t, []schema.ID{id}, nil)
+	v.recordUndo(t, []ID{id}, nil)
 }
 
 // AddBulk adds an ID to the set without recording undo history.
@@ -159,7 +159,7 @@ func (v *VersionedSet) Add(id schema.ID, t StoreTime) {
 // to time-travel before the snapshot, so we skip the undo chain overhead.
 // The caller must hold no lock; this acquires the write lock.
 // TODO: rethink this when we have a proper hydration protocol.
-func (v *VersionedSet) AddBulk(id schema.ID) {
+func (v *VersionedSet) AddBulk(id ID) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -179,7 +179,7 @@ func (v *VersionedSet) AddBulk(id schema.ID) {
 
 // Remove removes an ID from the set at the given time.
 // If the ID doesn't exist, this is a no-op.
-func (v *VersionedSet) Remove(id schema.ID, t StoreTime) {
+func (v *VersionedSet) Remove(id ID, t StoreTime) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -196,7 +196,7 @@ func (v *VersionedSet) Remove(id schema.ID, t StoreTime) {
 
 	if removed {
 		// Record undo: this was a remove, so undo = add back
-		v.recordUndo(t, nil, []schema.ID{id})
+		v.recordUndo(t, nil, []ID{id})
 	}
 }
 
@@ -204,7 +204,7 @@ func (v *VersionedSet) Remove(id schema.ID, t StoreTime) {
 // added contains IDs that were added (undo = remove them).
 // removed contains IDs that were removed (undo = add them back).
 // Must be called with v.mu held.
-func (v *VersionedSet) recordUndo(t StoreTime, added, removed []schema.ID) {
+func (v *VersionedSet) recordUndo(t StoreTime, added, removed []ID) {
 	if v.headUndo != nil {
 		// Move current headUndo to history with its delta to the new head
 		v.headUndo.timeDelta = t.Difference(v.headTime)
@@ -217,7 +217,7 @@ func (v *VersionedSet) recordUndo(t StoreTime, added, removed []schema.ID) {
 }
 
 // Contains checks if the ID is in the current (HEAD) state.
-func (v *VersionedSet) Contains(id schema.ID) bool {
+func (v *VersionedSet) Contains(id ID) bool {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	if v.isInlineMode() {
@@ -304,12 +304,12 @@ func (v *VersionedSet) OldestTime() StoreTime {
 // Returns (found, stateTime) where stateTime is the OLDEST time that gives
 // the same answer, allowing for maximum snapshot window width.
 // Returns (false, 0) if no state is available within the time bound.
-func (v *VersionedSet) ContainsWithin(id schema.ID, maxTime StoreTime) (bool, StoreTime) {
+func (v *VersionedSet) ContainsWithin(id ID, maxTime StoreTime) (bool, StoreTime) {
 	return v.ContainsWithinObserved(id, maxTime, NoOpMVCCObserver{})
 }
 
 // ContainsWithinObserved is like ContainsWithin but with observability hooks.
-func (v *VersionedSet) ContainsWithinObserved(id schema.ID, maxTime StoreTime, obs MVCCObserver) (bool, StoreTime) {
+func (v *VersionedSet) ContainsWithinObserved(id ID, maxTime StoreTime, obs MVCCObserver) (bool, StoreTime) {
 	probe := obs.ContainsWithinStarted(id, maxTime)
 	defer probe.End()
 
@@ -420,7 +420,7 @@ func (v *VersionedSet) ContainsWithinObserved(id schema.ID, maxTime StoreTime, o
 // findStateAtMax finds the state of an ID at the latest time <= maxTime.
 // Returns (result, stateTime, historyIdx) where historyIdx is the history
 // index we stopped at (or len(history) if we used head state).
-func (v *VersionedSet) findStateAtMax(id schema.ID, maxTime StoreTime) (bool, StoreTime, int) {
+func (v *VersionedSet) findStateAtMax(id ID, maxTime StoreTime) (bool, StoreTime, int) {
 	// If head is within bounds, use it
 	if v.headTime <= maxTime {
 		var contains bool
