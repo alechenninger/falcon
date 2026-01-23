@@ -84,7 +84,8 @@ type VisitedNode struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// object_type_id is the schema TypeID for the object type.
 	ObjectTypeId uint32 `protobuf:"varint,1,opt,name=object_type_id,json=objectTypeId,proto3" json:"object_type_id,omitempty"`
-	ObjectId     uint32 `protobuf:"varint,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
+	// object_id is the 64-bit ID of the object.
+	ObjectId uint64 `protobuf:"varint,2,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
 	// relation_id is the schema RelationID for the relation.
 	RelationId    uint32 `protobuf:"varint,3,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -128,7 +129,7 @@ func (x *VisitedNode) GetObjectTypeId() uint32 {
 	return 0
 }
 
-func (x *VisitedNode) GetObjectId() uint32 {
+func (x *VisitedNode) GetObjectId() uint64 {
 	if x != nil {
 		return x.ObjectId
 	}
@@ -147,10 +148,12 @@ type CheckRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// subject_type_id is the schema TypeID for the subject type.
 	SubjectTypeId uint32 `protobuf:"varint,1,opt,name=subject_type_id,json=subjectTypeId,proto3" json:"subject_type_id,omitempty"`
-	SubjectId     uint32 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// subject_id is the 64-bit ID of the subject.
+	SubjectId uint64 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
 	// object_type_id is the schema TypeID for the object type.
 	ObjectTypeId uint32 `protobuf:"varint,3,opt,name=object_type_id,json=objectTypeId,proto3" json:"object_type_id,omitempty"`
-	ObjectId     uint32 `protobuf:"varint,4,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
+	// object_id is the 64-bit ID of the object.
+	ObjectId uint64 `protobuf:"varint,4,opt,name=object_id,json=objectId,proto3" json:"object_id,omitempty"`
 	// relation_id is the schema RelationID for the relation on object_type.
 	RelationId uint32 `protobuf:"varint,5,opt,name=relation_id,json=relationId,proto3" json:"relation_id,omitempty"`
 	// window constrains the snapshot for consistent reads across shards.
@@ -199,7 +202,7 @@ func (x *CheckRequest) GetSubjectTypeId() uint32 {
 	return 0
 }
 
-func (x *CheckRequest) GetSubjectId() uint32 {
+func (x *CheckRequest) GetSubjectId() uint64 {
 	if x != nil {
 		return x.SubjectId
 	}
@@ -213,7 +216,7 @@ func (x *CheckRequest) GetObjectTypeId() uint32 {
 	return 0
 }
 
-func (x *CheckRequest) GetObjectId() uint32 {
+func (x *CheckRequest) GetObjectId() uint64 {
 	if x != nil {
 		return x.ObjectId
 	}
@@ -377,7 +380,8 @@ type CheckUnionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// subject_type_id is the schema TypeID for the subject type.
 	SubjectTypeId uint32 `protobuf:"varint,1,opt,name=subject_type_id,json=subjectTypeId,proto3" json:"subject_type_id,omitempty"`
-	SubjectId     uint32 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	// subject_id is the 64-bit ID of the subject.
+	SubjectId uint64 `protobuf:"varint,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
 	// Checks to perform, each with its own object type, IDs, relation, and window.
 	Checks []*RelationCheck `protobuf:"bytes,3,rep,name=checks,proto3" json:"checks,omitempty"`
 	// visited contains the nodes already visited in this query traversal.
@@ -423,7 +427,7 @@ func (x *CheckUnionRequest) GetSubjectTypeId() uint32 {
 	return 0
 }
 
-func (x *CheckUnionRequest) GetSubjectId() uint32 {
+func (x *CheckUnionRequest) GetSubjectId() uint64 {
 	if x != nil {
 		return x.SubjectId
 	}
@@ -588,15 +592,15 @@ const file_graph_proto_rawDesc = "" +
 	"\x03max\x18\x02 \x01(\x04R\x03max\"q\n" +
 	"\vVisitedNode\x12$\n" +
 	"\x0eobject_type_id\x18\x01 \x01(\rR\fobjectTypeId\x12\x1b\n" +
-	"\tobject_id\x18\x02 \x01(\rR\bobjectId\x12\x1f\n" +
+	"\tobject_id\x18\x02 \x01(\x04R\bobjectId\x12\x1f\n" +
 	"\vrelation_id\x18\x03 \x01(\rR\n" +
 	"relationId\"\xc2\x02\n" +
 	"\fCheckRequest\x12&\n" +
 	"\x0fsubject_type_id\x18\x01 \x01(\rR\rsubjectTypeId\x12\x1d\n" +
 	"\n" +
-	"subject_id\x18\x02 \x01(\rR\tsubjectId\x12$\n" +
+	"subject_id\x18\x02 \x01(\x04R\tsubjectId\x12$\n" +
 	"\x0eobject_type_id\x18\x03 \x01(\rR\fobjectTypeId\x12\x1b\n" +
-	"\tobject_id\x18\x04 \x01(\rR\bobjectId\x12\x1f\n" +
+	"\tobject_id\x18\x04 \x01(\x04R\bobjectId\x12\x1f\n" +
 	"\vrelation_id\x18\x05 \x01(\rR\n" +
 	"relationId\x12C\n" +
 	"\x06window\x18\x06 \x01(\v2+.falcon.infrastructure.graph.SnapshotWindowR\x06window\x12B\n" +
@@ -614,7 +618,7 @@ const file_graph_proto_rawDesc = "" +
 	"\x11CheckUnionRequest\x12&\n" +
 	"\x0fsubject_type_id\x18\x01 \x01(\rR\rsubjectTypeId\x12\x1d\n" +
 	"\n" +
-	"subject_id\x18\x02 \x01(\rR\tsubjectId\x12B\n" +
+	"subject_id\x18\x02 \x01(\x04R\tsubjectId\x12B\n" +
 	"\x06checks\x18\x03 \x03(\v2*.falcon.infrastructure.graph.RelationCheckR\x06checks\x12B\n" +
 	"\avisited\x18\x04 \x03(\v2(.falcon.infrastructure.graph.VisitedNodeR\avisited\"t\n" +
 	"\fDependentSet\x12$\n" +

@@ -61,14 +61,25 @@ func (tg *TestGraph) WriteTuple(ctx context.Context, objectType TypeName, object
 	}
 
 	s := tg.Schema()
-	if err := tg.store.WriteTuple(ctx, Tuple{
+	tuple := Tuple{
 		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
 		SubjectType:     s.GetTypeID(subjectType),
 		SubjectID:       subjectID,
 		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
-	}); err != nil {
+	}
+
+	tx, err := tg.store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.Write(ctx, []Mutation{{Op: OpInsert, Tuple: tuple}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 
@@ -86,14 +97,25 @@ func (tg *TestGraph) DeleteTuple(ctx context.Context, objectType TypeName, objec
 	}
 
 	s := tg.Schema()
-	if err := tg.store.DeleteTuple(ctx, Tuple{
+	tuple := Tuple{
 		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
 		SubjectType:     s.GetTypeID(subjectType),
 		SubjectID:       subjectID,
 		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
-	}); err != nil {
+	}
+
+	tx, err := tg.store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.Write(ctx, []Mutation{{Op: OpDelete, Tuple: tuple}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 

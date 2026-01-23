@@ -17,10 +17,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
-	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 	"github.com/alechenninger/falcon/internal/application/observability"
 	"github.com/alechenninger/falcon/internal/domain"
 	infragrpc "github.com/alechenninger/falcon/internal/infrastructure/grpc"
+	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 )
 
 // Config holds the configuration for a falcon server node.
@@ -258,14 +258,9 @@ func newStaticStore(tuples []domain.Tuple) *staticStore {
 	}
 }
 
-// WriteTuple is not supported for static store.
-func (s *staticStore) WriteTuple(ctx context.Context, t domain.Tuple) error {
-	return fmt.Errorf("static store does not support writes")
-}
-
-// DeleteTuple is not supported for static store.
-func (s *staticStore) DeleteTuple(ctx context.Context, t domain.Tuple) error {
-	return fmt.Errorf("static store does not support deletes")
+// Begin returns a read-only transaction that does not support writes.
+func (s *staticStore) Begin(ctx context.Context) (domain.Tx, error) {
+	return &staticTx{}, nil
 }
 
 // LoadAll returns an iterator over all tuples.
@@ -300,8 +295,36 @@ func (s *staticStore) CurrentTime(ctx context.Context) (domain.StoreTime, error)
 	return s.currentTime, nil
 }
 
+// staticTx is a read-only transaction that does not support writes.
+type staticTx struct{}
+
+func (t *staticTx) GetID(ctx context.Context, ref domain.ObjectRef) (domain.ID, error) {
+	return 0, domain.ErrIDNotFound
+}
+
+func (t *staticTx) GetOrProvisionID(ctx context.Context, ref domain.ObjectRef, root domain.ObjectRef) (domain.ID, error) {
+	return 0, fmt.Errorf("static store does not support ID provisioning")
+}
+
+func (t *staticTx) Write(ctx context.Context, mutations []domain.Mutation) error {
+	return fmt.Errorf("static store does not support writes")
+}
+
+func (t *staticTx) Contains(ctx context.Context, predicate domain.TuplePredicate) (bool, error) {
+	return false, fmt.Errorf("static store does not support contains check")
+}
+
+func (t *staticTx) Commit(ctx context.Context) error {
+	return nil
+}
+
+func (t *staticTx) Rollback(ctx context.Context) error {
+	return nil
+}
+
 // Compile-time interface checks
 var (
 	_ domain.Store        = (*staticStore)(nil)
 	_ domain.ChangeStream = (*staticStore)(nil)
+	_ domain.Tx           = (*staticTx)(nil)
 )

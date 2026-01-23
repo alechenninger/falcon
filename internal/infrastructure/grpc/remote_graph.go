@@ -36,9 +36,9 @@ func (g *RemoteGraph) Check(ctx context.Context,
 ) (bool, domain.SnapshotWindow, error) {
 	req := &graphpb.CheckRequest{
 		SubjectTypeId: uint32(subjectType),
-		SubjectId:     uint32(subjectID),
+		SubjectId:     uint64(subjectID),
 		ObjectTypeId:  uint32(objectType),
-		ObjectId:      uint32(objectID),
+		ObjectId:      uint64(objectID),
 		RelationId:    uint32(relation),
 		Window:        SnapshotWindowToProto(window),
 		Visited:       VisitedKeysToProto(visited),
@@ -64,7 +64,7 @@ func (g *RemoteGraph) CheckUnion(ctx context.Context,
 
 	req := &graphpb.CheckUnionRequest{
 		SubjectTypeId: uint32(subjectType),
-		SubjectId:     uint32(subjectID),
+		SubjectId:     uint64(subjectID),
 		Checks:        RelationChecksToProto(checks),
 		Visited:       VisitedKeysToProto(visited),
 	}

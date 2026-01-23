@@ -5,12 +5,11 @@ import (
 	"net"
 	"testing"
 
-	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/alechenninger/falcon/internal/domain"
 	infragrpc "github.com/alechenninger/falcon/internal/infrastructure/grpc"
-	transportgrpc "github.com/alechenninger/falcon/internal/transport/grpc"
 	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
-	
+	transportgrpc "github.com/alechenninger/falcon/internal/transport/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -79,7 +78,7 @@ func remoteCheck(ctx context.Context, remote *infragrpc.RemoteGraph, s *domain.S
 // remoteCheckUnion is a test helper that calls CheckUnion with type names and converts to IDs.
 func remoteCheckUnion(ctx context.Context, remote *infragrpc.RemoteGraph, s *domain.Schema,
 	subjectType domain.TypeName, subjectID domain.ID,
-	objectType domain.TypeName, objectIDs *roaring.Bitmap,
+	objectType domain.TypeName, objectIDs *roaring64.Bitmap,
 	relation domain.RelationName,
 ) (domain.CheckResult, error) {
 	checks := []domain.RelationCheck{{
@@ -172,10 +171,10 @@ func TestRemoteGraph_CheckUnion(t *testing.T) {
 	}
 
 	// Build a CheckUnion with multiple folders
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
-	bitmap.Add(uint32(folder12))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
+	bitmap.Add(uint64(folder12))
 
 	// CheckUnion via remote - should find user1 on folder11
 	result, err := remoteCheckUnion(ctx, remote, s, "user", user1, "folder", bitmap, "viewer")

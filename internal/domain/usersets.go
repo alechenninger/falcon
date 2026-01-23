@@ -5,21 +5,20 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring"
-	
+	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 // usersetKey uniquely identifies a set of subjects for a given object, relation,
 // subject type, and subject relation.
 //
 // Uses compact TypeID/RelationID instead of strings for memory efficiency.
-// Total size: 8 bytes (vs ~72 bytes with strings).
+// Total size: 12 bytes (vs ~72 bytes with strings).
 type usersetKey struct {
 	ObjectType      TypeID     // 1 byte
 	Relation        RelationID // 1 byte
 	SubjectType     TypeID     // 1 byte
 	SubjectRelation RelationID // 1 byte (0 = no relation)
-	ObjectID        ID         // 4 bytes
+	ObjectID        ID         // 8 bytes
 }
 
 // tupleToKey converts a Tuple directly to a usersetKey.
@@ -58,7 +57,7 @@ type MultiversionUsersets struct {
 	observer UsersetsObserver
 }
 
-// NewMultiversionUsersets creates a new MultiversionUsersets with the given 
+// NewMultiversionUsersets creates a new MultiversionUsersets with the given
 func NewMultiversionUsersets(s *Schema) *MultiversionUsersets {
 	return &MultiversionUsersets{
 		schema:   s,
@@ -309,7 +308,7 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 	objectType TypeID, objectID ID, relation RelationID,
 	subjectType TypeID, subjectRelation RelationID,
 	window SnapshotWindow,
-) (*roaring.Bitmap, SnapshotWindow) {
+) (*roaring64.Bitmap, SnapshotWindow) {
 	// Constrain max to replicated time
 	window = u.constrainWindow(window)
 
@@ -362,7 +361,7 @@ func (u *MultiversionUsersets) GetSubjectBitmapWithin(
 }
 
 // ValidateTuple checks that the object type, relation, and subject reference
-// are valid according to the 
+// are valid according to the
 func (u *MultiversionUsersets) ValidateTuple(objectType TypeName, relation RelationName, subjectType TypeName, subjectRelation RelationName) error {
 	ot, ok := u.schema.Types[objectType]
 	if !ok {

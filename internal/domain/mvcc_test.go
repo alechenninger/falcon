@@ -476,7 +476,7 @@ func TestVersionedSet_SnapshotWithin(t *testing.T) {
 				return
 			}
 			for _, id := range tt.wantIDs {
-				if !snapshot.Contains(uint32(id)) {
+				if !snapshot.Contains(uint64(id)) {
 					t.Errorf("SnapshotWithin(%d) missing ID %d", tt.maxTime, id)
 				}
 			}

@@ -2,10 +2,34 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
-
-	
 )
+
+// ErrIDNotFound is returned when an external ID has no mapping to an internal ID.
+var ErrIDNotFound = errors.New("external ID not found")
+
+// ExternalID is the application-level identifier for objects and subjects.
+// These are strings that get mapped to internal compact numeric IDs ([ID]).
+// Examples: "doc-abc", "alice", "550e8400-e29b-41d4-a716-446655440000"
+type ExternalID string
+
+// ObjectRef identifies an object by its type and external ID.
+// An external ID is only meaningful in the context of its object type;
+// the same external ID string may refer to different objects in different types.
+type ObjectRef struct {
+	Type TypeID
+	ID   ExternalID
+}
+
+// NoObject is a zero ObjectRef, used when no object reference is needed.
+// For example, pass NoObject as the root when an object is its own shard root.
+var NoObject ObjectRef
+
+// IsZero returns true if this is a zero-value ObjectRef (equivalent to NoObject).
+func (r ObjectRef) IsZero() bool {
+	return r.Type == 0 && r.ID == ""
+}
 
 // StoreTime represents a timestamp encoded as uint64.
 // Stores must encode their native format in an order-preserving way.
@@ -82,19 +106,150 @@ type Change struct {
 	Tuple Tuple
 }
 
-// Store defines the persistence interface for authorization tuples.
-// Implementations handle durable storage of tuples (e.g., Postgres).
-//
-// Note: Writes do not return timestamps. The timestamp is only available via
-// the ChangeStream, which delivers changes in WAL order with their timestamps.
-type Store interface {
-	// WriteTuple persists a tuple to the store. If the tuple already exists,
-	// this is a no-op.
-	WriteTuple(ctx context.Context, t Tuple) error
+// Mutation represents a single tuple change.
+type Mutation struct {
+	Op    ChangeOp // OpInsert or OpDelete
+	Tuple Tuple
+}
 
-	// DeleteTuple removes a tuple from the store. If the tuple doesn't exist,
-	// this is a no-op.
-	DeleteTuple(ctx context.Context, t Tuple) error
+// TupleField identifies a field of a Tuple for use in predicates.
+type TupleField int
+
+const (
+	FieldObjectType TupleField = iota
+	FieldObjectID
+	FieldRelation
+	FieldSubjectType
+	FieldSubjectID
+	FieldSubjectRelation
+)
+
+// CompareOp specifies how to compare a field value.
+type CompareOp int
+
+const (
+	// OpEq matches if the field equals the value.
+	OpEq CompareOp = iota
+	// OpNeq matches if the field does not equal the value.
+	OpNeq
+	// OpLt matches if the field is less than the value (lexicographic for strings).
+	OpLt
+	// OpLte matches if the field is less than or equal to the value.
+	OpLte
+	// OpGt matches if the field is greater than the value.
+	OpGt
+	// OpGte matches if the field is greater than or equal to the value.
+	OpGte
+	// OpStartsWith matches if the field value starts with the given prefix.
+	// Only valid for string fields (ObjectID, SubjectID).
+	OpStartsWith
+)
+
+// TuplePredicate defines a condition over tuples that can be evaluated in SQL.
+// Predicates form a tree structure with boolean combinators (And, Or, Not)
+// and leaf nodes that compare tuple fields to values.
+type TuplePredicate interface {
+	// isTuplePredicate is a marker method to ensure only predicate types
+	// implement this interface.
+	isTuplePredicate()
+}
+
+// FieldPredicate compares a tuple field to a value.
+// For ObjectType/SubjectType fields, Value should be a TypeID.
+// For Relation/SubjectRelation fields, Value should be a RelationID.
+// For ObjectID/SubjectID fields, Value should be an [ObjectRef] containing
+// both the type and external ID. The Store implementation joins with the
+// ID mapping table for ID comparisons.
+type FieldPredicate struct {
+	Field TupleField
+	Op    CompareOp
+	Value any
+}
+
+func (FieldPredicate) isTuplePredicate() {}
+
+// AndPredicate matches if all child predicates match.
+type AndPredicate struct {
+	Predicates []TuplePredicate
+}
+
+func (AndPredicate) isTuplePredicate() {}
+
+// OrPredicate matches if any child predicate matches.
+type OrPredicate struct {
+	Predicates []TuplePredicate
+}
+
+func (OrPredicate) isTuplePredicate() {}
+
+// NotPredicate inverts the result of its child predicate.
+type NotPredicate struct {
+	Predicate TuplePredicate
+}
+
+func (NotPredicate) isTuplePredicate() {}
+
+// Predicate constructors for convenient usage.
+
+// Eq creates a predicate that matches if the field equals the value.
+func Eq(field TupleField, value any) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpEq, Value: value}
+}
+
+// Neq creates a predicate that matches if the field does not equal the value.
+func Neq(field TupleField, value any) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpNeq, Value: value}
+}
+
+// Lt creates a predicate that matches if the field is less than the value.
+func Lt(field TupleField, value any) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpLt, Value: value}
+}
+
+// Lte creates a predicate that matches if the field is less than or equal to the value.
+func Lte(field TupleField, value any) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpLte, Value: value}
+}
+
+// Gt creates a predicate that matches if the field is greater than the value.
+func Gt(field TupleField, value any) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpGt, Value: value}
+}
+
+// Gte creates a predicate that matches if the field is greater than or equal to the value.
+func Gte(field TupleField, value any) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpGte, Value: value}
+}
+
+// StartsWith creates a predicate that matches if the field value starts with the prefix.
+// Only valid for ObjectID and SubjectID fields.
+// The ObjectRef.ID is used as the prefix to match against, and the type must also match.
+func StartsWith(field TupleField, ref ObjectRef) FieldPredicate {
+	return FieldPredicate{Field: field, Op: OpStartsWith, Value: ref}
+}
+
+// And creates a predicate that matches if all predicates match.
+func And(predicates ...TuplePredicate) AndPredicate {
+	return AndPredicate{Predicates: predicates}
+}
+
+// Or creates a predicate that matches if any predicate matches.
+func Or(predicates ...TuplePredicate) OrPredicate {
+	return OrPredicate{Predicates: predicates}
+}
+
+// Not creates a predicate that inverts the result.
+func Not(predicate TuplePredicate) NotPredicate {
+	return NotPredicate{Predicate: predicate}
+}
+
+// Store defines the persistence interface for authorization tuples.
+// Transaction boundaries are controlled externally via Begin/Commit/Rollback.
+// Preconditions are evaluated by querying tuples, not by the store itself.
+type Store interface {
+	// Begin starts a new transaction.
+	// The returned Tx must be committed or rolled back.
+	Begin(ctx context.Context) (Tx, error)
 
 	// LoadAll returns an iterator over all tuples in the store.
 	// This is used to hydrate the in-memory graph on startup.
@@ -103,6 +258,50 @@ type Store interface {
 
 	// Close releases any resources held by the store.
 	Close() error
+}
+
+// Tx represents a database transaction.
+// All operations within a transaction see a consistent snapshot and are
+// committed atomically. The caller controls transaction boundaries.
+type Tx interface {
+	// ID Resolution
+
+	// GetID returns the internal ID for an object reference.
+	// Returns [ErrIDNotFound] if the external ID is not mapped.
+	GetID(ctx context.Context, ref ObjectRef) (ID, error)
+
+	// GetOrProvisionID returns the internal ID for an object reference, creating
+	// a new mapping if one does not exist. This is idempotent within the transaction.
+	//
+	// The root parameter specifies the shard root for this object. Pass NoObject
+	// if the object is its own root. The root is used to determine which shard
+	// the object belongs to and may be encoded in the high bits of the ID.
+	GetOrProvisionID(ctx context.Context, ref ObjectRef, root ObjectRef) (ID, error)
+
+	// Tuple Operations
+
+	// Write applies mutations within this transaction.
+	// Tuples use internal IDs (resolved via GetID/ProvisionID).
+	// Can be called multiple times before commit.
+	Write(ctx context.Context, mutations []Mutation) error
+
+	// Contains checks if any tuple matches the predicate within this transaction's view.
+	// Used to evaluate preconditions before writing.
+	// Returns true if at least one matching tuple exists.
+	// For ObjectID/SubjectID fields, predicate values are [ObjectRef];
+	// the implementation joins with the ID mapping table internally.
+	Contains(ctx context.Context, predicate TuplePredicate) (bool, error)
+
+	// Transaction Control
+
+	// Commit commits the transaction.
+	// After commit, the Tx should not be used.
+	Commit(ctx context.Context) error
+
+	// Rollback aborts the transaction.
+	// After rollback, the Tx should not be used.
+	// Rollback is safe to call multiple times or after commit (no-op).
+	Rollback(ctx context.Context) error
 }
 
 // ChangeStream emits ordered tuple changes from the store.

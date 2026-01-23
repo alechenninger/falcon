@@ -299,7 +299,7 @@ func (s *Stream) decodeTuple(rel *pglogrepl.RelationMessage, tuple *pglogrepl.Tu
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse object_type: %w", err)
 	}
-	objectID, err := parseOID(values["object_id"])
+	objectID, err := parseBigInt(values["object_id"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse object_id: %w", err)
 	}
@@ -311,7 +311,7 @@ func (s *Stream) decodeTuple(rel *pglogrepl.RelationMessage, tuple *pglogrepl.Tu
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subject_type: %w", err)
 	}
-	subjectID, err := parseOID(values["subject_id"])
+	subjectID, err := parseBigInt(values["subject_id"])
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse subject_id: %w", err)
 	}
@@ -330,12 +330,12 @@ func (s *Stream) decodeTuple(rel *pglogrepl.RelationMessage, tuple *pglogrepl.Tu
 	}, nil
 }
 
-func parseOID(s string) (uint32, error) {
-	v, err := strconv.ParseUint(s, 10, 32)
+func parseBigInt(s string) (int64, error) {
+	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
 		return 0, err
 	}
-	return uint32(v), nil
+	return v, nil
 }
 
 func parseSmallInt(s string) (int16, error) {

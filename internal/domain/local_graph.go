@@ -3,8 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/RoaringBitmap/roaring"
-	
+	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 // LocalGraph is a single-node Graph implementation.
@@ -101,7 +100,7 @@ func (g *LocalGraph) Start(ctx context.Context) error {
 	return g.usersets.Subscribe(ctx, g.stream, g.observer)
 }
 
-// Schema returns the authorization 
+// Schema returns the authorization
 func (g *LocalGraph) Schema() *Schema {
 	return g.usersets.Schema()
 }
@@ -174,8 +173,8 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 
 			if ok {
 				// Found: return single matching object
-				matchBitmap := roaring.New()
-				matchBitmap.Add(uint32(objectID))
+				matchBitmap := roaring64.New()
+				matchBitmap.Add(uint64(objectID))
 				result := CheckResult{
 					Found: true,
 					DependentSets: []DependentSet{{
@@ -225,7 +224,7 @@ func (g *LocalGraph) CheckUnion(ctx context.Context,
 	return result, nil
 }
 
-// ValidateTuple checks if a tuple is valid according to the 
+// ValidateTuple checks if a tuple is valid according to the
 func (g *LocalGraph) ValidateTuple(objectType TypeName, relation RelationName, subjectType TypeName, subjectRelation RelationName) error {
 	return g.usersets.ValidateTuple(objectType, relation, subjectType, subjectRelation)
 }

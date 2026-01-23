@@ -3,8 +3,7 @@ package domain
 import (
 	"context"
 
-	"github.com/RoaringBitmap/roaring"
-	
+	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 // ShardID identifies a shard in a distributed graph.
@@ -18,7 +17,7 @@ type Router func(objectType TypeID, objectID ID) ShardID
 // Used by CheckUnion to batch multiple checks with independent windows.
 type RelationCheck struct {
 	ObjectType TypeID
-	ObjectIDs  *roaring.Bitmap
+	ObjectIDs  *roaring64.Bitmap
 	Relation   RelationID
 	Window     SnapshotWindow // Window narrowed based on reading this type's data
 }
@@ -31,7 +30,7 @@ type DependentSet struct {
 	// ObjectIDs identifies the specific objects that mattered.
 	// If nil, means "all objects from the corresponding input check" (optimization).
 	// If non-nil, the specific subset (e.g., single matching ID for union positive).
-	ObjectIDs *roaring.Bitmap
+	ObjectIDs *roaring64.Bitmap
 }
 
 // CheckResult represents the outcome of a check with provenance information.
@@ -77,7 +76,7 @@ type Graph interface {
 		visited []VisitedKey,
 	) (CheckResult, error)
 
-	// Schema returns the authorization 
+	// Schema returns the authorization
 	Schema() *Schema
 }
 

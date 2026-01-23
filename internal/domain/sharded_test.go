@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/alechenninger/falcon/internal/domain"
 	"github.com/alechenninger/falcon/internal/infrastructure/memory"
-	
 )
 
 // TestShardedGraph holds multiple sharded graphs sharing a single store.
@@ -103,14 +102,25 @@ func (tsg *TestShardedGraph) WriteTuple(ctx context.Context, objectType domain.T
 	}
 
 	s := tsg.schema
-	if err := tsg.store.WriteTuple(ctx, domain.Tuple{
-	ObjectType:      s.GetTypeID(objectType),
+	tuple := domain.Tuple{
+		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
 		SubjectType:     s.GetTypeID(subjectType),
 		SubjectID:       subjectID,
 		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
-	}); err != nil {
+	}
+
+	tx, err := tsg.store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.Write(ctx, []domain.Mutation{{Op: domain.OpInsert, Tuple: tuple}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 
@@ -134,14 +144,25 @@ func (tsg *TestShardedGraph) DeleteTuple(ctx context.Context, objectType domain.
 	}
 
 	s := tsg.schema
-	if err := tsg.store.DeleteTuple(ctx, domain.Tuple{
-	ObjectType:      s.GetTypeID(objectType),
+	tuple := domain.Tuple{
+		ObjectType:      s.GetTypeID(objectType),
 		ObjectID:        objectID,
 		Relation:        s.GetRelationID(objectType, relation),
 		SubjectType:     s.GetTypeID(subjectType),
 		SubjectID:       subjectID,
 		SubjectRelation: s.GetRelationID(subjectType, subjectRelation),
-	}); err != nil {
+	}
+
+	tx, err := tsg.store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.Write(ctx, []domain.Mutation{{Op: domain.OpDelete, Tuple: tuple}}); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 
@@ -167,10 +188,10 @@ func (tsg *TestShardedGraph) Check(ctx context.Context, shardID domain.ShardID, 
 
 // CheckUnion is a convenience wrapper for CheckUnion that takes string names.
 // Takes string names for convenience and converts to IDs internally.
-func (tsg *TestShardedGraph) CheckUnion(ctx context.Context, shardID domain.ShardID, subjectType domain.TypeName, subjectID domain.ID, objectType domain.TypeName, objectIDs *roaring.Bitmap, relation domain.RelationName) (domain.CheckResult, error) {
+func (tsg *TestShardedGraph) CheckUnion(ctx context.Context, shardID domain.ShardID, subjectType domain.TypeName, subjectID domain.ID, objectType domain.TypeName, objectIDs *roaring64.Bitmap, relation domain.RelationName) (domain.CheckResult, error) {
 	s := tsg.shards[shardID].graph.Schema()
 	checks := []domain.RelationCheck{{
-	ObjectType: s.GetTypeID(objectType),
+		ObjectType: s.GetTypeID(objectType),
 		ObjectIDs:  objectIDs,
 		Relation:   s.GetRelationID(objectType, relation),
 		Window:     domain.MaxSnapshotWindow,
@@ -568,10 +589,10 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Positive(t *testing.T) {
 	// folder10 (shard1): user1 is NOT a viewer
 	// folder11 (shard2): user1 IS a viewer
 	// folder12 (shard1): user1 is NOT a viewer
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
-	bitmap.Add(uint32(folder12))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
+	bitmap.Add(uint64(folder12))
 
 	// Call CheckUnion - should find user1 on folder11 (shard2)
 	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
@@ -629,10 +650,10 @@ func TestShardedGraph_CheckUnionWindowNarrowing_Negative(t *testing.T) {
 
 	// Build a CheckUnion with folders on both shards
 	// None of these folders have user1 as viewer
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
-	bitmap.Add(uint32(folder12))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
+	bitmap.Add(uint64(folder12))
 
 	// Call CheckUnion - user1 should NOT be found on any folder
 	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
@@ -701,10 +722,10 @@ func TestShardedGraph_CheckUnionWindowNarrowing_MixedShards(t *testing.T) {
 	}
 
 	// Build a CheckUnion with folders on all three shards
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder9))
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder9))
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
 
 	// Call CheckUnion from shard1 - should check all three shards in parallel
 	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
@@ -756,10 +777,10 @@ func TestShardedGraph_CheckUnionWindowNarrowing_LocalOnly(t *testing.T) {
 
 	// Build a CheckUnion with only local folders (all on shard1)
 	// None of these folders have user1 as viewer
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
-	bitmap.Add(uint32(folder12))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
+	bitmap.Add(uint64(folder12))
 
 	// Call CheckUnion - user1 should NOT be found on any folder
 	// All checks are local (no remote shards)
@@ -822,11 +843,11 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Positive(t *testing.T
 	}
 
 	// Build a CheckUnion with folders on multiple remote shards
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
-	bitmap.Add(uint32(folder12))
-	bitmap.Add(uint32(folder13))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
+	bitmap.Add(uint64(folder12))
+	bitmap.Add(uint64(folder13))
 
 	// Call CheckUnion from shard1 - checks go to shard2 and shard3 in parallel
 	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
@@ -888,11 +909,11 @@ func TestShardedGraph_CheckUnionWindowNarrowing_RemoteOnly_Negative(t *testing.T
 	}
 
 	// Build a CheckUnion with folders on multiple remote shards
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
-	bitmap.Add(uint32(folder12))
-	bitmap.Add(uint32(folder13))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
+	bitmap.Add(uint64(folder12))
+	bitmap.Add(uint64(folder13))
 
 	// Call CheckUnion from shard1 - checks go to shard2 and shard3 in parallel
 	// user1 should NOT be found on any folder
@@ -957,9 +978,9 @@ func TestShardedGraph_CheckUnionParallelCancellation(t *testing.T) {
 	}
 
 	// Build a CheckUnion with folders on both shards
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
 
 	// Call CheckUnion multiple times to ensure parallel execution works correctly
 	// and early termination on true result functions properly
@@ -1029,9 +1050,9 @@ func TestShardedGraph_CheckUnion_SingleShardError(t *testing.T) {
 	)
 
 	// Build a CheckUnion with folders on both shards
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
 
 	// Call CheckUnion - shard1 returns false, shard2 errors
 	// Should return inconclusive error
@@ -1092,9 +1113,9 @@ func TestShardedGraph_CheckUnion_AllShardsError(t *testing.T) {
 	)
 
 	// Build a CheckUnion with folders only on remote shards (both will fail)
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
 
 	// Call CheckUnion - both remote shards error
 	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")
@@ -1151,9 +1172,9 @@ func TestShardedGraph_CheckUnion_ErrorButFoundOnOther(t *testing.T) {
 	tsg.Shard("shard1").SetRemoteShard("shard2", failingGraph)
 
 	// Build a CheckUnion with folders on both shards
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
 
 	// Call CheckUnion - shard1 returns true (found), shard2 errors
 	// Should return true and no error (short-circuit)
@@ -1206,9 +1227,9 @@ func TestShardedGraph_CheckUnion_PartialErrorPartialSuccess(t *testing.T) {
 	)
 
 	// Build a CheckUnion with folders on shard2 and shard3
-	bitmap := roaring.New()
-	bitmap.Add(uint32(folder10))
-	bitmap.Add(uint32(folder11))
+	bitmap := roaring64.New()
+	bitmap.Add(uint64(folder10))
+	bitmap.Add(uint64(folder11))
 
 	// Call CheckUnion - shard2 returns false, shard3 errors
 	result, err := tsg.CheckUnion(ctx, "shard1", "user", user1, "folder", bitmap, "viewer")

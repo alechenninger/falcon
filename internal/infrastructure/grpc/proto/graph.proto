@@ -35,7 +35,8 @@ message SnapshotWindow {
 message VisitedNode {
   // object_type_id is the schema TypeID for the object type.
   uint32 object_type_id = 1;
-  uint32 object_id = 2;
+  // object_id is the 64-bit ID of the object.
+  uint64 object_id = 2;
   // relation_id is the schema RelationID for the relation.
   uint32 relation_id = 3;
 }
@@ -44,10 +45,12 @@ message VisitedNode {
 message CheckRequest {
   // subject_type_id is the schema TypeID for the subject type.
   uint32 subject_type_id = 1;
-  uint32 subject_id = 2;
+  // subject_id is the 64-bit ID of the subject.
+  uint64 subject_id = 2;
   // object_type_id is the schema TypeID for the object type.
   uint32 object_type_id = 3;
-  uint32 object_id = 4;
+  // object_id is the 64-bit ID of the object.
+  uint64 object_id = 4;
   // relation_id is the schema RelationID for the relation on object_type.
   uint32 relation_id = 5;
   // window constrains the snapshot for consistent reads across shards.
@@ -84,7 +87,8 @@ message RelationCheck {
 message CheckUnionRequest {
   // subject_type_id is the schema TypeID for the subject type.
   uint32 subject_type_id = 1;
-  uint32 subject_id = 2;
+  // subject_id is the 64-bit ID of the subject.
+  uint64 subject_id = 2;
   // Checks to perform, each with its own object type, IDs, relation, and window.
   repeated RelationCheck checks = 3;
   // visited contains the nodes already visited in this query traversal.

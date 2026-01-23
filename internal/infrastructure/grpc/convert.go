@@ -2,12 +2,32 @@
 package grpc
 
 import (
+	"bytes"
 	"math"
 
-	"github.com/RoaringBitmap/roaring"
+	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/alechenninger/falcon/internal/domain"
 	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 )
+
+// byteReader wraps a byte slice to implement io.Reader.
+type byteReader struct {
+	data []byte
+	pos  int
+}
+
+func newByteReader(data []byte) *byteReader {
+	return &byteReader{data: data}
+}
+
+func (r *byteReader) Read(p []byte) (n int, err error) {
+	if r.pos >= len(r.data) {
+		return 0, nil
+	}
+	n = copy(p, r.data[r.pos:])
+	r.pos += n
+	return n, nil
+}
 
 // SnapshotWindowToProto converts a domain.SnapshotWindow to its proto representation.
 func SnapshotWindowToProto(w domain.SnapshotWindow) *graphpb.SnapshotWindow {
@@ -47,7 +67,7 @@ func VisitedKeysToProto(visited []domain.VisitedKey) []*graphpb.VisitedNode {
 	for i, v := range visited {
 		result[i] = &graphpb.VisitedNode{
 			ObjectTypeId: uint32(v.ObjectType),
-			ObjectId:     uint32(v.ObjectID),
+			ObjectId:     uint64(v.ObjectID),
 			RelationId:   uint32(v.Relation),
 		}
 	}
@@ -76,7 +96,9 @@ func RelationChecksToProto(checks []domain.RelationCheck) []*graphpb.RelationChe
 	for i, c := range checks {
 		var objectIDs []byte
 		if c.ObjectIDs != nil {
-			objectIDs, _ = c.ObjectIDs.ToBytes()
+			var buf bytes.Buffer
+			c.ObjectIDs.WriteTo(&buf)
+			objectIDs = buf.Bytes()
 		}
 		result[i] = &graphpb.RelationCheck{
 			ObjectTypeId: uint32(c.ObjectType),
@@ -92,9 +114,9 @@ func RelationChecksToProto(checks []domain.RelationCheck) []*graphpb.RelationChe
 func RelationChecksFromProto(checks []*graphpb.RelationCheck) ([]domain.RelationCheck, error) {
 	result := make([]domain.RelationCheck, len(checks))
 	for i, c := range checks {
-		bitmap := roaring.New()
+		bitmap := roaring64.New()
 		if len(c.ObjectIds) > 0 {
-			if _, err := bitmap.FromBuffer(c.ObjectIds); err != nil {
+			if _, err := bitmap.ReadFrom(newByteReader(c.ObjectIds)); err != nil {
 				return nil, err
 			}
 		}
@@ -117,7 +139,9 @@ func DependentSetsToProto(sets []domain.DependentSet) []*graphpb.DependentSet {
 	for i, s := range sets {
 		var objectIDs []byte
 		if s.ObjectIDs != nil {
-			objectIDs, _ = s.ObjectIDs.ToBytes()
+			var buf bytes.Buffer
+			s.ObjectIDs.WriteTo(&buf)
+			objectIDs = buf.Bytes()
 		}
 		result[i] = &graphpb.DependentSet{
 			ObjectTypeId: uint32(s.ObjectType),
@@ -135,10 +159,10 @@ func DependentSetsFromProto(sets []*graphpb.DependentSet) []domain.DependentSet 
 	}
 	result := make([]domain.DependentSet, len(sets))
 	for i, s := range sets {
-		var bitmap *roaring.Bitmap
+		var bitmap *roaring64.Bitmap
 		if len(s.ObjectIds) > 0 {
-			bitmap = roaring.New()
-			bitmap.FromBuffer(s.ObjectIds)
+			bitmap = roaring64.New()
+			bitmap.ReadFrom(newByteReader(s.ObjectIds))
 		}
 		result[i] = domain.DependentSet{
 			ObjectType: domain.TypeID(s.ObjectTypeId),

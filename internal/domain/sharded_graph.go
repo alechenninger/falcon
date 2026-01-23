@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring"
-	
+	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 // ShardedGraph is a distributed Graph implementation that routes checks
@@ -142,7 +141,7 @@ func (g *ShardedGraph) ownsObject(objectType TypeID, objectID ID) bool {
 	return g.router(objectType, objectID) == g.localShardID
 }
 
-// Schema returns the authorization 
+// Schema returns the authorization
 func (g *ShardedGraph) Schema() *Schema {
 	return g.usersets.Schema()
 }
@@ -238,8 +237,8 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 		}
 
 		// Partition this check's object IDs by shard
-		localBitmap := roaring.New()
-		remoteBitmaps := make(map[ShardID]*roaring.Bitmap)
+		localBitmap := roaring64.New()
+		remoteBitmaps := make(map[ShardID]*roaring64.Bitmap)
 
 		iter := chk.ObjectIDs.Iterator()
 		for iter.HasNext() {
@@ -247,12 +246,12 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 			targetShard := g.router(chk.ObjectType, objectID)
 
 			if targetShard == g.localShardID {
-				localBitmap.Add(uint32(objectID))
+				localBitmap.Add(uint64(objectID))
 			} else {
 				if remoteBitmaps[targetShard] == nil {
-					remoteBitmaps[targetShard] = roaring.New()
+					remoteBitmaps[targetShard] = roaring64.New()
 				}
-				remoteBitmaps[targetShard].Add(uint32(objectID))
+				remoteBitmaps[targetShard].Add(uint64(objectID))
 			}
 		}
 
@@ -300,8 +299,8 @@ func (g *ShardedGraph) CheckUnion(ctx context.Context,
 			if ok {
 				probe.Result(true, resultWindow)
 				// Found: return single matching object
-				matchBitmap := roaring.New()
-				matchBitmap.Add(uint32(objectID))
+				matchBitmap := roaring64.New()
+				matchBitmap.Add(uint64(objectID))
 				return CheckResult{
 					Found: true,
 					DependentSets: []DependentSet{{
@@ -442,7 +441,7 @@ func buildNotFoundResult(checks []RelationCheck, window SnapshotWindow) CheckRes
 	}
 }
 
-// ValidateTuple checks if a tuple is valid according to the 
+// ValidateTuple checks if a tuple is valid according to the
 func (g *ShardedGraph) ValidateTuple(objectType TypeName, relation RelationName, subjectType TypeName, subjectRelation RelationName) error {
 	return g.usersets.ValidateTuple(objectType, relation, subjectType, subjectRelation)
 }

@@ -1,5 +1,7 @@
 package domain
 
+import "fmt"
+
 // TypeName identifies an object type (e.g., "document", "folder", "user").
 // This is used for both object types and subject types.
 type TypeName string
@@ -8,7 +10,8 @@ type TypeName string
 type RelationName string
 
 // ID is a unique identifier for an object or subject within its type.
-type ID uint32
+// 64 bits to support encoding shard/routing information in high bits.
+type ID uint64
 
 // TypeID is a stable numeric identifier for an object type.
 // Like protobuf field numbers, these must be stable across schema versions.
@@ -43,6 +46,11 @@ type ObjectType struct {
 	Name TypeName
 	// Relations maps relation names to their definitions.
 	Relations map[RelationName]*Relation
+
+	// RootRelation is the relation that establishes this object's shard root.
+	// If set, the subject of a tuple with this relation becomes the object's root.
+	// If empty, objects of this type are their own roots.
+	RootRelation RelationName
 
 	// relationsByID is a reverse lookup from RelationID to Relation.
 	// Built by Schema.Compile().
@@ -224,4 +232,119 @@ func (s *Schema) GetRelationID(typeName TypeName, relationName RelationName) Rel
 		panic("schema: unknown relation " + string(relationName) + " on type " + string(typeName))
 	}
 	return rel.ID
+}
+
+// RootFor returns the root ObjectRef for an object based on a tuple's components,
+// if the tuple establishes a root relationship. Returns NoObject if the tuple does
+// not establish a root or if the object type has no root relation.
+//
+// The root is determined by checking if the object type has a RootRelation defined
+// and if the given relation matches it. If so, the subject becomes the root.
+func (s *Schema) RootFor(objectTypeName TypeName, relation RelationName, subjectTypeName TypeName, subjectID ExternalID) ObjectRef {
+	objectType := s.TypeByName(objectTypeName)
+	if objectType == nil || objectType.RootRelation == "" || objectType.RootRelation != relation {
+		return NoObject
+	}
+	subjectType := s.TypeByName(subjectTypeName)
+	if subjectType == nil {
+		return NoObject
+	}
+	return ObjectRef{Type: subjectType.ID, ID: subjectID}
+}
+
+// ValidateTuple checks that the tuple is valid according to the schema.
+// It verifies that:
+//   - The object type and relation exist
+//   - The subject type exists
+//   - The subject relation exists (if specified)
+//   - The subject reference is allowed by the relation's direct target types
+func (s *Schema) ValidateTuple(t Tuple) error {
+	// Check object type exists
+	ot := s.TypeByID(t.ObjectType)
+	if ot == nil {
+		return &ValidationError{Field: "object_type", Message: "unknown object type ID", ID: int(t.ObjectType)}
+	}
+
+	// Check relation exists on object type
+	rel := ot.RelationByID(t.Relation)
+	if rel == nil {
+		return &ValidationError{Field: "relation", Message: "unknown relation ID on type " + string(ot.Name), ID: int(t.Relation)}
+	}
+
+	// Check subject type exists
+	st := s.TypeByID(t.SubjectType)
+	if st == nil {
+		return &ValidationError{Field: "subject_type", Message: "unknown subject type ID", ID: int(t.SubjectType)}
+	}
+
+	// Check subject relation exists if specified
+	if t.SubjectRelation != NoRelation {
+		subRel := st.RelationByID(t.SubjectRelation)
+		if subRel == nil {
+			return &ValidationError{Field: "subject_relation", Message: "unknown subject relation ID on type " + string(st.Name), ID: int(t.SubjectRelation)}
+		}
+	}
+
+	// Check that the subject reference is allowed by the relation's direct types
+	targetTypes := rel.DirectTargetTypes()
+	if targetTypes == nil {
+		return &ValidationError{
+			Field:   "relation",
+			Message: "relation " + string(ot.Name) + "#" + string(rel.Name) + " does not allow direct tuples",
+		}
+	}
+
+	// Find matching subject ref
+	for _, ref := range targetTypes {
+		refType := s.TypeByName(ref.Type)
+		if refType == nil {
+			continue
+		}
+		if refType.ID != t.SubjectType {
+			continue
+		}
+
+		// Check subject relation matches
+		if ref.Relation == "" && t.SubjectRelation == NoRelation {
+			return nil // Direct subject match
+		}
+		if ref.Relation != "" {
+			expectedRelID := s.GetRelationID(ref.Type, ref.Relation)
+			if expectedRelID == t.SubjectRelation {
+				return nil // Userset subject match
+			}
+		}
+	}
+
+	// No matching subject ref found
+	if t.SubjectRelation == NoRelation {
+		return &ValidationError{
+			Field:   "subject_type",
+			Message: "subject type " + string(st.Name) + " is not allowed for " + string(ot.Name) + "#" + string(rel.Name),
+		}
+	}
+
+	subRel := st.RelationByID(t.SubjectRelation)
+	subRelName := ""
+	if subRel != nil {
+		subRelName = string(subRel.Name)
+	}
+	return &ValidationError{
+		Field:   "subject_relation",
+		Message: "subject " + string(st.Name) + "#" + subRelName + " is not allowed for " + string(ot.Name) + "#" + string(rel.Name),
+	}
+}
+
+// ValidationError represents a schema validation error.
+type ValidationError struct {
+	Field   string // Which field failed validation
+	Message string // Human-readable error description
+	ID      int    // The invalid ID value (if applicable)
+}
+
+func (e *ValidationError) Error() string {
+	if e.ID != 0 {
+		return fmt.Sprintf("%s: %d", e.Message, e.ID)
+	}
+	return e.Message
 }

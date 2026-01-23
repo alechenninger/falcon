@@ -4,8 +4,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/RoaringBitmap/roaring"
-	
+	"github.com/RoaringBitmap/roaring/roaring64"
 )
 
 // inlineThreshold is the maximum number of elements stored inline before
@@ -46,7 +45,7 @@ type VersionedSet struct {
 	inline [inlineThreshold]ID
 	count  uint8 // 0-3 = inline mode, bitmapMode = use bitmap
 
-	head     *roaring.Bitmap // Only allocated when count == bitmapMode
+	head     *roaring64.Bitmap // Only allocated when count == bitmapMode
 	headUndo *undoEntry      // Most recent change (at headTime), nil if no history
 	history  []undoEntry     // Older entries, oldest first
 }
@@ -121,9 +120,9 @@ func (v *VersionedSet) promoteToBitmap() {
 	if !v.isInlineMode() {
 		return // Already in bitmap mode
 	}
-	v.head = roaring.New()
+	v.head = roaring64.New()
 	for i := uint8(0); i < v.count; i++ {
-		v.head.Add(uint32(v.inline[i]))
+		v.head.Add(uint64(v.inline[i]))
 	}
 	v.count = bitmapMode
 }
@@ -141,13 +140,13 @@ func (v *VersionedSet) Add(id ID, t StoreTime) {
 		if !v.inlineAdd(id) {
 			// No space, promote to bitmap and add
 			v.promoteToBitmap()
-			v.head.Add(uint32(id))
+			v.head.Add(uint64(id))
 		}
 	} else {
-		if v.head.Contains(uint32(id)) {
+		if v.head.Contains(uint64(id)) {
 			return // Already present
 		}
-		v.head.Add(uint32(id))
+		v.head.Add(uint64(id))
 	}
 
 	// Record undo: this was an add, so undo = remove
@@ -170,10 +169,10 @@ func (v *VersionedSet) AddBulk(id ID) {
 		if !v.inlineAdd(id) {
 			// No space, promote to bitmap and add
 			v.promoteToBitmap()
-			v.head.Add(uint32(id))
+			v.head.Add(uint64(id))
 		}
 	} else {
-		v.head.Add(uint32(id))
+		v.head.Add(uint64(id))
 	}
 }
 
@@ -187,10 +186,10 @@ func (v *VersionedSet) Remove(id ID, t StoreTime) {
 	if v.isInlineMode() {
 		removed = v.inlineRemove(id)
 	} else {
-		if !v.head.Contains(uint32(id)) {
+		if !v.head.Contains(uint64(id)) {
 			return // Not present
 		}
-		v.head.Remove(uint32(id))
+		v.head.Remove(uint64(id))
 		removed = true
 	}
 
@@ -223,12 +222,12 @@ func (v *VersionedSet) Contains(id ID) bool {
 	if v.isInlineMode() {
 		return v.inlineContains(id)
 	}
-	return v.head.Contains(uint32(id))
+	return v.head.Contains(uint64(id))
 }
 
 // Head returns the current HEAD bitmap. The caller must not modify it.
 // If in inline mode, promotes to bitmap mode first.
-func (v *VersionedSet) Head() *roaring.Bitmap {
+func (v *VersionedSet) Head() *roaring64.Bitmap {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if v.isInlineMode() {
@@ -427,7 +426,7 @@ func (v *VersionedSet) findStateAtMax(id ID, maxTime StoreTime) (bool, StoreTime
 		if v.isInlineMode() {
 			contains = v.inlineContains(id)
 		} else {
-			contains = v.head.Contains(uint32(id))
+			contains = v.head.Contains(uint64(id))
 		}
 		return contains, v.headTime, len(v.history)
 	}
@@ -442,7 +441,7 @@ func (v *VersionedSet) findStateAtMax(id ID, maxTime StoreTime) (bool, StoreTime
 	if v.isInlineMode() {
 		result = v.inlineContains(id)
 	} else {
-		result = v.head.Contains(uint32(id))
+		result = v.head.Contains(uint64(id))
 	}
 
 	// Undo headUndo first
@@ -477,12 +476,12 @@ func (v *VersionedSet) findStateAtMax(id ID, maxTime StoreTime) (bool, StoreTime
 // SnapshotWithin returns a clone of the bitmap at the latest state <= maxTime.
 // Returns (snapshot, stateTime) where stateTime is the time of the state used,
 // or (nil, 0) if no state is available within the time bound.
-func (v *VersionedSet) SnapshotWithin(maxTime StoreTime) (*roaring.Bitmap, StoreTime) {
+func (v *VersionedSet) SnapshotWithin(maxTime StoreTime) (*roaring64.Bitmap, StoreTime) {
 	return v.SnapshotWithinObserved(maxTime, NoOpMVCCObserver{})
 }
 
 // SnapshotWithinObserved is like SnapshotWithin but with observability hooks.
-func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserver) (*roaring.Bitmap, StoreTime) {
+func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserver) (*roaring64.Bitmap, StoreTime) {
 	probe := obs.SnapshotWithinStarted(maxTime)
 	defer probe.End()
 
@@ -499,9 +498,9 @@ func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserve
 		probe.Result(true, v.headTime)
 		// Create bitmap from current state
 		if v.isInlineMode() {
-			result := roaring.New()
+			result := roaring64.New()
 			for i := uint8(0); i < v.count; i++ {
-				result.Add(uint32(v.inline[i]))
+				result.Add(uint64(v.inline[i]))
 			}
 			return result, v.headTime
 		}
@@ -516,11 +515,11 @@ func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserve
 	}
 
 	// Start with head state and undo changes
-	var result *roaring.Bitmap
+	var result *roaring64.Bitmap
 	if v.isInlineMode() {
-		result = roaring.New()
+		result = roaring64.New()
 		for i := uint8(0); i < v.count; i++ {
-			result.Add(uint32(v.inline[i]))
+			result.Add(uint64(v.inline[i]))
 		}
 	} else {
 		result = v.head.Clone()
@@ -528,10 +527,10 @@ func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserve
 
 	// Undo headUndo first
 	for _, id := range v.headUndo.added {
-		result.Remove(uint32(id))
+		result.Remove(uint64(id))
 	}
 	for _, id := range v.headUndo.removed {
-		result.Add(uint32(id))
+		result.Add(uint64(id))
 	}
 
 	// Walk history in reverse to find state <= maxTime
@@ -549,10 +548,10 @@ func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserve
 		}
 		// Continue undoing
 		for _, id := range undo.added {
-			result.Remove(uint32(id))
+			result.Remove(uint64(id))
 		}
 		for _, id := range undo.removed {
-			result.Add(uint32(id))
+			result.Add(uint64(id))
 		}
 	}
 
