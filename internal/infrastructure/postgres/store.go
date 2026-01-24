@@ -152,6 +152,22 @@ func (t *pgxTx) GetOrProvisionID(ctx context.Context, ref domain.ObjectRef, root
 	return domain.ID(internalID), nil
 }
 
+// GetRef returns the external object reference for an internal ID.
+// Returns domain.ErrIDNotFound if the internal ID has no mapping.
+func (t *pgxTx) GetRef(ctx context.Context, typeID domain.TypeID, id domain.ID) (domain.ObjectRef, error) {
+	var externalID string
+	err := t.tx.QueryRow(ctx, `
+		SELECT external_id FROM id_mappings WHERE type_id = $1 AND internal_id = $2
+	`, int16(typeID), int64(id)).Scan(&externalID)
+	if err == pgx.ErrNoRows {
+		return domain.ObjectRef{}, domain.ErrIDNotFound
+	}
+	if err != nil {
+		return domain.ObjectRef{}, fmt.Errorf("failed to get ref: %w", err)
+	}
+	return domain.ObjectRef{Type: typeID, ID: domain.ExternalID(externalID)}, nil
+}
+
 // Write applies mutations within this transaction.
 func (t *pgxTx) Write(ctx context.Context, mutations []domain.Mutation) error {
 	for _, m := range mutations {

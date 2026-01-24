@@ -41,15 +41,15 @@ Internally, a lot happens that is unique to Falcon. This is how Falcon works at 
   - When receiving a query, we determine an LSN range for the query. If LSN range is specified (which it always is if coming from a peer node), we constrain our range to that under these rules.
     - We try to serve the latest object state no greater than the maximum LSN. We bump our own minimum LSN if we pick a state GREATER than the minimum LSN. You can serve an object state LESSER than the minimum LSN, but the minimum LSN never decreases; it is max(state lsn, minimum LSN).
     - We set the new maximum LSN to min(maximum LSN, replicated LSN).
-    - If our replicated (maximum LSN) is less than the queries MIN LSN, then we wait to replicate up to the min LSN and answer the query based on that state.
+    - If our replicated (maximum LSN) is less than the query's MIN LSN, then we wait to replicate up to the min LSN and answer the query based on that state.
     - If we are up to date and we have no object state less than or equal to the maximum LSN, it means the caller is far behind. We have two options, based on the preference of the caller. If the caller is okay waiting, we continue the query with both the min and max = ~oldest object state LSN we have, ONLY returning as little as possible to determine a new reachable LSN (maybe we still have to return all the bitmaps, but if we can avoid it, they will not be used in the final result). When the query finishes evaluating, the caller gets a new LSN, which it must now wait for. We start the process from there (picking a new object LSN accordingly, if it was updated). If the caller does not want to wait, we abort at the first point we cannot meet their constraint.
 
 So you get:
 
 - Linearizability if any of:
   1. You pick a time window pinned on "last flushed lsn" (nodes must all wait if not already caught up)
-  2. You wait for writes to be acknowledged by shards and you wait for max causally relevant snapshot on read
-  3. You wait for writes to be acknowledge everywhere
+  2. You wait for writes to be acknowledged by shards and you wait for max causally relevant snapshot on read (earlier shards may have to wait & possibly retry if results change)
+  3. You wait for writes to be acknowledged everywhere
 - Monotonic reads if any of:
   1. There are no secondary replicas for a shard.
   - If there are secondaries, then you can read from node 1, get max 100, then read from node 2, get max 99

@@ -278,6 +278,11 @@ type Tx interface {
 	// the object belongs to and may be encoded in the high bits of the ID.
 	GetOrProvisionID(ctx context.Context, ref ObjectRef, root ObjectRef) (ID, error)
 
+	// GetRef returns the external object reference for an internal ID.
+	// Returns [ErrIDNotFound] if the internal ID has no mapping.
+	// Used for reverse queries (list_objects, list_subjects).
+	GetRef(ctx context.Context, typeID TypeID, id ID) (ObjectRef, error)
+
 	// Tuple Operations
 
 	// Write applies mutations within this transaction.

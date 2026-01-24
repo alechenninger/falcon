@@ -306,6 +306,10 @@ func (t *staticTx) GetOrProvisionID(ctx context.Context, ref domain.ObjectRef, r
 	return 0, fmt.Errorf("static store does not support ID provisioning")
 }
 
+func (t *staticTx) GetRef(ctx context.Context, typeID domain.TypeID, id domain.ID) (domain.ObjectRef, error) {
+	return domain.ObjectRef{}, domain.ErrIDNotFound
+}
+
 func (t *staticTx) Write(ctx context.Context, mutations []domain.Mutation) error {
 	return fmt.Errorf("static store does not support writes")
 }

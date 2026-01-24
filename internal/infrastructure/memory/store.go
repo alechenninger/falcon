@@ -126,6 +126,23 @@ func (t *memTx) GetOrProvisionID(ctx context.Context, ref domain.ObjectRef, root
 	return id, nil
 }
 
+// GetRef returns the external object reference for an internal ID.
+// Returns domain.ErrIDNotFound if the internal ID has no mapping.
+func (t *memTx) GetRef(ctx context.Context, typeID domain.TypeID, id domain.ID) (domain.ObjectRef, error) {
+	if t.done {
+		return domain.ObjectRef{}, fmt.Errorf("transaction already finished")
+	}
+	// Check transaction-local IDs first
+	if ref, ok := t.provisionedByID[id]; ok && ref.Type == typeID {
+		return ref, nil
+	}
+	// Check committed store IDs
+	if ref, ok := t.store.idToObjectRef[id]; ok && ref.Type == typeID {
+		return ref, nil
+	}
+	return domain.ObjectRef{}, domain.ErrIDNotFound
+}
+
 // Write accumulates mutations to be applied on commit.
 func (t *memTx) Write(ctx context.Context, mutations []domain.Mutation) error {
 	if t.done {

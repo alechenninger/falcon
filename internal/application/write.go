@@ -203,22 +203,29 @@ type WriteResult struct {
 
 // WriteServiceConfig holds configuration for WriteService.
 type WriteServiceConfig struct {
-	Store  domain.Store
-	Schema *domain.Schema
+	Store    domain.Store
+	Schema   *domain.Schema
+	Observer WriteObserver
 }
 
 // WriteService orchestrates write operations, providing validation,
 // ID mapping, and coordinating with the underlying store.
 type WriteService struct {
-	store  domain.Store
-	schema *domain.Schema
+	store    domain.Store
+	schema   *domain.Schema
+	observer WriteObserver
 }
 
 // NewWriteService creates a new WriteService.
 func NewWriteService(cfg WriteServiceConfig) *WriteService {
+	obs := cfg.Observer
+	if obs == nil {
+		obs = NoOpWriteObserver{}
+	}
 	return &WriteService{
-		store:  cfg.Store,
-		schema: cfg.Schema,
+		store:    cfg.Store,
+		schema:   cfg.Schema,
+		observer: obs,
 	}
 }
 
@@ -230,6 +237,12 @@ func NewWriteService(cfg WriteServiceConfig) *WriteService {
 // If the precondition is set and does not match any tuples, returns
 // [ErrPreconditionFailed] and no mutations are applied.
 func (s *WriteService) Write(ctx context.Context, cmd WriteCommand) (WriteResult, error) {
+	ctx, probe := s.observer.WriteStarted(ctx, cmd)
+	defer probe.End()
+
+	probe.MutationCount(len(cmd.Mutations))
+	probe.HasPrecondition(cmd.Precondition != nil)
+
 	// Nothing to do if no mutations
 	if len(cmd.Mutations) == 0 {
 		return WriteResult{}, nil
@@ -238,13 +251,16 @@ func (s *WriteService) Write(ctx context.Context, cmd WriteCommand) (WriteResult
 	// Begin transaction - all ID resolution happens within the transaction
 	tx, err := s.store.Begin(ctx)
 	if err != nil {
-		return WriteResult{}, fmt.Errorf("begin transaction: %w", err)
+		err = fmt.Errorf("begin transaction: %w", err)
+		probe.Error(err)
+		return WriteResult{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	// First we map from external IDs to internal IDs across mutations and preconditions
 	mutations, err := s.toInternalMutations(ctx, tx, cmd.Mutations)
 	if err != nil {
+		probe.Error(err)
 		return WriteResult{}, err
 	}
 
@@ -252,25 +268,37 @@ func (s *WriteService) Write(ctx context.Context, cmd WriteCommand) (WriteResult
 	if cmd.Precondition != nil {
 		precondition, err := s.toInternalPredicate(cmd.Precondition)
 		if err != nil {
-			return WriteResult{}, fmt.Errorf("precondition: %w", err)
+			err = fmt.Errorf("precondition: %w", err)
+			probe.Error(err)
+			return WriteResult{}, err
 		}
 		matches, err := tx.Contains(ctx, precondition)
 		if err != nil {
-			return WriteResult{}, fmt.Errorf("precondition: %w", err)
+			err = fmt.Errorf("precondition: %w", err)
+			probe.Error(err)
+			return WriteResult{}, err
 		}
+		probe.PreconditionEvaluated(matches)
 		if !matches {
+			probe.Error(ErrPreconditionFailed)
 			return WriteResult{}, ErrPreconditionFailed
 		}
 	}
 
 	// Apply mutations
 	if err := tx.Write(ctx, mutations); err != nil {
-		return WriteResult{}, fmt.Errorf("write: %w", err)
+		err = fmt.Errorf("write: %w", err)
+		probe.Error(err)
+		return WriteResult{}, err
 	}
+	probe.MutationsApplied()
 
 	if err := tx.Commit(ctx); err != nil {
-		return WriteResult{}, fmt.Errorf("commit: %w", err)
+		err = fmt.Errorf("commit: %w", err)
+		probe.Error(err)
+		return WriteResult{}, err
 	}
+	probe.Committed()
 
 	return WriteResult{}, nil
 }

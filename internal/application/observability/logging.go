@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/alechenninger/falcon/internal/application"
 	"github.com/alechenninger/falcon/internal/domain"
 )
 
@@ -894,4 +895,175 @@ func (p *mvccProbe) End() {
 		attrs = append([]slog.Attr{slog.Any("id", p.id)}, attrs...)
 	}
 	p.logger.LogAttrs(context.Background(), slog.LevelDebug, "mvcc operation", attrs...)
+}
+
+// -----------------------------------------------------------------------------
+// WriteObserver
+// -----------------------------------------------------------------------------
+
+// WriteObserver logs WriteService operations.
+type WriteObserver struct {
+	application.NoOpWriteObserver
+	logger *slog.Logger
+}
+
+// NewWriteObserver creates a new logging WriteObserver.
+func NewWriteObserver(logger *slog.Logger) *WriteObserver {
+	return &WriteObserver{logger: logger.With("component", "write")}
+}
+
+// WriteStarted logs the start of a Write operation.
+func (o *WriteObserver) WriteStarted(ctx context.Context, cmd application.WriteCommand) (context.Context, application.WriteProbe) {
+	return ctx, &writeProbe{
+		logger:    o.logger,
+		ctx:       ctx,
+		startTime: time.Now(),
+	}
+}
+
+type writeProbe struct {
+	application.NoOpWriteProbe
+	logger              *slog.Logger
+	ctx                 context.Context
+	startTime           time.Time
+	mutationCount       int
+	hasPrecondition     bool
+	preconditionChecked bool
+	preconditionResult  bool
+	mutationsApplied    bool
+	committed           bool
+	err                 error
+}
+
+func (p *writeProbe) MutationCount(count int) {
+	p.mutationCount = count
+}
+
+func (p *writeProbe) HasPrecondition(has bool) {
+	p.hasPrecondition = has
+}
+
+func (p *writeProbe) PreconditionEvaluated(satisfied bool) {
+	p.preconditionChecked = true
+	p.preconditionResult = satisfied
+}
+
+func (p *writeProbe) MutationsApplied() {
+	p.mutationsApplied = true
+}
+
+func (p *writeProbe) Committed() {
+	p.committed = true
+}
+
+func (p *writeProbe) Error(err error) {
+	p.err = err
+}
+
+func (p *writeProbe) End() {
+	duration := time.Since(p.startTime)
+
+	if p.err != nil {
+		p.logger.LogAttrs(p.ctx, slog.LevelError, "write failed",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.Int("mutation_count", p.mutationCount),
+			slog.Bool("has_precondition", p.hasPrecondition),
+			slog.Bool("precondition_checked", p.preconditionChecked),
+			slog.Bool("precondition_satisfied", p.preconditionResult),
+			slog.Any("error", p.err),
+			slog.Duration("duration", duration))
+		return
+	}
+
+	if !p.logger.Enabled(p.ctx, slog.LevelInfo) {
+		return
+	}
+
+	p.logger.LogAttrs(p.ctx, slog.LevelInfo, "write completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.Int("mutation_count", p.mutationCount),
+		slog.Bool("has_precondition", p.hasPrecondition),
+		slog.Bool("precondition_satisfied", p.preconditionResult),
+		slog.Duration("duration", duration))
+}
+
+// -----------------------------------------------------------------------------
+// QueryObserver
+// -----------------------------------------------------------------------------
+
+// QueryObserver logs QueryService operations.
+type QueryObserver struct {
+	application.NoOpQueryObserver
+	logger *slog.Logger
+}
+
+// NewQueryObserver creates a new logging QueryObserver.
+func NewQueryObserver(logger *slog.Logger) *QueryObserver {
+	return &QueryObserver{logger: logger.With("component", "query")}
+}
+
+// CheckStarted logs the start of a Check operation.
+func (o *QueryObserver) CheckStarted(ctx context.Context, q application.CheckQuery) (context.Context, application.QueryCheckProbe) {
+	return ctx, &queryCheckProbe{
+		logger:    o.logger,
+		ctx:       ctx,
+		query:     q,
+		startTime: time.Now(),
+	}
+}
+
+type queryCheckProbe struct {
+	application.NoOpQueryCheckProbe
+	logger    *slog.Logger
+	ctx       context.Context
+	query     application.CheckQuery
+	startTime time.Time
+	objectID  domain.ID
+	subjectID domain.ID
+	allowed   bool
+	err       error
+}
+
+func (p *queryCheckProbe) IdsResolved(objectID, subjectID domain.ID) {
+	p.objectID = objectID
+	p.subjectID = subjectID
+}
+
+func (p *queryCheckProbe) Result(allowed bool) {
+	p.allowed = allowed
+}
+
+func (p *queryCheckProbe) Error(err error) {
+	p.err = err
+}
+
+func (p *queryCheckProbe) End() {
+	duration := time.Since(p.startTime)
+
+	if p.err != nil {
+		p.logger.LogAttrs(p.ctx, slog.LevelError, "check failed",
+			slog.String("request_id", RequestIDFromContext(p.ctx)),
+			slog.String("object_type", string(p.query.ObjectType)),
+			slog.String("object_id", string(p.query.ObjectID)),
+			slog.String("relation", string(p.query.Relation)),
+			slog.String("subject_type", string(p.query.SubjectType)),
+			slog.String("subject_id", string(p.query.SubjectID)),
+			slog.Any("error", p.err),
+			slog.Duration("duration", duration))
+		return
+	}
+
+	if !p.logger.Enabled(p.ctx, slog.LevelInfo) {
+		return
+	}
+
+	p.logger.LogAttrs(p.ctx, slog.LevelInfo, "check completed",
+		slog.String("request_id", RequestIDFromContext(p.ctx)),
+		slog.String("object_type", string(p.query.ObjectType)),
+		slog.String("object_id", string(p.query.ObjectID)),
+		slog.String("relation", string(p.query.Relation)),
+		slog.String("subject_type", string(p.query.SubjectType)),
+		slog.String("subject_id", string(p.query.SubjectID)),
+		slog.Bool("allowed", p.allowed),
+		slog.Duration("duration", duration))
 }
