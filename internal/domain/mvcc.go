@@ -19,9 +19,9 @@ const bitmapMode = 255
 // undoEntry records a change that can be undone to reconstruct historical state.
 // In the history slice, timeDelta stores the time gap to the next (newer) entry.
 type undoEntry struct {
-	timeDelta StoreDelta   // Delta to next entry's time (0 for headUndo, computed for history)
-	added     []ID  // IDs added at this time (undo = remove)
-	removed   []ID  // IDs removed at this time (undo = add back)
+	timeDelta StoreDelta // Delta to next entry's time (0 for headUndo, computed for history)
+	added     []ID       // IDs added at this time (undo = remove)
+	removed   []ID       // IDs removed at this time (undo = add back)
 }
 
 // VersionedSet stores a set of IDs with MVCC support via undo chains.
@@ -46,8 +46,8 @@ type VersionedSet struct {
 	count  uint8 // 0-3 = inline mode, bitmapMode = use bitmap
 
 	head     *roaring64.Bitmap // Only allocated when count == bitmapMode
-	headUndo *undoEntry      // Most recent change (at headTime), nil if no history
-	history  []undoEntry     // Older entries, oldest first
+	headUndo *undoEntry        // Most recent change (at headTime), nil if no history
+	history  []undoEntry       // Older entries, oldest first
 }
 
 // NewVersionedSet creates a new versioned set starting at the given time.
@@ -231,6 +231,7 @@ func (v *VersionedSet) Head() *roaring64.Bitmap {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if v.isInlineMode() {
+		// TODO: this is suspect here
 		v.promoteToBitmap()
 	}
 	return v.head

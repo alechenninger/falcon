@@ -13,6 +13,8 @@ Internally, a lot happens that is unique to Falcon. This is how Falcon works at 
 
 ## How Falcon Works
 
+TODO: Need to account for schema changes
+
 ### Writes & replication
 
 - Writes go straight to an underlying postgres store, in a serializable transaction, dependent on precondition queries being satisifed.
