@@ -379,21 +379,23 @@ func measureHeap() uint64 {
 
 // setupPostgres starts a PostgreSQL container and returns the connection string.
 // Returns a cleanup function that should be called when done.
-func setupPostgres(ctx context.Context, t testing.TB) (string, func()) {
+func setupPostgres(ctx context.Context, t testing.TB, options ...testcontainers.ContainerCustomizer) (string, func()) {
 	// Disable Ryuk for podman compatibility
 	os.Setenv("TESTCONTAINERS_RYUK_DISABLED", "true")
 
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:18-alpine",
+	containerOptions := []testcontainers.ContainerCustomizer{
 		postgres.WithDatabase("falcon_bench"),
 		postgres.WithUsername("bench"),
 		postgres.WithPassword("bench"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
+				WithStartupTimeout(60 * time.Second),
 		),
-	)
+	}
+	containerOptions = append(containerOptions, options...)
+
+	pgContainer, err := postgres.Run(ctx, "postgres:18-alpine", containerOptions...)
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}

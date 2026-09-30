@@ -4,6 +4,7 @@ go 1.25.5
 
 require (
 	github.com/RoaringBitmap/roaring v1.9.4
+	github.com/docker/docker v28.5.1+incompatible
 	github.com/jackc/pglogrepl v0.0.0-20250509230407-a9884f6bd75a
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/testcontainers/testcontainers-go v0.40.0
@@ -25,7 +26,6 @@ require (
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
-	github.com/docker/docker v28.5.1+incompatible // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.8.4 // indirect
