@@ -1,8 +1,3 @@
----
-description: Package organization following a layered architecture
-alwaysApply: true
----
-
 # Package Organization
 
 Falcon uses a 4-layer architecture. Dependencies flow downward only.

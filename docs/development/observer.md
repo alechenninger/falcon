@@ -1,9 +1,3 @@
----
-description: Pattern for creating Observers (domain-oriented observability)
-globs: **/*.go
-alwaysApply: false
----
-
 # Observer Pattern
 
 Use when adding observability to domain or application components. Inspired by [Domain-Oriented Observability](https://martinfowler.com/articles/domain-oriented-observability.html).
@@ -11,7 +5,7 @@ Use when adding observability to domain or application components. Inspired by [
 ## Structure
 
 1. **Observer interface** - Entry point, returns Probes for operations
-2. **Probe interface** - Tracks a single operation lifecycle  
+2. **Probe interface** - Tracks a single operation lifecycle
 3. **NoOp implementations** - For forward compatibility and testing
 
 ## Naming
@@ -37,10 +31,10 @@ type {Component}Observer interface {
 type {Op}Probe interface {
     // Result is called with the operation result.
     Result(...)
-    
+
     // Error is called when an error occurs.
     Error(err error)
-    
+
     // End signals the operation is complete (for timing). Called via defer.
     End()
 }
@@ -112,14 +106,14 @@ func (p *{op}Probe) End() {
 func (s *Service) DoOperation(ctx context.Context, ...) error {
     ctx, probe := s.observer.DoOperationStarted(ctx, ...)
     defer probe.End()
-    
+
     // ... operation logic ...
-    
+
     if err != nil {
         probe.Error(err)
         return err
     }
-    
+
     probe.Result(...)
     return nil
 }
