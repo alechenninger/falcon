@@ -36,27 +36,22 @@ func (r ObjectRef) IsZero() bool {
 // Supported: Postgres LSN, Oracle SCN, MariaDB GTID, SQL Server Change Tracking.
 //
 // Use native operators (<, >, ==) for comparisons. Use [StoreTime.Difference] and
-// [StoreTime.Less] for type-safe conversions between StoreTime and StoreDelta.
+// [StoreTime.Less] when computing and applying deltas between StoreTime values.
 type StoreTime uint64
 
-// Difference returns the delta (t - other) as a [StoreDelta].
-// Panics if the delta exceeds uint32 max value.
-func (t StoreTime) Difference(other StoreTime) StoreDelta {
-	delta := uint64(t - other)
-	if delta > uint64(^uint32(0)) {
-		panic("StoreTime.Difference: delta overflow (exceeds uint32)")
+// Difference returns the delta (t - other) as a [StoreTime].
+// Panics if t is earlier than other.
+func (t StoreTime) Difference(other StoreTime) StoreTime {
+	if t < other {
+		panic("StoreTime.Difference: t is earlier than other")
 	}
-	return StoreDelta(delta)
+	return t - other
 }
 
 // Less returns t - d as a new StoreTime.
-func (t StoreTime) Less(d StoreDelta) StoreTime {
-	return t - StoreTime(d)
+func (t StoreTime) Less(d StoreTime) StoreTime {
+	return t - d
 }
-
-// StoreDelta represents the distance between two [StoreTime] values.
-// Use native + operator for adding deltas.
-type StoreDelta uint32
 
 // AtomicStoreTime provides atomic operations on [StoreTime].
 type AtomicStoreTime struct {

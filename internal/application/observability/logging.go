@@ -865,7 +865,7 @@ func (p *mvccProbe) HistoryDepth(depth int) {
 	p.historyDepth = depth
 }
 
-func (p *mvccProbe) UndoApplied(timeDelta uint32) {
+func (p *mvccProbe) UndoApplied(timeDelta domain.StoreTime) {
 	p.undoCount++
 }
 

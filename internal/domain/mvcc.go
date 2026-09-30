@@ -19,9 +19,9 @@ const bitmapMode = 255
 // undoEntry records a change that can be undone to reconstruct historical state.
 // In the history slice, timeDelta stores the time gap to the next (newer) entry.
 type undoEntry struct {
-	timeDelta StoreDelta // Delta to next entry's time (0 for headUndo, computed for history)
-	added     []ID       // IDs added at this time (undo = remove)
-	removed   []ID       // IDs removed at this time (undo = add back)
+	timeDelta StoreTime // Delta to next entry's time (0 for headUndo, computed for history)
+	added     []ID      // IDs added at this time (undo = remove)
+	removed   []ID      // IDs removed at this time (undo = add back)
 }
 
 // VersionedSet stores a set of IDs with MVCC support via undo chains.
@@ -396,7 +396,7 @@ func (v *VersionedSet) ContainsWithinObserved(id ID, maxTime StoreTime, obs MVCC
 		undo := &v.history[i]
 		entryTime := currentTime.Less(undo.timeDelta)
 		historyDepth++
-		probe.UndoApplied(uint32(undo.timeDelta))
+		probe.UndoApplied(undo.timeDelta)
 
 		// Check if this entry changed the state for our ID
 		if slices.Contains(undo.added, id) && result {
@@ -541,7 +541,7 @@ func (v *VersionedSet) SnapshotWithinObserved(maxTime StoreTime, obs MVCCObserve
 		undo := &v.history[i]
 		currentTime = currentTime.Less(undo.timeDelta)
 		historyDepth++
-		probe.UndoApplied(uint32(undo.timeDelta))
+		probe.UndoApplied(undo.timeDelta)
 		if currentTime <= maxTime {
 			probe.HistoryDepth(historyDepth)
 			probe.Result(true, currentTime)

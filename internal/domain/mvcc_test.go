@@ -1,9 +1,10 @@
 package domain
 
 import (
+	"math"
+	"strconv"
 	"testing"
-
-	
+	"unsafe"
 )
 
 // TestVersionedSet_Add tests basic add operations.
@@ -93,6 +94,40 @@ func TestVersionedSet_DeltaChainInvariants(t *testing.T) {
 				t.Errorf("ID %d should NOT be present at time %d", i+1, time-1)
 			}
 		}
+	}
+}
+
+func TestVersionedSet_WideTimeDeltas(t *testing.T) {
+	laterTime := StoreTime(math.MaxUint32) + 1
+	vs := NewVersionedSet(0)
+	vs.Add(1, 0)
+	vs.Add(2, laterTime)
+
+	found, stateTime := vs.ContainsWithin(1, 0)
+	if !found || stateTime != 0 {
+		t.Errorf("ContainsWithin at time 0 = (%v, %d), want (true, 0)", found, stateTime)
+	}
+
+	snapshot, snapshotTime := vs.SnapshotWithin(0)
+	if snapshot == nil || snapshotTime != 0 || !snapshot.Contains(1) || snapshot.Contains(2) {
+		t.Errorf("SnapshotWithin at time 0 returned an incorrect snapshot at time %d", snapshotTime)
+	}
+
+	window := NewSnapshotWindow(0, laterTime)
+	if window.Min() != 0 || window.Max() != laterTime {
+		t.Errorf("NewSnapshotWindow(0, %d) = %v", laterTime, window)
+	}
+}
+
+func TestWideDeltaFieldsDoNotIncrease64BitStructSizes(t *testing.T) {
+	if strconv.IntSize != 64 {
+		t.Skip("struct size assertion applies to 64-bit systems")
+	}
+	if got := unsafe.Sizeof(undoEntry{}); got != 56 {
+		t.Errorf("sizeof(undoEntry) = %d, want 56", got)
+	}
+	if got := unsafe.Sizeof(SnapshotWindow{}); got != 16 {
+		t.Errorf("sizeof(SnapshotWindow) = %d, want 16", got)
 	}
 }
 

@@ -3,8 +3,6 @@ package domain
 import (
 	"context"
 	"sync"
-
-	
 )
 
 // UsersetKey identifies a userset for observation purposes using type/relation IDs.
@@ -529,7 +527,7 @@ type MVCCProbe interface {
 	HistoryDepth(depth int)
 
 	// UndoApplied is called when an undo entry is applied during time travel.
-	UndoApplied(timeDelta uint32)
+	UndoApplied(timeDelta StoreTime)
 
 	// HeadUsed is called when the head state was used (no time travel needed).
 	HeadUsed()
@@ -562,7 +560,7 @@ func (NoOpMVCCObserver) SnapshotWithinStarted(_ StoreTime) MVCCProbe {
 type NoOpMVCCProbe struct{}
 
 func (NoOpMVCCProbe) HistoryDepth(int)       {}
-func (NoOpMVCCProbe) UndoApplied(uint32)     {}
+func (NoOpMVCCProbe) UndoApplied(StoreTime)  {}
 func (NoOpMVCCProbe) HeadUsed()              {}
 func (NoOpMVCCProbe) Result(bool, StoreTime) {}
 func (NoOpMVCCProbe) End()                   {}

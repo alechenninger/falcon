@@ -3,7 +3,6 @@ package grpc
 
 import (
 	"bytes"
-	"math"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/alechenninger/falcon/internal/domain"
@@ -38,15 +37,9 @@ func SnapshotWindowToProto(w domain.SnapshotWindow) *graphpb.SnapshotWindow {
 }
 
 // SnapshotWindowFromProto converts a proto SnapshotWindow to the Go type.
-// Handles the special case of MaxSnapshotWindow (min=0, max=MaxUint64).
 // If the window is nil or has zero values, defaults to MaxSnapshotWindow.
 func SnapshotWindowFromProto(w *graphpb.SnapshotWindow) domain.SnapshotWindow {
 	if w == nil {
-		return domain.MaxSnapshotWindow
-	}
-	// Detect MaxSnapshotWindow: min=0 and max=MaxUint64
-	// Can't use NewSnapshotWindow for this because delta would overflow
-	if w.Min == 0 && w.Max == math.MaxUint64 {
 		return domain.MaxSnapshotWindow
 	}
 	// TODO: reconsider this

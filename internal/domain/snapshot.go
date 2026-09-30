@@ -9,16 +9,9 @@ import (
 // Use this as the starting window when you don't have constraints.
 // The narrowing algorithm will constrain it based on actual data access.
 // Safe to use directly since SnapshotWindow is a value type (copied on use).
-//
-// This is a sentinel value - Min() special-cases it to return 0.
 var MaxSnapshotWindow = SnapshotWindow{
-	minDelta: math.MaxUint32,
-	max:      StoreTime(math.MaxUint64),
-}
-
-// isMaxWindow returns true if this is the MaxSnapshotWindow sentinel.
-func (w SnapshotWindow) isMaxWindow() bool {
-	return w.max == StoreTime(math.MaxUint64) && w.minDelta == math.MaxUint32
+	min: 0,
+	max: StoreTime(math.MaxUint64),
 }
 
 // SnapshotWindow represents the time range for a consistent snapshot read.
@@ -30,12 +23,9 @@ func (w SnapshotWindow) isMaxWindow() bool {
 // while also lazily assigning a specific, "effective" snapshot
 // (by giving the range of what would still be causally consistent).
 //
-// Internally, Min is stored as a delta from Max to save memory (4 bytes vs 8).
-// Since Min <= Max, the delta is always non-negative.
+// Min and Max are stored as absolute times.
 type SnapshotWindow struct {
-	// minDelta is Max - Min. This compresses the Min value into 4 bytes.
-	// Min() returns Max - minDelta.
-	minDelta StoreDelta
+	min StoreTime
 
 	// max is the maximum time we can use. This starts as the replicated time
 	// (what we know we're up to) and may decrease when a shard has a lower
@@ -44,24 +34,18 @@ type SnapshotWindow struct {
 }
 
 // NewSnapshotWindow creates a new SnapshotWindow with the given min and max times.
-// Panics if min > max or if the delta exceeds uint32 range.
+// Panics if min > max.
 func NewSnapshotWindow(min, max StoreTime) SnapshotWindow {
 	if min > max {
 		panic("SnapshotWindow: min > max")
 	}
-	// Difference panics if delta exceeds uint32
-	delta := max.Difference(min)
-	return SnapshotWindow{minDelta: delta, max: max}
+	return SnapshotWindow{min: min, max: max}
 }
 
 // Min returns the minimum time we've committed to. This is the highest state time
 // we've used so far, meaning other tuple reads must be at least this fresh.
 func (w SnapshotWindow) Min() StoreTime {
-	// Special case: MaxSnapshotWindow represents [0, MaxUint64]
-	if w.isMaxWindow() {
-		return 0
-	}
-	return w.max.Less(w.minDelta)
+	return w.min
 }
 
 // Max returns the maximum time we can use.
