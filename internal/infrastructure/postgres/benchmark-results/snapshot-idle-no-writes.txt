@@ -1,0 +1,8 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/alechenninger/falcon/internal/infrastructure/postgres
+cpu: Apple M4 Pro
+BenchmarkSnapshotIdlePolling/Ticker10ms-14         	       3	1000062070 ns/op	        99.99 idle-scans/s	       300.0 poll-wakes
+BenchmarkSnapshotIdlePolling/Idle100ms-14          	       3	1001100250 ns/op	         9.323 idle-scans/s	        28.00 poll-wakes
+PASS
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	12.890s

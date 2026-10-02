@@ -32,6 +32,9 @@ var replicationBenchRunSequence atomic.Uint64
 
 type replicationBenchObjects struct {
 	table       string
+	clock       string
+	journal     string
+	sequence    string
 	channel     string
 	publication string
 	slot        string
@@ -41,6 +44,9 @@ func newReplicationBenchObjects() replicationBenchObjects {
 	suffix := fmt.Sprintf("%x_%x", time.Now().UnixNano(), replicationBenchRunSequence.Add(1))
 	return replicationBenchObjects{
 		table:       "replication_bench_events_" + suffix,
+		clock:       "replication_bench_clock_" + suffix,
+		journal:     "replication_bench_journal_" + suffix,
+		sequence:    "replication_bench_seq_" + suffix,
 		channel:     "falcon_replication_bench_" + suffix,
 		publication: "replication_bench_pub_" + suffix,
 		slot:        "replication_bench_slot_" + suffix,
@@ -60,6 +66,11 @@ func setupReplicationBenchPostgres(ctx context.Context, b *testing.B) (string, f
 			"-c", "effective_cache_size=3GB",
 			"-c", "work_mem=4MB",
 			"-c", "max_wal_size=4GB",
+			// The Testcontainers postgres module disables fsync by default.
+			// Explicitly restore durability for commit-contention measurements.
+			"-c", "fsync=on",
+			"-c", "synchronous_commit=on",
+			"-c", "full_page_writes=on",
 		),
 		testcontainers.WithHostConfigModifier(func(hostConfig *container.HostConfig) {
 			hostConfig.Resources.Memory = 4 << 30
@@ -69,15 +80,20 @@ func setupReplicationBenchPostgres(ctx context.Context, b *testing.B) (string, f
 }
 
 type replicationBenchWorkload struct {
-	name        string
-	rowsPerTx   int
-	payloadSize int
+	name          string
+	rowsPerTx     int
+	payloadSize   int
+	sourceKeys    int // Zero appends distinct rows; positive values upsert a bounded key set.
+	sequenceFault sequenceBenchFault
 }
 
 type replicationBenchRunOptions struct {
 	writerCount            int
 	fetchLimit             int
 	offeredWritesPerSecond int
+	snapshotWakeMode       snapshotBenchWakeMode
+	snapshotPollMode       snapshotBenchPollMode
+	snapshotNotifyDelay    time.Duration
 }
 
 type replicationBenchMode int
@@ -86,6 +102,15 @@ const (
 	replicationNotifyInTx replicationBenchMode = iota
 	replicationNotifyAfterCommit
 	replicationLogicalSlot
+	replicationJournalPoll
+	replicationJournalNotifyInTx
+	replicationJournalNotifyAfterCommit
+	replicationCounterLogicalSlot
+	replicationJournalPipelined
+	replicationSequencePoll
+	replicationSequencePipelined
+	replicationSnapshotPoll
+	replicationSnapshotPipelined
 )
 
 func (m replicationBenchMode) String() string {
@@ -94,9 +119,47 @@ func (m replicationBenchMode) String() string {
 		return "NotifyInTransaction"
 	case replicationNotifyAfterCommit:
 		return "NotifyAfterCommit"
+	case replicationJournalPoll:
+		return "JournalPoll"
+	case replicationJournalNotifyInTx:
+		return "JournalNotifyInTransaction"
+	case replicationJournalNotifyAfterCommit:
+		return "JournalNotifyAfterCommit"
+	case replicationCounterLogicalSlot:
+		return "CounterLogicalSlot"
+	case replicationJournalPipelined:
+		return "JournalPollPipelined"
+	case replicationSequencePoll:
+		return "SequencePoll"
+	case replicationSequencePipelined:
+		return "SequencePollPipelined"
+	case replicationSnapshotPoll:
+		return "SnapshotPoll"
+	case replicationSnapshotPipelined:
+		return "SnapshotPollPipelined"
 	default:
 		return "LogicalSlot"
 	}
+}
+
+func (m replicationBenchMode) usesJournal() bool {
+	return m == replicationJournalPoll || m == replicationJournalNotifyInTx || m == replicationJournalNotifyAfterCommit || m == replicationJournalPipelined || m.usesSequence() || m.usesSnapshot()
+}
+
+func (m replicationBenchMode) usesCounter() bool {
+	return (m.usesJournal() && !m.usesSequence() && !m.usesSnapshot()) || m == replicationCounterLogicalSlot
+}
+
+func (m replicationBenchMode) usesSnapshot() bool {
+	return m == replicationSnapshotPoll || m == replicationSnapshotPipelined
+}
+
+func (m replicationBenchMode) usesSequence() bool {
+	return m == replicationSequencePoll || m == replicationSequencePipelined
+}
+
+func (m replicationBenchMode) usesLogicalSlot() bool {
+	return m == replicationLogicalSlot || m == replicationCounterLogicalSlot
 }
 
 func BenchmarkReplicationTransport(b *testing.B) {
@@ -204,7 +267,7 @@ func runReplicationTransportBenchmark(
 	}
 	defer pool.Close()
 	defer func() {
-		if err := cleanupReplicationBenchObjects(context.Background(), pool, connString, objects, mode == replicationLogicalSlot); err != nil {
+		if err := cleanupReplicationBenchObjects(context.Background(), pool, connString, objects, mode.usesLogicalSlot()); err != nil {
 			b.Logf("failed to clean up replication benchmark objects: %v", err)
 		}
 	}()
@@ -212,14 +275,31 @@ func runReplicationTransportBenchmark(
 	if err := prepareReplicationBenchSchema(setupCtx, pool, objects); err != nil {
 		b.Fatal(err)
 	}
+	if mode.usesCounter() {
+		if err := prepareJournalBenchSchema(setupCtx, pool, objects); err != nil {
+			b.Fatal(err)
+		}
+	}
 
-	var sharedBuffers, effectiveCacheSize, workMem, maxWALSize string
+	if mode.usesSequence() {
+		if err := prepareSequenceBenchSchema(setupCtx, pool, objects); err != nil {
+			b.Fatal(err)
+		}
+	}
+	if mode.usesSnapshot() {
+		if err := prepareSnapshotBenchSchema(setupCtx, pool, objects); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	var sharedBuffers, effectiveCacheSize, workMem, maxWALSize, version, fsync, synchronousCommit string
 	if err := pool.QueryRow(setupCtx, `
 		SELECT current_setting('shared_buffers'),
 		       current_setting('effective_cache_size'),
 		       current_setting('work_mem'),
-		       current_setting('max_wal_size')
-	`).Scan(&sharedBuffers, &effectiveCacheSize, &workMem, &maxWALSize); err != nil {
+		       current_setting('max_wal_size'), version(),
+		       current_setting('fsync'), current_setting('synchronous_commit')
+	`).Scan(&sharedBuffers, &effectiveCacheSize, &workMem, &maxWALSize, &version, &fsync, &synchronousCommit); err != nil {
 		b.Fatalf("read PostgreSQL memory settings: %v", err)
 	}
 	memoryProfile := "container=4GiB"
@@ -230,6 +310,19 @@ func runReplicationTransportBenchmark(
 		memoryProfile, sharedBuffers, effectiveCacheSize, workMem, maxWALSize,
 		options.writerCount, options.fetchLimit, options.offeredWritesPerSecond,
 		workload.rowsPerTx, workload.payloadSize)
+	b.Logf("%s; fsync=%s synchronous_commit=%s", version, fsync, synchronousCommit)
+	if mode.usesCounter() {
+		b.Logf("durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=%s", journalBenchPollInterval)
+	}
+	if mode.usesSequence() {
+		b.Logf("sequence journal: CACHE 1, gap grace=%s, repair lock timeout=%s, idle poll=%s, source keys=%d, fault=%d", sequenceBenchGapGrace, sequenceBenchRepairLockTimeout, journalBenchPollInterval, workload.sourceKeys, workload.sequenceFault)
+	}
+	if mode.usesSnapshot() {
+		b.Logf("snapshot journal: explicit xid8 + index, repeatable-read pages, durable epoch manifests, idle poll=%s, source keys=%d, fault=%d", journalBenchPollInterval, workload.sourceKeys, workload.sequenceFault)
+	}
+	if mode == replicationJournalPipelined || mode == replicationSequencePipelined || mode == replicationSnapshotPipelined {
+		b.Log("append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline")
+	}
 
 	payloadBytes := make([]byte, workload.payloadSize)
 	rng := rand.New(rand.NewSource(42))
@@ -260,6 +353,14 @@ func runReplicationTransportBenchmark(
 	}
 
 	tracker := newReplicationBenchTracker(b.N)
+	tracker.snapshotPollMode = options.snapshotPollMode
+	if mode.usesSnapshot() {
+		tracker.snapshotWake, err = startSnapshotBenchWakeups(runCtx, connString, objects.channel, options.snapshotWakeMode, options.snapshotNotifyDelay, &consumerWG, reportConsumerError)
+		if err != nil {
+			b.Fatalf("start snapshot wakeups: %v", err)
+		}
+		b.Logf("snapshot wakeup policy=%s; polling=%s; notification batch wait=%s", options.snapshotWakeMode, options.snapshotPollMode, options.snapshotNotifyDelay)
+	}
 	consumerReady := make(chan struct{})
 	switch mode {
 	case replicationNotifyInTx, replicationNotifyAfterCommit:
@@ -268,11 +369,21 @@ func runReplicationTransportBenchmark(
 			&consumerWG, reportConsumerError); err != nil {
 			b.Fatalf("start notification consumer: %v", err)
 		}
-	case replicationLogicalSlot:
+	case replicationLogicalSlot, replicationCounterLogicalSlot:
 		if err := startLogicalSlotBenchConsumer(setupCtx, runCtx, connString, tracker,
 			workload.rowsPerTx, expectedPayloadChecksum, objects, consumerReady,
 			&consumerWG, reportConsumerError); err != nil {
 			b.Fatalf("start logical slot consumer: %v", err)
+		}
+	case replicationSequencePoll, replicationSequencePipelined:
+		startSequenceBenchConsumer(runCtx, pool, tracker, workload, expectedPayloadChecksum, options.fetchLimit, objects, consumerReady, &consumerWG, reportConsumerError)
+	case replicationSnapshotPoll, replicationSnapshotPipelined:
+		startSnapshotBenchConsumer(runCtx, pool, tracker, workload, expectedPayloadChecksum, options.fetchLimit, objects, consumerReady, &consumerWG, reportConsumerError)
+	case replicationJournalPoll, replicationJournalNotifyInTx, replicationJournalNotifyAfterCommit, replicationJournalPipelined:
+		if err := startJournalBenchConsumer(runCtx, connString, pool, tracker, workload,
+			expectedPayloadChecksum, mode, options.fetchLimit, objects, consumerReady,
+			&consumerWG, reportConsumerError); err != nil {
+			b.Fatalf("start journal consumer: %v", err)
 		}
 	}
 	if err := waitForReplicationBenchReady(runCtx, consumerReady, consumerErrors); err != nil {
@@ -303,10 +414,22 @@ func runReplicationTransportBenchmark(
 		b.Fatal(err)
 	}
 	b.StopTimer()
+	if workload.sourceKeys > 0 {
+		var sourceRows int
+		if err := pool.QueryRow(setupCtx, "SELECT COUNT(*) FROM "+objects.table).Scan(&sourceRows); err != nil {
+			b.Fatal(err)
+		}
+		want := min(b.N, workload.sourceKeys) * workload.rowsPerTx
+		if sourceRows != want {
+			b.Fatalf("latest-state rows=%d, want %d", sourceRows, want)
+		}
+	}
 	applyFinished := tracker.finishedAt()
-	samples := tracker.samples()
 	cancel()
 	consumerWG.Wait()
+	// The final transaction closes the drain channel before the consumer finishes
+	// its epoch accounting. Join it before collecting the complete metrics.
+	samples := tracker.samples()
 	if err := takeReplicationBenchError(consumerErrors); err != nil {
 		b.Fatalf("replication consumer shutdown: %v", err)
 	}
@@ -316,19 +439,25 @@ func runReplicationTransportBenchmark(
 			len(samples.commitToApply), len(samples.operationToApply),
 			len(samples.remainingCatchUp), len(samples.commitDurations), b.N)
 	}
-	if options.offeredWritesPerSecond > 0 && len(samples.scheduleLags) != b.N {
+	if options.offeredWritesPerSecond > 0 && (len(samples.scheduleLags) != b.N || len(samples.arrivalToApply) != b.N) {
 		b.Fatalf("recorded %d scheduling delays, want %d", len(samples.scheduleLags), b.N)
+	}
+	if (mode.usesJournal() || mode.usesCounter()) && len(samples.journalAppendDurations) != b.N {
+		b.Fatalf("recorded %d journal append durations, want %d", len(samples.journalAppendDurations), b.N)
 	}
 
 	applyElapsed := applyFinished.Sub(writeStarted)
 	if writeElapsed <= 0 || applyElapsed <= 0 {
 		b.Fatalf("invalid elapsed times: writes=%s apply=%s", writeElapsed, applyElapsed)
 	}
+	sort.Slice(samples.arrivalToApply, func(i, j int) bool { return samples.arrivalToApply[i] < samples.arrivalToApply[j] })
 	sort.Slice(samples.operationToApply, func(i, j int) bool { return samples.operationToApply[i] < samples.operationToApply[j] })
 	sort.Slice(samples.commitToApply, func(i, j int) bool { return samples.commitToApply[i] < samples.commitToApply[j] })
 	sort.Slice(samples.remainingCatchUp, func(i, j int) bool { return samples.remainingCatchUp[i] < samples.remainingCatchUp[j] })
 	sort.Slice(samples.commitDurations, func(i, j int) bool { return samples.commitDurations[i] < samples.commitDurations[j] })
 	sort.Slice(samples.scheduleLags, func(i, j int) bool { return samples.scheduleLags[i] < samples.scheduleLags[j] })
+	sort.Slice(samples.writeDurations, func(i, j int) bool { return samples.writeDurations[i] < samples.writeDurations[j] })
+	sort.Slice(samples.journalAppendDurations, func(i, j int) bool { return samples.journalAppendDurations[i] < samples.journalAppendDurations[j] })
 	sort.Ints(samples.transactionsPerFetch)
 
 	sourceBytes := float64(completed) * float64(workload.rowsPerTx) * float64(workload.payloadSize)
@@ -339,6 +468,11 @@ func runReplicationTransportBenchmark(
 	b.ReportMetric(float64(options.writerCount), "writers")
 	if options.offeredWritesPerSecond > 0 {
 		b.ReportMetric(float64(options.offeredWritesPerSecond), "offered-writes/s")
+		b.ReportMetric(float64(replicationBenchPercentile(samples.arrivalToApply, 50))/float64(time.Microsecond), "p50-arrival-to-apply-us")
+		b.ReportMetric(float64(replicationBenchPercentile(samples.arrivalToApply, 99))/float64(time.Microsecond), "p99-arrival-to-apply-us")
+		b.ReportMetric(float64(samples.arrivalToApply[len(samples.arrivalToApply)-1])/float64(time.Microsecond), "max-arrival-to-apply-us")
+		over50ms := len(samples.arrivalToApply) - sort.Search(len(samples.arrivalToApply), func(i int) bool { return samples.arrivalToApply[i] > 50*time.Millisecond })
+		b.ReportMetric(float64(over50ms)/float64(b.N)*100, "over-50ms-arrival-pct")
 		b.ReportMetric(float64(replicationBenchPercentile(samples.scheduleLags, 50))/float64(time.Microsecond), "p50-schedule-lag-us")
 		b.ReportMetric(float64(replicationBenchPercentile(samples.scheduleLags, 99))/float64(time.Microsecond), "p99-schedule-lag-us")
 	}
@@ -351,6 +485,32 @@ func runReplicationTransportBenchmark(
 	b.ReportMetric(float64(samples.appliedBeforeCommit)/float64(b.N)*100, "applied-before-commit-pct")
 	b.ReportMetric(float64(replicationBenchPercentile(samples.commitDurations, 50))/float64(time.Microsecond), "p50-commit-us")
 	b.ReportMetric(float64(replicationBenchPercentile(samples.commitDurations, 99))/float64(time.Microsecond), "p99-commit-us")
+	b.ReportMetric(float64(replicationBenchPercentile(samples.writeDurations, 50))/float64(time.Microsecond), "p50-write-us")
+	b.ReportMetric(float64(replicationBenchPercentile(samples.writeDurations, 99))/float64(time.Microsecond), "p99-write-us")
+	if mode.usesJournal() || mode.usesCounter() {
+		b.ReportMetric(float64(replicationBenchPercentile(samples.journalAppendDurations, 50))/float64(time.Microsecond), "p50-journal-append-us")
+		b.ReportMetric(float64(replicationBenchPercentile(samples.journalAppendDurations, 99))/float64(time.Microsecond), "p99-journal-append-us")
+	}
+	if mode.usesSnapshot() {
+		b.ReportMetric(float64(samples.snapshotEpochs), "snapshot-epochs")
+		b.ReportMetric(float64(samples.snapshotReplays), "snapshot-replays")
+		b.ReportMetric(float64(samples.snapshotExceptionMax), "max-snapshot-exceptions")
+		b.ReportMetric(float64(b.N)/float64(samples.snapshotEpochs), "avg-tx-per-epoch")
+		if wake := tracker.snapshotWake; wake != nil {
+			wake.report(b)
+		}
+	}
+	if mode.usesSequence() || mode.usesSnapshot() {
+		b.ReportMetric(float64(samples.gapObservations), "gap-observations")
+		b.ReportMetric(float64(samples.gapFills), "gap-fills")
+		b.ReportMetric(float64(samples.repairLockTimeouts), "repair-lock-timeouts")
+		b.ReportMetric(float64(samples.sequenceRetries), "sequence-retries")
+		b.ReportMetric(float64(samples.injectedRollbacks), "injected-rollbacks")
+	}
+	if mode.usesJournal() {
+		b.ReportMetric(float64(samples.emptyFetches), "empty-fetches")
+		b.ReportMetric(float64(options.fetchLimit), "fetch-limit")
+	}
 	if len(samples.transactionsPerFetch) > 0 {
 		var totalFetched int
 		for _, count := range samples.transactionsPerFetch {
@@ -416,6 +576,12 @@ func cleanupReplicationBenchObjects(
 	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+objects.table); err != nil {
 		return fmt.Errorf("drop benchmark table: %w", err)
 	}
+	if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS "+objects.journal+", "+objects.clock); err != nil {
+		return fmt.Errorf("drop benchmark journal and counter: %w", err)
+	}
+	if _, err := pool.Exec(ctx, "DROP SEQUENCE IF EXISTS "+objects.sequence); err != nil {
+		return fmt.Errorf("drop benchmark sequence: %w", err)
+	}
 	return nil
 }
 
@@ -477,6 +643,7 @@ func warmReplicationBenchConnections(ctx context.Context, pool *pgxpool.Pool, ta
 
 type replicationBenchTiming struct {
 	operationStarted time.Time
+	scheduledAt      time.Time
 	commitStarted    time.Time
 	commitFinished   time.Time
 	applyFinished    time.Time
@@ -486,24 +653,38 @@ type replicationBenchTiming struct {
 }
 
 type replicationBenchSamples struct {
-	operationToApply     []time.Duration
-	commitToApply        []time.Duration
-	remainingCatchUp     []time.Duration
-	commitDurations      []time.Duration
-	scheduleLags         []time.Duration
-	transactionsPerFetch []int
-	appliedBeforeCommit  int
+	operationToApply       []time.Duration
+	arrivalToApply         []time.Duration
+	commitToApply          []time.Duration
+	remainingCatchUp       []time.Duration
+	commitDurations        []time.Duration
+	writeDurations         []time.Duration
+	journalAppendDurations []time.Duration
+	scheduleLags           []time.Duration
+	transactionsPerFetch   []int
+	appliedBeforeCommit    int
+	emptyFetches           int
+	gapObservations        int
+	gapFills               int
+	repairLockTimeouts     int
+	sequenceRetries        int
+	injectedRollbacks      int
+	snapshotEpochs         int
+	snapshotReplays        int
+	snapshotExceptionMax   int
 }
 
 type replicationBenchTracker struct {
-	mu           sync.Mutex
-	events       map[int64]replicationBenchTiming
-	completedIDs map[int64]struct{}
-	measurements replicationBenchSamples
-	expected     int
-	applied      int
-	finished     time.Time
-	done         chan struct{}
+	snapshotPollMode snapshotBenchPollMode // Set before starting the consumer.
+	snapshotWake     *snapshotBenchWakeups // Set before starting writers or consumer.
+	mu               sync.Mutex
+	events           map[int64]replicationBenchTiming
+	completedIDs     map[int64]struct{}
+	measurements     replicationBenchSamples
+	expected         int
+	applied          int
+	finished         time.Time
+	done             chan struct{}
 }
 
 func newReplicationBenchTracker(expected int) *replicationBenchTracker {
@@ -515,6 +696,7 @@ func newReplicationBenchTracker(expected int) *replicationBenchTracker {
 			commitToApply:        make([]time.Duration, 0, expected),
 			remainingCatchUp:     make([]time.Duration, 0, expected),
 			commitDurations:      make([]time.Duration, 0, expected),
+			writeDurations:       make([]time.Duration, 0, expected),
 			scheduleLags:         make([]time.Duration, 0, expected),
 			transactionsPerFetch: make([]int, 0, expected),
 		},
@@ -532,19 +714,23 @@ func (t *replicationBenchTracker) recordOperationStart(id int64, started, schedu
 
 	event := t.events[id]
 	event.operationStarted = started
+	event.scheduledAt = scheduledAt
 	event.hasOperation = true
 	t.completeEventLocked(id, event)
 }
 
 func (t *replicationBenchTracker) recordCommit(id int64, started, finished time.Time) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 
 	event := t.events[id]
 	event.commitStarted = started
 	event.commitFinished = finished
 	event.hasCommit = true
 	t.completeEventLocked(id, event)
+	t.mu.Unlock()
+	if t.snapshotWake != nil {
+		t.snapshotWake.signalCommit()
+	}
 }
 
 func (t *replicationBenchTracker) recordApply(
@@ -587,6 +773,9 @@ func (t *replicationBenchTracker) recordApply(
 
 func (t *replicationBenchTracker) completeEventLocked(id int64, event replicationBenchTiming) {
 	if event.hasOperation && event.hasCommit && event.hasApply {
+		if !event.scheduledAt.IsZero() {
+			t.measurements.arrivalToApply = append(t.measurements.arrivalToApply, event.applyFinished.Sub(event.scheduledAt))
+		}
 		t.measurements.operationToApply = append(t.measurements.operationToApply,
 			event.applyFinished.Sub(event.operationStarted))
 		t.measurements.commitToApply = append(t.measurements.commitToApply,
@@ -599,6 +788,8 @@ func (t *replicationBenchTracker) completeEventLocked(id int64, event replicatio
 		t.measurements.remainingCatchUp = append(t.measurements.remainingCatchUp, remaining)
 		t.measurements.commitDurations = append(t.measurements.commitDurations,
 			event.commitFinished.Sub(event.commitStarted))
+		t.measurements.writeDurations = append(t.measurements.writeDurations,
+			event.commitFinished.Sub(event.operationStarted))
 		delete(t.events, id)
 		return
 	}
@@ -611,6 +802,18 @@ func (t *replicationBenchTracker) recordFetch(transactionCount int) {
 	t.measurements.transactionsPerFetch = append(t.measurements.transactionsPerFetch, transactionCount)
 }
 
+func (t *replicationBenchTracker) recordJournalAppend(elapsed time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.measurements.journalAppendDurations = append(t.measurements.journalAppendDurations, elapsed)
+}
+
+func (t *replicationBenchTracker) recordEmptyFetch() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.measurements.emptyFetches++
+}
+
 func (t *replicationBenchTracker) finishedAt() time.Time {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -621,13 +824,25 @@ func (t *replicationBenchTracker) samples() replicationBenchSamples {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return replicationBenchSamples{
-		operationToApply:     append([]time.Duration(nil), t.measurements.operationToApply...),
-		commitToApply:        append([]time.Duration(nil), t.measurements.commitToApply...),
-		remainingCatchUp:     append([]time.Duration(nil), t.measurements.remainingCatchUp...),
-		commitDurations:      append([]time.Duration(nil), t.measurements.commitDurations...),
-		scheduleLags:         append([]time.Duration(nil), t.measurements.scheduleLags...),
-		transactionsPerFetch: append([]int(nil), t.measurements.transactionsPerFetch...),
-		appliedBeforeCommit:  t.measurements.appliedBeforeCommit,
+		operationToApply:       append([]time.Duration(nil), t.measurements.operationToApply...),
+		arrivalToApply:         append([]time.Duration(nil), t.measurements.arrivalToApply...),
+		commitToApply:          append([]time.Duration(nil), t.measurements.commitToApply...),
+		remainingCatchUp:       append([]time.Duration(nil), t.measurements.remainingCatchUp...),
+		commitDurations:        append([]time.Duration(nil), t.measurements.commitDurations...),
+		writeDurations:         append([]time.Duration(nil), t.measurements.writeDurations...),
+		journalAppendDurations: append([]time.Duration(nil), t.measurements.journalAppendDurations...),
+		scheduleLags:           append([]time.Duration(nil), t.measurements.scheduleLags...),
+		transactionsPerFetch:   append([]int(nil), t.measurements.transactionsPerFetch...),
+		appliedBeforeCommit:    t.measurements.appliedBeforeCommit,
+		emptyFetches:           t.measurements.emptyFetches,
+		gapObservations:        t.measurements.gapObservations,
+		gapFills:               t.measurements.gapFills,
+		repairLockTimeouts:     t.measurements.repairLockTimeouts,
+		sequenceRetries:        t.measurements.sequenceRetries,
+		injectedRollbacks:      t.measurements.injectedRollbacks,
+		snapshotEpochs:         t.measurements.snapshotEpochs,
+		snapshotReplays:        t.measurements.snapshotReplays,
+		snapshotExceptionMax:   t.measurements.snapshotExceptionMax,
 	}
 }
 
@@ -788,18 +1003,51 @@ func writeReplicationBenchBatch(
 	objects replicationBenchObjects,
 ) error {
 	tracker.recordOperationStart(id, time.Now(), scheduledAt)
-	tx, err := pool.Begin(ctx)
+	if mode.usesSequence() || mode.usesSnapshot() {
+		return writeSequenceBenchBatch(ctx, pool, tracker, mode, workload, payload, id, objects)
+	}
+	var tx pgx.Tx
+	var err error
+	if mode == replicationJournalPipelined {
+		// SQL COMMIT through SendBatch does not release a pgxpool.Tx's pooled
+		// connection. Own the connection explicitly for the pipelined variant.
+		conn, acquireErr := pool.Acquire(ctx)
+		if acquireErr != nil {
+			return fmt.Errorf("acquire pipeline connection: %w", acquireErr)
+		}
+		defer conn.Release()
+		tx, err = conn.Begin(ctx)
+	} else {
+		tx, err = pool.Begin(ctx)
+	}
 	if err != nil {
 		return fmt.Errorf("begin batch %d: %w", id, err)
 	}
-	defer tx.Rollback(context.Background())
+	defer func() {
+		if mode != replicationJournalPipelined || tx.Conn().PgConn().TxStatus() != 'I' {
+			tx.Rollback(context.Background())
+		}
+	}()
 
-	if _, err := tx.Exec(ctx, fmt.Sprintf(`
-		INSERT INTO %s (batch_id, ordinal, payload)
-		SELECT $1, ordinal, $3
-		FROM generate_series(1, $2) AS ordinal
-	`, objects.table), id, workload.rowsPerTx, payload); err != nil {
+	if err := writeJournalBenchSource(ctx, tx, objects, workload, payload, id); err != nil {
 		return fmt.Errorf("insert batch %d: %w", id, err)
+	}
+	if mode == replicationJournalPipelined {
+		return commitPipelinedJournalBenchBatch(ctx, tx, tracker, objects, id, workload.rowsPerTx, payload)
+	}
+	if mode.usesJournal() {
+		if err := appendJournalBenchBatch(ctx, tx, tracker, objects, id, workload.rowsPerTx, payload,
+			mode == replicationJournalNotifyInTx); err != nil {
+			return err
+		}
+	}
+	if mode == replicationCounterLogicalSlot {
+		started := time.Now()
+		_, err := tx.Exec(ctx, "UPDATE "+objects.clock+" SET position = position + 1 WHERE id = 1")
+		tracker.recordJournalAppend(time.Since(started))
+		if err != nil {
+			return fmt.Errorf("increment control counter: %w", err)
+		}
 	}
 
 	if mode == replicationNotifyInTx {
@@ -814,7 +1062,7 @@ func writeReplicationBenchBatch(
 	}
 	tracker.recordCommit(id, commitStarted, time.Now())
 
-	if mode == replicationNotifyAfterCommit {
+	if mode == replicationNotifyAfterCommit || mode == replicationJournalNotifyAfterCommit {
 		if _, err := pool.Exec(ctx, "SELECT pg_notify($1, $2)", objects.channel, strconv.FormatInt(id, 10)); err != nil {
 			return fmt.Errorf("notify batch %d after commit: %w", id, err)
 		}

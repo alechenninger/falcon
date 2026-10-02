@@ -1,0 +1,84 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/alechenninger/falcon/internal/infrastructure/postgres
+cpu: Apple M4 Pro
+BenchmarkChangeLogPipelined/SingleRow-14         	   85604	    284574 ns/op	         0.8579 applied-MiB/s	      3514 applied-batches/s	         0.2570 applied-before-commit-pct	        35.14 avg-tx-per-fetch	         3.000 empty-fetches	       128.0 fetch-limit	      8406 p50-commit-to-apply-us	      2546 p50-commit-us	      2542 p50-journal-append-us	      8939 p50-op-to-apply-us	      4994 p50-remaining-us	      3086 p50-write-us	     25824 p99-commit-to-apply-us	     20031 p99-commit-us	     20029 p99-journal-append-us	     26359 p99-op-to-apply-us	      9878 p99-remaining-us	        39.00 p99-tx-per-fetch	     20580 p99-write-us	        16.00 writers	      3515 writes/s	         0.8582 written-MiB/s	    4015 B/op	      53 allocs/op
+--- BENCH: BenchmarkChangeLogPipelined/SingleRow-14
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+	... [output truncated]
+BenchmarkChangeLogPipelined/SingleRow-14         	   85998	    288657 ns/op	         0.8458 applied-MiB/s	      3464 applied-batches/s	         0.2372 applied-before-commit-pct	        34.72 avg-tx-per-fetch	         8.000 empty-fetches	       128.0 fetch-limit	      8456 p50-commit-to-apply-us	      2609 p50-commit-us	      2606 p50-journal-append-us	      9011 p50-op-to-apply-us	      5006 p50-remaining-us	      3162 p50-write-us	     25881 p99-commit-to-apply-us	     20031 p99-commit-us	     20028 p99-journal-append-us	     26435 p99-op-to-apply-us	      9892 p99-remaining-us	        39.00 p99-tx-per-fetch	     20597 p99-write-us	        16.00 writers	      3464 writes/s	         0.8458 written-MiB/s	    4014 B/op	      53 allocs/op
+--- BENCH: BenchmarkChangeLogPipelined/SingleRow-14
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+	... [output truncated]
+BenchmarkChangeLogPipelined/SingleRow-14         	   80090	    283110 ns/op	         0.8624 applied-MiB/s	      3532 applied-batches/s	         0.2809 applied-before-commit-pct	        35.33 avg-tx-per-fetch	         3.000 empty-fetches	       128.0 fetch-limit	      8437 p50-commit-to-apply-us	      2605 p50-commit-us	      2602 p50-journal-append-us	      8978 p50-op-to-apply-us	      5005 p50-remaining-us	      3151 p50-write-us	     25208 p99-commit-to-apply-us	     19360 p99-commit-us	     19357 p99-journal-append-us	     25729 p99-op-to-apply-us	      9884 p99-remaining-us	        38.00 p99-tx-per-fetch	     19911 p99-write-us	        16.00 writers	      3533 writes/s	         0.8625 written-MiB/s	    4017 B/op	      53 allocs/op
+--- BENCH: BenchmarkChangeLogPipelined/SingleRow-14
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=1, payload/row=256 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+	... [output truncated]
+BenchmarkChangeLogPipelined/Batch16-14           	   56904	    432950 ns/op	        36.09 applied-MiB/s	      2310 applied-batches/s	         0 applied-before-commit-pct	        23.78 avg-tx-per-fetch	        73.00 empty-fetches	       128.0 fetch-limit	     10479 p50-commit-to-apply-us	      3817 p50-commit-us	      3814 p50-journal-append-us	     11661 p50-op-to-apply-us	      6248 p50-remaining-us	      4673 p50-write-us	     37907 p99-commit-to-apply-us	     30922 p99-commit-us	     30919 p99-journal-append-us	     39134 p99-op-to-apply-us	     10481 p99-remaining-us	        28.00 p99-tx-per-fetch	     31869 p99-write-us	        16.00 writers	      2310 writes/s	        36.10 written-MiB/s	   93884 B/op	      58 allocs/op
+--- BENCH: BenchmarkChangeLogPipelined/Batch16-14
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+	... [output truncated]
+BenchmarkChangeLogPipelined/Batch16-14           	   56144	    520933 ns/op	        29.99 applied-MiB/s	      1920 applied-batches/s	         0.01069 applied-before-commit-pct	        20.80 avg-tx-per-fetch	       228.0 empty-fetches	       128.0 fetch-limit	     10692 p50-commit-to-apply-us	      4008 p50-commit-us	      4007 p50-journal-append-us	     11748 p50-op-to-apply-us	      6178 p50-remaining-us	      4857 p50-write-us	     63592 p99-commit-to-apply-us	     55999 p99-commit-us	     55997 p99-journal-append-us	     64250 p99-op-to-apply-us	     10382 p99-remaining-us	        28.00 p99-tx-per-fetch	     56599 p99-write-us	        16.00 writers	      1920 writes/s	        30.00 written-MiB/s	   93903 B/op	      58 allocs/op
+--- BENCH: BenchmarkChangeLogPipelined/Batch16-14
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+	... [output truncated]
+BenchmarkChangeLogPipelined/Batch16-14           	   58652	    709512 ns/op	        22.02 applied-MiB/s	      1409 applied-batches/s	         0.01705 applied-before-commit-pct	        17.76 avg-tx-per-fetch	       861.0 empty-fetches	       128.0 fetch-limit	     11197 p50-commit-to-apply-us	      4370 p50-commit-us	      4369 p50-journal-append-us	     12037 p50-op-to-apply-us	      6094 p50-remaining-us	      5211 p50-write-us	     96252 p99-commit-to-apply-us	     92549 p99-commit-us	     92547 p99-journal-append-us	     97053 p99-op-to-apply-us	     10420 p99-remaining-us	        28.00 p99-tx-per-fetch	     93305 p99-write-us	        16.00 writers	      1410 writes/s	        22.03 written-MiB/s	   93711 B/op	      59 allocs/op
+--- BENCH: BenchmarkChangeLogPipelined/Batch16-14
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+    replication_bench_test.go:277: durable journal: one binary entry/transaction, counter UPDATE + log INSERT in one statement, ordered cursor fetch, idle poll interval=10ms
+    replication_bench_test.go:280: append and COMMIT share a protocol pipeline; commit timing covers the combined pipeline
+    replication_bench_test.go:271: PostgreSQL memory profile: container=4GiB shared_buffers=1GB effective_cache_size=3GB work_mem=4MB max_wal_size=4GB; writers=16, notification fetch limit=128, offered writes/sec=0, rows/transaction=16, payload/row=1024 bytes
+    replication_bench_test.go:275: PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit; fsync=on synchronous_commit=on
+	... [output truncated]
+PASS
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	256.501s

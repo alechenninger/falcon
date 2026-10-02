@@ -400,16 +400,18 @@ func setupPostgres(ctx context.Context, t testing.TB, options ...testcontainers.
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
 
+	cleanup := func() {
+		// Workload cancellation must not cancel cleanup of its database.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := pgContainer.Terminate(cleanupCtx); err != nil {
+			t.Errorf("failed to terminate postgres container: %v", err)
+		}
+	}
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		pgContainer.Terminate(ctx)
+		cleanup()
 		t.Fatalf("failed to get connection string: %v", err)
-	}
-
-	cleanup := func() {
-		if err := pgContainer.Terminate(ctx); err != nil {
-			t.Logf("failed to terminate postgres container: %v", err)
-		}
 	}
 
 	return connStr, cleanup
