@@ -213,3 +213,25 @@ go test ./internal/infrastructure/postgres -run '^Test(Snapshot|PostgresCleanup)
 ```
 
 Container cleanup uses an independent timeout context, so canceling writers/consumers cannot leave their database running. Cleanup failures fail the test/benchmark. Omitted-hint recovery tests use the 100 ms idle timer, and rollback/pagination tests exercise immediate notifications and the 2 ms batch variant. Existing earlier benchmark functions retain their 10 ms control for reproduction.
+
+## Global capture and fair root fetch scheduling
+
+[Capture/domain comparisons](benchmark-results/domain-capture.md) compare coupled snapshot capture, separate root fetching, routed snapshots, global/tenant/root counters, and WAL with independent root delivery. [The follow-up matrix](benchmark-results/snapshot-fetch.md) holds one global snapshot epoch domain while comparing global routed payload fetch with fair batched root fetch, each with polling or coalesced post-commit notifications.
+
+The follow-up includes three repetitions of capacity, fixed-rate freshness, Pareto and dominant-root load, injected fetch-stage stalls, idle load, and two million retained journal entries, with WAL controls. It records consumer SQL, socket traffic, retained payload, and client heap. A separate bounded notification-probe treatment addresses a retained-history generic-plan regression. These are benchmark implementations; Falcon's production Store and MVCC protocol are unchanged. The report links source, correctness tests, raw samples, and reproduction commands.
+
+## Incremental snapshot fetching and application
+
+[The pipeline comparison](benchmark-results/snapshot-pipeline.md) holds the same global publisher, notifications, per-root FIFO application workers, batching rule, and payload queue budget while comparing whole-epoch buffering, incremental 128-row pages, incremental 2,048-row pages, and one streamed SELECT per captured epoch. The baseline ranks all 1,024 roots with a single Pareto-shaped activity distribution. It measures concurrent write capacity, healthy freshness, bursts, root-local application stalls, source-idle backlog drain, two million retained entries, and a separate 32-row application-batching control.
+
+Private root application starts as rows arrive. Successful fetch EOF queues completion markers; roots become readable independently after their own preceding tasks finish. Full pages continue immediately, and the streamed variant uses pgx rows without collecting an epoch-sized payload slice. Protocol tests cover partial-fetch failure, late commits with lower sequence positions, and a quiet root advancing through later epochs while another root is held. Prepared-plan diagnostics examine startup delay and generic-plan behavior separately from the measured matrix.
+
+The streamed small-backlog median drain is 0.219 seconds versus 5.794 seconds for incremental 128-row pages; the large-backlog payload peak falls from 312.5 MiB with whole-epoch buffering to 0.41 MiB with streaming. Peak write capacity and ordinary healthy freshness remain similar. The report contains ranges, limitations, code links, and raw samples. These experiments change benchmark implementations only.
+
+```bash
+go test -c -o /tmp/falcon-snapshot-pipeline.test ./internal/infrastructure/postgres
+python3 internal/infrastructure/postgres/benchmark-results/run-snapshot-pipeline.py all
+python3 internal/infrastructure/postgres/benchmark-results/report-snapshot-pipeline.py
+```
+
+The runner records source/binary hashes, requires empty container inventories between invocations, and refuses external databases. Archive prior pipeline raw files before repeating phases so implementations and samples are not mixed.

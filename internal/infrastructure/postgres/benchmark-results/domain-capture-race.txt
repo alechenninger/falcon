@@ -1,0 +1,20 @@
+=== RUN   TestDomainCaptureCounterPlans
+    domain_capture_plan_test.go:16: opt-in query plan diagnostic
+--- SKIP: TestDomainCaptureCounterPlans (0.00s)
+=== RUN   TestDomainCaptureProtocols
+=== RUN   TestDomainCaptureProtocols/counter-global
+=== RUN   TestDomainCaptureProtocols/counter-tenant
+=== RUN   TestDomainCaptureProtocols/counter-root
+=== RUN   TestDomainCaptureProtocols/counter-bounded-pagination
+=== RUN   TestDomainCaptureProtocols/snapshot-replay-pagination-late-commit
+--- PASS: TestDomainCaptureProtocols (1.47s)
+    --- PASS: TestDomainCaptureProtocols/counter-global (0.14s)
+    --- PASS: TestDomainCaptureProtocols/counter-tenant (0.06s)
+    --- PASS: TestDomainCaptureProtocols/counter-root (0.02s)
+    --- PASS: TestDomainCaptureProtocols/counter-bounded-pagination (0.02s)
+    --- PASS: TestDomainCaptureProtocols/snapshot-replay-pagination-late-commit (0.03s)
+=== RUN   TestDomainCaptureSchedulerIndependentRoots
+--- PASS: TestDomainCaptureSchedulerIndependentRoots (0.00s)
+=== RUN   TestDomainCaptureIntegrity
+--- PASS: TestDomainCaptureIntegrity (0.00s)
+PASS

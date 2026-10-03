@@ -53,11 +53,12 @@ func newReplicationBenchObjects() replicationBenchObjects {
 	}
 }
 
-func setupReplicationBenchPostgres(ctx context.Context, b *testing.B) (string, func(), bool) {
+func setupReplicationBenchPostgres(ctx context.Context, b testing.TB) (string, func(), bool) {
 	if connString := os.Getenv("FALCON_REPLICATION_BENCH_DATABASE_URL"); connString != "" {
 		return connString, func() {}, true
 	}
 	connString, cleanup := setupPostgres(ctx, b,
+		testcontainers.WithLabels(map[string]string{"falcon.benchmark": "domain-capture"}),
 		testcontainers.WithCmdArgs(
 			"-c", "wal_level=logical",
 			"-c", "max_replication_slots=20",

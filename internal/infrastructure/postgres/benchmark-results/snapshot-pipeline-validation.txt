@@ -1,0 +1,9 @@
+?   	github.com/alechenninger/falcon/cmd/falcon	[no test files]
+ok  	github.com/alechenninger/falcon/internal/application	0.351s
+?   	github.com/alechenninger/falcon/internal/application/observability	[no test files]
+ok  	github.com/alechenninger/falcon/internal/domain	0.590s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/grpc	0.722s
+?   	github.com/alechenninger/falcon/internal/infrastructure/grpc/proto	[no test files]
+ok  	github.com/alechenninger/falcon/internal/infrastructure/memory	0.624s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	20.318s
+?   	github.com/alechenninger/falcon/internal/transport/grpc	[no test files]

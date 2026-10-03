@@ -1,0 +1,1488 @@
+=== RUN   TestSnapshotFetchHistoryPlans
+2026/10/03 00:07:17 github.com/testcontainers/testcontainers-go - Connected to docker: 
+  Server Version: 6.1.0
+  API Version: 1.44
+  Operating System: fedora
+  Total Memory: 5893 MB
+  Testcontainers for Go Version: v0.40.0
+  Resolved Docker Host: unix:///var/folders/0g/8qk101ks3xl4v_w5kqv47r_h0000gn/T/podman/podman-machine-default-api.sock
+  Resolved Docker Socket Path: /var/folders/0g/8qk101ks3xl4v_w5kqv47r_h0000gn/T/podman/podman-machine-default-api.sock
+  Test SessionID: e8fb1fede6c1b9cc380dfc5fa8399a198a4d4e94f3407b9429dcfa057d0454e9
+  Test ProcessID: 566cfc1d-013f-459a-8f16-f3f1a47800c3
+2026/10/03 00:07:17 🐳 Creating container for image postgres:18-alpine
+2026/10/03 00:07:17 ✅ Container created: 7af277b589a4
+2026/10/03 00:07:17 🐳 Starting container: 7af277b589a4
+2026/10/03 00:07:17 ✅ Container started: 7af277b589a4
+2026/10/03 00:07:17 ⏳ Waiting for container id 7af277b589a4 image: postgres:18-alpine. Waiting for: all of: [log message "database system is ready to accept connections" (occurrence: 2)]
+2026/10/03 00:07:18 🔔 Container is ready: 7af277b589a4
+    snapshot_fetch_plan_test.go:81: READ exists auto 0 0.603 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 1 0.367 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 2 0.339 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 3 0.343 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 4 0.315 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 5 0.286 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 6 0.223 ms
+    snapshot_fetch_plan_test.go:81: READ exists auto 7 0.226 ms
+    snapshot_fetch_plan_test.go:93: PLAN exists auto [
+          {
+            "Plan": {
+              "Node Type": "Result",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.86,
+              "Total Cost": 0.87,
+              "Plan Rows": 1,
+              "Plan Width": 1,
+              "Actual Startup Time": 0.009,
+              "Actual Total Time": 0.010,
+              "Actual Rows": 1.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Append",
+                  "Parent Relationship": "InitPlan",
+                  "Subplan Name": "InitPlan 1",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 0.44,
+                  "Total Cost": 95115.36,
+                  "Plan Rows": 223339,
+                  "Plan Width": 0,
+                  "Actual Startup Time": 0.009,
+                  "Actual Total Time": 0.009,
+                  "Actual Rows": 1.00,
+                  "Actual Loops": 1,
+                  "Disabled": false,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Subplans Removed": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 1",
+                      "Startup Cost": 0.44,
+                      "Total Cost": 5954.35,
+                      "Plan Rows": 1111,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.009,
+                      "Actual Total Time": 0.009,
+                      "Actual Rows": 1.00,
+                      "Actual Loops": 1,
+                      "Disabled": false,
+                      "Shared Hit Blocks": 4,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Startup Cost": 0.44,
+                          "Total Cost": 5943.24,
+                          "Plan Rows": 1111,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.009,
+                          "Actual Total Time": 0.009,
+                          "Actual Rows": 1.00,
+                          "Actual Loops": 1,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid >= ($1)::xid8) AND (writer_xid < ($2)::xid8) AND (\"position\" > $3))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "pg_visible_in_snapshot(writer_xid, ($5)::pg_snapshot)",
+                          "Rows Removed by Filter": 0,
+                          "Heap Fetches": 1,
+                          "Index Searches": 1,
+                          "Shared Hit Blocks": 4,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 2",
+                      "Startup Cost": 1000.43,
+                      "Total Cost": 88044.32,
+                      "Plan Rows": 222228,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.000,
+                      "Actual Total Time": 0.000,
+                      "Actual Rows": 0,
+                      "Actual Loops": 0,
+                      "Disabled": false,
+                      "Shared Hit Blocks": 0,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Gather",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Startup Cost": 1000.43,
+                          "Total Cost": 85822.04,
+                          "Plan Rows": 222228,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.000,
+                          "Actual Total Time": 0.000,
+                          "Actual Rows": 0,
+                          "Actual Loops": 0,
+                          "Disabled": false,
+                          "Workers Planned": 2,
+                          "Workers Launched": 0,
+                          "Single Copy": false,
+                          "Shared Hit Blocks": 0,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0,
+                          "Plans": [
+                            {
+                              "Node Type": "Index Scan",
+                              "Parent Relationship": "Outer",
+                              "Parallel Aware": true,
+                              "Async Capable": false,
+                              "Scan Direction": "Forward",
+                              "Index Name": "replication_bench_journal_18dae968c854f8e0_1_pkey",
+                              "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                              "Alias": "replication_bench_journal_18dae968c854f8e0_1_1",
+                              "Startup Cost": 0.43,
+                              "Total Cost": 62599.24,
+                              "Plan Rows": 92595,
+                              "Plan Width": 60,
+                              "Actual Startup Time": 0.000,
+                              "Actual Total Time": 0.000,
+                              "Actual Rows": 0,
+                              "Actual Loops": 0,
+                              "Disabled": false,
+                              "Index Cond": "(\"position\" > $3)",
+                              "Rows Removed by Index Recheck": 0,
+                              "Filter": "(pg_visible_in_snapshot(writer_xid, ($5)::pg_snapshot) AND (writer_xid = ANY (($4)::xid8[])))",
+                              "Rows Removed by Filter": 0,
+                              "Index Searches": 0,
+                              "Shared Hit Blocks": 0,
+                              "Shared Read Blocks": 0,
+                              "Shared Dirtied Blocks": 0,
+                              "Shared Written Blocks": 0,
+                              "Local Hit Blocks": 0,
+                              "Local Read Blocks": 0,
+                              "Local Dirtied Blocks": 0,
+                              "Local Written Blocks": 0,
+                              "Temp Read Blocks": 0,
+                              "Temp Written Blocks": 0
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.005,
+            "Triggers": [
+            ],
+            "Execution Time": 0.029
+          }
+        ]
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 0 0.344 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 1 0.332 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 2 0.311 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 3 0.280 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 4 0.315 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 5 0.293 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 6 0.276 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_custom_plan 7 0.277 ms
+    snapshot_fetch_plan_test.go:93: PLAN exists force_custom_plan [
+          {
+            "Plan": {
+              "Node Type": "Result",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 7.55,
+              "Total Cost": 7.56,
+              "Plan Rows": 1,
+              "Plan Width": 1,
+              "Actual Startup Time": 0.007,
+              "Actual Total Time": 0.008,
+              "Actual Rows": 1.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Append",
+                  "Parent Relationship": "InitPlan",
+                  "Subplan Name": "InitPlan 1",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 0.43,
+                  "Total Cost": 14.68,
+                  "Plan Rows": 2,
+                  "Plan Width": 0,
+                  "Actual Startup Time": 0.007,
+                  "Actual Total Time": 0.007,
+                  "Actual Rows": 1.00,
+                  "Actual Loops": 1,
+                  "Disabled": false,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Subplans Removed": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 1",
+                      "Startup Cost": 0.43,
+                      "Total Cost": 8.46,
+                      "Plan Rows": 1,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.007,
+                      "Actual Total Time": 0.007,
+                      "Actual Rows": 1.00,
+                      "Actual Loops": 1,
+                      "Disabled": false,
+                      "Shared Hit Blocks": 4,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Startup Cost": 0.43,
+                          "Total Cost": 8.45,
+                          "Plan Rows": 1,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.007,
+                          "Actual Total Time": 0.007,
+                          "Actual Rows": 1.00,
+                          "Actual Loops": 1,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid >= '758'::xid8) AND (writer_xid < '791'::xid8) AND (\"position\" > '0'::bigint))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "pg_visible_in_snapshot(writer_xid, '791:791:'::pg_snapshot)",
+                          "Rows Removed by Filter": 0,
+                          "Heap Fetches": 1,
+                          "Index Searches": 1,
+                          "Shared Hit Blocks": 4,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 2",
+                      "Startup Cost": 0.43,
+                      "Total Cost": 6.21,
+                      "Plan Rows": 1,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.000,
+                      "Actual Total Time": 0.000,
+                      "Actual Rows": 0,
+                      "Actual Loops": 0,
+                      "Disabled": false,
+                      "Shared Hit Blocks": 0,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1_1",
+                          "Startup Cost": 0.43,
+                          "Total Cost": 6.20,
+                          "Plan Rows": 1,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.000,
+                          "Actual Total Time": 0.000,
+                          "Actual Rows": 0,
+                          "Actual Loops": 0,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid = ANY ('{}'::xid8[])) AND (\"position\" > '0'::bigint))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Heap Fetches": 0,
+                          "Index Searches": 0,
+                          "Shared Hit Blocks": 0,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 8,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.092,
+            "Triggers": [
+            ],
+            "Execution Time": 0.021
+          }
+        ]
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 0 0.217 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 1 0.205 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 2 0.218 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 3 0.205 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 4 0.201 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 5 0.198 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 6 0.203 ms
+    snapshot_fetch_plan_test.go:81: READ exists force_generic_plan 7 0.182 ms
+    snapshot_fetch_plan_test.go:93: PLAN exists force_generic_plan [
+          {
+            "Plan": {
+              "Node Type": "Result",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.86,
+              "Total Cost": 0.87,
+              "Plan Rows": 1,
+              "Plan Width": 1,
+              "Actual Startup Time": 0.008,
+              "Actual Total Time": 0.009,
+              "Actual Rows": 1.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Append",
+                  "Parent Relationship": "InitPlan",
+                  "Subplan Name": "InitPlan 1",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 0.44,
+                  "Total Cost": 95115.36,
+                  "Plan Rows": 223339,
+                  "Plan Width": 0,
+                  "Actual Startup Time": 0.008,
+                  "Actual Total Time": 0.008,
+                  "Actual Rows": 1.00,
+                  "Actual Loops": 1,
+                  "Disabled": false,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Subplans Removed": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 1",
+                      "Startup Cost": 0.44,
+                      "Total Cost": 5954.35,
+                      "Plan Rows": 1111,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.008,
+                      "Actual Total Time": 0.008,
+                      "Actual Rows": 1.00,
+                      "Actual Loops": 1,
+                      "Disabled": false,
+                      "Shared Hit Blocks": 4,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Startup Cost": 0.44,
+                          "Total Cost": 5943.24,
+                          "Plan Rows": 1111,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.008,
+                          "Actual Total Time": 0.008,
+                          "Actual Rows": 1.00,
+                          "Actual Loops": 1,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid >= ($1)::xid8) AND (writer_xid < ($2)::xid8) AND (\"position\" > $3))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "pg_visible_in_snapshot(writer_xid, ($5)::pg_snapshot)",
+                          "Rows Removed by Filter": 0,
+                          "Heap Fetches": 1,
+                          "Index Searches": 1,
+                          "Shared Hit Blocks": 4,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 2",
+                      "Startup Cost": 1000.43,
+                      "Total Cost": 88044.32,
+                      "Plan Rows": 222228,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.000,
+                      "Actual Total Time": 0.000,
+                      "Actual Rows": 0,
+                      "Actual Loops": 0,
+                      "Disabled": false,
+                      "Shared Hit Blocks": 0,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Gather",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Startup Cost": 1000.43,
+                          "Total Cost": 85822.04,
+                          "Plan Rows": 222228,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.000,
+                          "Actual Total Time": 0.000,
+                          "Actual Rows": 0,
+                          "Actual Loops": 0,
+                          "Disabled": false,
+                          "Workers Planned": 2,
+                          "Workers Launched": 0,
+                          "Single Copy": false,
+                          "Shared Hit Blocks": 0,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0,
+                          "Plans": [
+                            {
+                              "Node Type": "Index Scan",
+                              "Parent Relationship": "Outer",
+                              "Parallel Aware": true,
+                              "Async Capable": false,
+                              "Scan Direction": "Forward",
+                              "Index Name": "replication_bench_journal_18dae968c854f8e0_1_pkey",
+                              "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                              "Alias": "replication_bench_journal_18dae968c854f8e0_1_1",
+                              "Startup Cost": 0.43,
+                              "Total Cost": 62599.24,
+                              "Plan Rows": 92595,
+                              "Plan Width": 60,
+                              "Actual Startup Time": 0.000,
+                              "Actual Total Time": 0.000,
+                              "Actual Rows": 0,
+                              "Actual Loops": 0,
+                              "Disabled": false,
+                              "Index Cond": "(\"position\" > $3)",
+                              "Rows Removed by Index Recheck": 0,
+                              "Filter": "(pg_visible_in_snapshot(writer_xid, ($5)::pg_snapshot) AND (writer_xid = ANY (($4)::xid8[])))",
+                              "Rows Removed by Filter": 0,
+                              "Index Searches": 0,
+                              "Shared Hit Blocks": 0,
+                              "Shared Read Blocks": 0,
+                              "Shared Dirtied Blocks": 0,
+                              "Shared Written Blocks": 0,
+                              "Local Hit Blocks": 0,
+                              "Local Read Blocks": 0,
+                              "Local Dirtied Blocks": 0,
+                              "Local Written Blocks": 0,
+                              "Temp Read Blocks": 0,
+                              "Temp Written Blocks": 0
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.004,
+            "Triggers": [
+            ],
+            "Execution Time": 0.026
+          }
+        ]
+    snapshot_fetch_plan_test.go:81: READ bounded auto 0 0.311 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 1 0.310 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 2 0.319 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 3 0.282 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 4 0.278 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 5 0.395 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 6 0.189 ms
+    snapshot_fetch_plan_test.go:81: READ bounded auto 7 0.169 ms
+    snapshot_fetch_plan_test.go:93: PLAN bounded auto [
+          {
+            "Plan": {
+              "Node Type": "Result",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.93,
+              "Total Cost": 0.94,
+              "Plan Rows": 1,
+              "Plan Width": 1,
+              "Actual Startup Time": 0.010,
+              "Actual Total Time": 0.011,
+              "Actual Rows": 1.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Append",
+                  "Parent Relationship": "InitPlan",
+                  "Subplan Name": "InitPlan 1",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 0.44,
+                  "Total Cost": 109415.70,
+                  "Plan Rows": 223339,
+                  "Plan Width": 0,
+                  "Actual Startup Time": 0.010,
+                  "Actual Total Time": 0.010,
+                  "Actual Rows": 1.00,
+                  "Actual Loops": 1,
+                  "Disabled": false,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Subplans Removed": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 1",
+                      "Startup Cost": 0.44,
+                      "Total Cost": 5976.57,
+                      "Plan Rows": 1111,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.010,
+                      "Actual Total Time": 0.010,
+                      "Actual Rows": 1.00,
+                      "Actual Loops": 1,
+                      "Disabled": false,
+                      "Filter": "pg_visible_in_snapshot(\"*SELECT* 1\".writer_xid, ($5)::pg_snapshot)",
+                      "Rows Removed by Filter": 0,
+                      "Shared Hit Blocks": 4,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Startup Cost": 0.44,
+                          "Total Cost": 5918.24,
+                          "Plan Rows": 3333,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.010,
+                          "Actual Total Time": 0.010,
+                          "Actual Rows": 1.00,
+                          "Actual Loops": 1,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid >= ($1)::xid8) AND (writer_xid < ($2)::xid8) AND (\"position\" > $3))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Heap Fetches": 1,
+                          "Index Searches": 1,
+                          "Shared Hit Blocks": 4,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 2",
+                      "Startup Cost": 0.43,
+                      "Total Cost": 102322.43,
+                      "Plan Rows": 222228,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.000,
+                      "Actual Total Time": 0.000,
+                      "Actual Rows": 0,
+                      "Actual Loops": 0,
+                      "Disabled": false,
+                      "Filter": "pg_visible_in_snapshot(\"*SELECT* 2\".writer_xid, ($5)::pg_snapshot)",
+                      "Rows Removed by Filter": 0,
+                      "Shared Hit Blocks": 0,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f8e0_1_pkey",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1_1",
+                          "Startup Cost": 0.43,
+                          "Total Cost": 90655.48,
+                          "Plan Rows": 666683,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.000,
+                          "Actual Total Time": 0.000,
+                          "Actual Rows": 0,
+                          "Actual Loops": 0,
+                          "Disabled": false,
+                          "Index Cond": "(\"position\" > $3)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "(writer_xid = ANY (($4)::xid8[]))",
+                          "Rows Removed by Filter": 0,
+                          "Index Searches": 0,
+                          "Shared Hit Blocks": 0,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.004,
+            "Triggers": [
+            ],
+            "Execution Time": 0.041
+          }
+        ]
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 0 0.391 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 1 0.366 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 2 0.326 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 3 0.315 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 4 0.311 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 5 0.299 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 6 0.306 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_custom_plan 7 0.309 ms
+    snapshot_fetch_plan_test.go:93: PLAN bounded force_custom_plan [
+          {
+            "Plan": {
+              "Node Type": "Result",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 7.55,
+              "Total Cost": 7.56,
+              "Plan Rows": 1,
+              "Plan Width": 1,
+              "Actual Startup Time": 0.009,
+              "Actual Total Time": 0.009,
+              "Actual Rows": 1.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Append",
+                  "Parent Relationship": "InitPlan",
+                  "Subplan Name": "InitPlan 1",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 0.43,
+                  "Total Cost": 14.68,
+                  "Plan Rows": 2,
+                  "Plan Width": 0,
+                  "Actual Startup Time": 0.009,
+                  "Actual Total Time": 0.009,
+                  "Actual Rows": 1.00,
+                  "Actual Loops": 1,
+                  "Disabled": false,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Subplans Removed": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 1",
+                      "Startup Cost": 0.43,
+                      "Total Cost": 8.46,
+                      "Plan Rows": 1,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.009,
+                      "Actual Total Time": 0.009,
+                      "Actual Rows": 1.00,
+                      "Actual Loops": 1,
+                      "Disabled": false,
+                      "Filter": "pg_visible_in_snapshot(\"*SELECT* 1\".writer_xid, '791:791:'::pg_snapshot)",
+                      "Rows Removed by Filter": 0,
+                      "Shared Hit Blocks": 4,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Startup Cost": 0.43,
+                          "Total Cost": 8.45,
+                          "Plan Rows": 1,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.008,
+                          "Actual Total Time": 0.008,
+                          "Actual Rows": 1.00,
+                          "Actual Loops": 1,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid >= '758'::xid8) AND (writer_xid < '791'::xid8) AND (\"position\" > '0'::bigint))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Heap Fetches": 1,
+                          "Index Searches": 1,
+                          "Shared Hit Blocks": 4,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 2",
+                      "Startup Cost": 0.43,
+                      "Total Cost": 6.21,
+                      "Plan Rows": 1,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.000,
+                      "Actual Total Time": 0.000,
+                      "Actual Rows": 0,
+                      "Actual Loops": 0,
+                      "Disabled": false,
+                      "Filter": "pg_visible_in_snapshot(\"*SELECT* 2\".writer_xid, '791:791:'::pg_snapshot)",
+                      "Rows Removed by Filter": 0,
+                      "Shared Hit Blocks": 0,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1_1",
+                          "Startup Cost": 0.43,
+                          "Total Cost": 6.20,
+                          "Plan Rows": 1,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.000,
+                          "Actual Total Time": 0.000,
+                          "Actual Rows": 0,
+                          "Actual Loops": 0,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid = ANY ('{}'::xid8[])) AND (\"position\" > '0'::bigint))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Heap Fetches": 0,
+                          "Index Searches": 0,
+                          "Shared Hit Blocks": 0,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 8,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.086,
+            "Triggers": [
+            ],
+            "Execution Time": 0.020
+          }
+        ]
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 0 0.210 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 1 0.208 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 2 0.219 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 3 0.199 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 4 0.229 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 5 0.206 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 6 0.217 ms
+    snapshot_fetch_plan_test.go:81: READ bounded force_generic_plan 7 0.204 ms
+    snapshot_fetch_plan_test.go:93: PLAN bounded force_generic_plan [
+          {
+            "Plan": {
+              "Node Type": "Result",
+              "Parallel Aware": false,
+              "Async Capable": false,
+              "Startup Cost": 0.93,
+              "Total Cost": 0.94,
+              "Plan Rows": 1,
+              "Plan Width": 1,
+              "Actual Startup Time": 0.009,
+              "Actual Total Time": 0.010,
+              "Actual Rows": 1.00,
+              "Actual Loops": 1,
+              "Disabled": false,
+              "Shared Hit Blocks": 4,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0,
+              "Plans": [
+                {
+                  "Node Type": "Append",
+                  "Parent Relationship": "InitPlan",
+                  "Subplan Name": "InitPlan 1",
+                  "Parallel Aware": false,
+                  "Async Capable": false,
+                  "Startup Cost": 0.44,
+                  "Total Cost": 109415.70,
+                  "Plan Rows": 223339,
+                  "Plan Width": 0,
+                  "Actual Startup Time": 0.009,
+                  "Actual Total Time": 0.009,
+                  "Actual Rows": 1.00,
+                  "Actual Loops": 1,
+                  "Disabled": false,
+                  "Shared Hit Blocks": 4,
+                  "Shared Read Blocks": 0,
+                  "Shared Dirtied Blocks": 0,
+                  "Shared Written Blocks": 0,
+                  "Local Hit Blocks": 0,
+                  "Local Read Blocks": 0,
+                  "Local Dirtied Blocks": 0,
+                  "Local Written Blocks": 0,
+                  "Temp Read Blocks": 0,
+                  "Temp Written Blocks": 0,
+                  "Subplans Removed": 0,
+                  "Plans": [
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 1",
+                      "Startup Cost": 0.44,
+                      "Total Cost": 5976.57,
+                      "Plan Rows": 1111,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.009,
+                      "Actual Total Time": 0.009,
+                      "Actual Rows": 1.00,
+                      "Actual Loops": 1,
+                      "Disabled": false,
+                      "Filter": "pg_visible_in_snapshot(\"*SELECT* 1\".writer_xid, ($5)::pg_snapshot)",
+                      "Rows Removed by Filter": 0,
+                      "Shared Hit Blocks": 4,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Only Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f_writer_xid_position_idx",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Startup Cost": 0.44,
+                          "Total Cost": 5918.24,
+                          "Plan Rows": 3333,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.009,
+                          "Actual Total Time": 0.009,
+                          "Actual Rows": 1.00,
+                          "Actual Loops": 1,
+                          "Disabled": false,
+                          "Index Cond": "((writer_xid >= ($1)::xid8) AND (writer_xid < ($2)::xid8) AND (\"position\" > $3))",
+                          "Rows Removed by Index Recheck": 0,
+                          "Heap Fetches": 1,
+                          "Index Searches": 1,
+                          "Shared Hit Blocks": 4,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Subquery Scan",
+                      "Parent Relationship": "Member",
+                      "Parallel Aware": false,
+                      "Async Capable": false,
+                      "Alias": "*SELECT* 2",
+                      "Startup Cost": 0.43,
+                      "Total Cost": 102322.43,
+                      "Plan Rows": 222228,
+                      "Plan Width": 0,
+                      "Actual Startup Time": 0.000,
+                      "Actual Total Time": 0.000,
+                      "Actual Rows": 0,
+                      "Actual Loops": 0,
+                      "Disabled": false,
+                      "Filter": "pg_visible_in_snapshot(\"*SELECT* 2\".writer_xid, ($5)::pg_snapshot)",
+                      "Rows Removed by Filter": 0,
+                      "Shared Hit Blocks": 0,
+                      "Shared Read Blocks": 0,
+                      "Shared Dirtied Blocks": 0,
+                      "Shared Written Blocks": 0,
+                      "Local Hit Blocks": 0,
+                      "Local Read Blocks": 0,
+                      "Local Dirtied Blocks": 0,
+                      "Local Written Blocks": 0,
+                      "Temp Read Blocks": 0,
+                      "Temp Written Blocks": 0,
+                      "Plans": [
+                        {
+                          "Node Type": "Index Scan",
+                          "Parent Relationship": "Subquery",
+                          "Parallel Aware": false,
+                          "Async Capable": false,
+                          "Scan Direction": "Forward",
+                          "Index Name": "replication_bench_journal_18dae968c854f8e0_1_pkey",
+                          "Relation Name": "replication_bench_journal_18dae968c854f8e0_1",
+                          "Alias": "replication_bench_journal_18dae968c854f8e0_1_1",
+                          "Startup Cost": 0.43,
+                          "Total Cost": 90655.48,
+                          "Plan Rows": 666683,
+                          "Plan Width": 60,
+                          "Actual Startup Time": 0.000,
+                          "Actual Total Time": 0.000,
+                          "Actual Rows": 0,
+                          "Actual Loops": 0,
+                          "Disabled": false,
+                          "Index Cond": "(\"position\" > $3)",
+                          "Rows Removed by Index Recheck": 0,
+                          "Filter": "(writer_xid = ANY (($4)::xid8[]))",
+                          "Rows Removed by Filter": 0,
+                          "Index Searches": 0,
+                          "Shared Hit Blocks": 0,
+                          "Shared Read Blocks": 0,
+                          "Shared Dirtied Blocks": 0,
+                          "Shared Written Blocks": 0,
+                          "Local Hit Blocks": 0,
+                          "Local Read Blocks": 0,
+                          "Local Dirtied Blocks": 0,
+                          "Local Written Blocks": 0,
+                          "Temp Read Blocks": 0,
+                          "Temp Written Blocks": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "Planning": {
+              "Shared Hit Blocks": 0,
+              "Shared Read Blocks": 0,
+              "Shared Dirtied Blocks": 0,
+              "Shared Written Blocks": 0,
+              "Local Hit Blocks": 0,
+              "Local Read Blocks": 0,
+              "Local Dirtied Blocks": 0,
+              "Local Written Blocks": 0,
+              "Temp Read Blocks": 0,
+              "Temp Written Blocks": 0
+            },
+            "Planning Time": 0.005,
+            "Triggers": [
+            ],
+            "Execution Time": 0.029
+          }
+        ]
+2026/10/03 00:07:23 🐳 Stopping container: 7af277b589a4
+2026/10/03 00:07:24 ✅ Container stopped: 7af277b589a4
+2026/10/03 00:07:24 🐳 Terminating container: 7af277b589a4
+2026/10/03 00:07:24 🚫 Container terminated: 7af277b589a4
+--- PASS: TestSnapshotFetchHistoryPlans (7.44s)
+=== RUN   TestSnapshotFetchHistoryCaptureTrace
+2026/10/03 00:07:24 🐳 Creating container for image postgres:18-alpine
+2026/10/03 00:07:24 ✅ Container created: 92a9b371c403
+2026/10/03 00:07:24 🐳 Starting container: 92a9b371c403
+2026/10/03 00:07:24 ✅ Container started: 92a9b371c403
+2026/10/03 00:07:24 ⏳ Waiting for container id 92a9b371c403 image: postgres:18-alpine. Waiting for: all of: [log message "database system is ready to accept connections" (occurrence: 2)]
+2026/10/03 00:07:25 🔔 Container is ready: 92a9b371c403
+    snapshot_fetch_plan_test.go:133: TRACE BENCH global
+        goos: darwin
+        goarch: arm64
+        pkg: github.com/alechenninger/falcon/internal/infrastructure/postgres
+        cpu: Apple M4 Pro
+        BenchmarkDomainCapture
+            domain_capture_bench_test.go:1305: DOMAIN_SAMPLE {"config":{"name":"history-trace","mode":"snapshot-routed","tenants":64,"roots_per_tenant":16,"rows":1,"payload":256,"keys":4096,"rate":1000,"skew":"pareto","fault":"","history":2000000,"workers":4,"snapshot_fetch":"global","snapshot_wake":"notify","notify_batch_ms":2,"fallback_ms":100},"operations":1,"WriteTPS":373.59323467483193,"ApplyTPS":134.5464942229099,"WriteSeconds":0.002676708,"DrainSeconds":0.004755667,"Write":{"count":1,"p50_ms":2.584,"p95_ms":2.584,"p99_ms":2.584,"p999_ms":2.584,"max_ms":2.584},"AppendCommit":{"count":1,"p50_ms":1.365916,"p95_ms":1.365916,"p99_ms":1.365916,"p999_ms":1.365916,"max_ms":1.365916},"Freshness":{"count":1,"p50_ms":4.760834,"p95_ms":4.760834,"p99_ms":4.760834,"p999_ms":4.760834,"max_ms":4.760834},"Arrival":{"count":1,"p50_ms":7.432375,"p95_ms":7.432375,"p99_ms":7.432375,"p999_ms":7.432375,"max_ms":7.432375},"Cohorts":{"quiet-roots":{"count":1,"p50_ms":4.760834,"p95_ms":4.760834,"p99_ms":4.760834,"p999_ms":4.760834,"max_ms":4.760834},"sibling-roots":{"count":1,"p50_ms":4.760834,"p95_ms":4.760834,"p99_ms":4.760834,"p999_ms":4.760834,"max_ms":4.760834}},"CohortWrites":{"quiet-roots":{"count":1,"p50_ms":2.584,"p95_ms":2.584,"p99_ms":2.584,"p999_ms":2.584,"max_ms":2.584},"sibling-roots":{"count":1,"p50_ms":2.584,"p95_ms":2.584,"p99_ms":2.584,"p999_ms":2.584,"max_ms":2.584}},"CohortArrivals":{"quiet-roots":{"count":1,"p50_ms":7.432375,"p95_ms":7.432375,"p99_ms":7.432375,"p999_ms":7.432375,"max_ms":7.432375},"sibling-roots":{"count":1,"p50_ms":7.432375,"p95_ms":7.432375,"p99_ms":7.432375,"p999_ms":7.432375,"max_ms":7.432375}},"Queries":6,"Cuts":1,"RootTasks":1,"MaxQueued":1,"ApplyBeforeAck":0,"RootTop20Share":1,"RootTop1Share":1,"WALBytes":1536,"JournalBytes":907034624,"SourceBytes":32768,"snapshot":{"FetchQueries":1,"DiscoveryQueries":0,"EmptyEpochs":0,"SkippedCaptures":1,"FallbackCaptures":1,"WakeCaptures":1,"NotifySent":1,"NotifyReceived":1,"CommitHints":1,"DroppedHints":0,"CoalescedHints":0,"ReadWireBytes":1167,"WriteWireBytes":2582,"PeakBufferedPayload":256,"PeakRootPayload":256,"PeakStagedIDs":0,"PeakPendingEpochs":0,"PeakHeapBytes":1726448,"FaultPauses":0,"CaptureSQL":{"count":2,"p50_ms":2.665584,"p95_ms":3.152334,"p99_ms":3.152334,"p999_ms":3.152334,"max_ms":3.152334},"DiscoverySQL":{"count":0,"p50_ms":0,"p95_ms":0,"p99_ms":0,"p999_ms":0,"max_ms":0},"FetchSQL":{"count":1,"p50_ms":0.920125,"p95_ms":0.920125,"p99_ms":0.920125,"p999_ms":0.920125,"max_ms":0.920125},"ElapsedSeconds":0.007432375}}
+            domain_capture_bench_test.go:1305: DOMAIN_SAMPLE {"config":{"name":"history-trace","mode":"snapshot-routed","tenants":64,"roots_per_tenant":16,"rows":1,"payload":256,"keys":4096,"rate":1000,"skew":"pareto","fault":"","history":2000000,"workers":4,"snapshot_fetch":"global","snapshot_wake":"notify","notify_batch_ms":2,"fallback_ms":100},"operations":20000,"WriteTPS":1000.0152314819944,"ApplyTPS":999.8864649916618,"WriteSeconds":19.999695375,"DrainSeconds":0.002575583,"Write":{"count":20000,"p50_ms":0.654208,"p95_ms":0.859458,"p99_ms":4.629083,"p999_ms":11.817875,"max_ms":19.178},"AppendCommit":{"count":20000,"p50_ms":0.295792,"p95_ms":0.441792,"p99_ms":4.054708,"p999_ms":11.31125,"max_ms":18.755583},"Freshness":{"count":20000,"p50_ms":2.042583,"p95_ms":3.003292,"p99_ms":128.767333,"p999_ms":184.864458,"max_ms":202.163583},"Arrival":{"count":20000,"p50_ms":2.734166,"p95_ms":3.906041,"p99_ms":131.453458,"p999_ms":185.500541,"max_ms":204.491541},"Cohorts":{"affected-root":{"count":1442,"p50_ms":2.034166,"p95_ms":2.996292,"p99_ms":115.622458,"p999_ms":169.704875,"max_ms":178.355709},"other-tenants":{"count":15331,"p50_ms":2.043542,"p95_ms":3.002459,"p99_ms":127.650375,"p999_ms":188.746416,"max_ms":202.163583},"quiet-roots":{"count":18558,"p50_ms":2.042959,"p95_ms":3.005584,"p99_ms":130.830292,"p999_ms":186.895625,"max_ms":202.163583},"sibling-roots":{"count":3227,"p50_ms":2.0405,"p95_ms":3.023625,"p99_ms":134.781167,"p999_ms":169.72875,"max_ms":191.721292}},"CohortWrites":{"affected-root":{"count":1442,"p50_ms":0.652667,"p95_ms":0.854125,"p99_ms":3.3805,"p999_ms":15.712833,"max_ms":19.178},"other-tenants":{"count":15331,"p50_ms":0.654542,"p95_ms":0.857875,"p99_ms":4.554375,"p999_ms":10.817958,"max_ms":17.285125},"quiet-roots":{"count":18558,"p50_ms":0.654375,"p95_ms":0.859833,"p99_ms":4.755083,"p999_ms":11.817875,"max_ms":18.274875},"sibling-roots":{"count":3227,"p50_ms":0.653625,"p95_ms":0.867417,"p99_ms":5.689833,"p999_ms":13.361666,"max_ms":18.274875}},"CohortArrivals":{"affected-root":{"count":1442,"p50_ms":2.7315,"p95_ms":3.837916,"p99_ms":116.642708,"p999_ms":177.642708,"max_ms":179.464875},"other-tenants":{"count":15331,"p50_ms":2.734458,"p95_ms":3.906041,"p99_ms":130.705583,"p999_ms":189.488041,"max_ms":204.491541},"quiet-roots":{"count":18558,"p50_ms":2.734166,"p95_ms":3.924875,"p99_ms":132.380208,"p999_ms":187.52775,"max_ms":204.491541},"sibling-roots":{"count":3227,"p50_ms":2.731166,"p95_ms":3.992958,"p99_ms":135.469333,"p999_ms":171.652666,"max_ms":199.48375}},"Queries":37672,"Cuts":9414,"RootTasks":19587,"MaxQueued":92,"ApplyBeforeAck":0,"RootTop20Share":0.7845999999999992,"RootTop1Share":0.27905,"WALBytes":553871328,"JournalBytes":915537920,"SourceBytes":7651328,"snapshot":{"FetchQueries":9418,"DiscoveryQueries":0,"EmptyEpochs":0,"SkippedCaptures":6,"FallbackCaptures":2,"WakeCaptures":9418,"NotifySent":9705,"NotifyReceived":9705,"CommitHints":20000,"DroppedHints":0,"CoalescedHints":10295,"ReadWireBytes":10646053,"WriteWireBytes":7619745,"PeakBufferedPayload":51712,"PeakRootPayload":3840,"PeakStagedIDs":0,"PeakPendingEpochs":0,"PeakHeapBytes":10075032,"FaultPauses":0,"CaptureSQL":{"count":9420,"p50_ms":0.935167,"p95_ms":1.088833,"p99_ms":1.350458,"p999_ms":8.813,"max_ms":200.238375},"DiscoverySQL":{"count":0,"p50_ms":0,"p95_ms":0,"p99_ms":0,"p999_ms":0,"max_ms":0},"FetchSQL":{"count":9418,"p50_ms":0.284375,"p95_ms":0.393792,"p99_ms":0.462917,"p999_ms":0.681292,"max_ms":2.932792},"ElapsedSeconds":20.002270958}}
+        BenchmarkDomainCapture-14    	   20000	   1000114 ns/op	       131.5 arrival-p99-ms	       128.8 fresh-p99-ms	      1000 writes/s
+        PASS
+    snapshot_fetch_plan_test.go:133: TRACE BENCH fair
+        goos: darwin
+        goarch: arm64
+        pkg: github.com/alechenninger/falcon/internal/infrastructure/postgres
+        cpu: Apple M4 Pro
+        BenchmarkDomainCapture
+            domain_capture_bench_test.go:1305: DOMAIN_SAMPLE {"config":{"name":"history-trace","mode":"snapshot-routed","tenants":64,"roots_per_tenant":16,"rows":1,"payload":256,"keys":4096,"rate":1000,"skew":"pareto","fault":"","history":2000000,"workers":4,"snapshot_fetch":"fair","snapshot_wake":"notify","notify_batch_ms":2,"fallback_ms":100},"operations":1,"WriteTPS":412.62636682484015,"ApplyTPS":106.51092780817126,"WriteSeconds":0.0024235,"DrainSeconds":0.006965208,"Write":{"count":1,"p50_ms":2.376458,"p95_ms":2.376458,"p99_ms":2.376458,"p999_ms":2.376458,"max_ms":2.376458},"AppendCommit":{"count":1,"p50_ms":1.018083,"p95_ms":1.018083,"p99_ms":1.018083,"p999_ms":1.018083,"max_ms":1.018083},"Freshness":{"count":1,"p50_ms":6.968292,"p95_ms":6.968292,"p99_ms":6.968292,"p999_ms":6.968292,"max_ms":6.968292},"Arrival":{"count":1,"p50_ms":9.388708,"p95_ms":9.388708,"p99_ms":9.388708,"p999_ms":9.388708,"max_ms":9.388708},"Cohorts":{"quiet-roots":{"count":1,"p50_ms":6.968292,"p95_ms":6.968292,"p99_ms":6.968292,"p999_ms":6.968292,"max_ms":6.968292},"sibling-roots":{"count":1,"p50_ms":6.968292,"p95_ms":6.968292,"p99_ms":6.968292,"p999_ms":6.968292,"max_ms":6.968292}},"CohortWrites":{"quiet-roots":{"count":1,"p50_ms":2.376458,"p95_ms":2.376458,"p99_ms":2.376458,"p999_ms":2.376458,"max_ms":2.376458},"sibling-roots":{"count":1,"p50_ms":2.376458,"p95_ms":2.376458,"p99_ms":2.376458,"p999_ms":2.376458,"max_ms":2.376458}},"CohortArrivals":{"quiet-roots":{"count":1,"p50_ms":9.388708,"p95_ms":9.388708,"p99_ms":9.388708,"p999_ms":9.388708,"max_ms":9.388708},"sibling-roots":{"count":1,"p50_ms":9.388708,"p95_ms":9.388708,"p99_ms":9.388708,"p999_ms":9.388708,"max_ms":9.388708}},"Queries":7,"Cuts":1,"RootTasks":1,"MaxQueued":0,"ApplyBeforeAck":0,"RootTop20Share":1,"RootTop1Share":1,"WALBytes":1456,"JournalBytes":907034624,"SourceBytes":32768,"snapshot":{"FetchQueries":1,"DiscoveryQueries":1,"EmptyEpochs":0,"SkippedCaptures":1,"FallbackCaptures":1,"WakeCaptures":1,"NotifySent":1,"NotifyReceived":1,"CommitHints":1,"DroppedHints":0,"CoalescedHints":0,"ReadWireBytes":1379,"WriteWireBytes":3835,"PeakBufferedPayload":256,"PeakRootPayload":256,"PeakStagedIDs":1,"PeakPendingEpochs":1,"PeakHeapBytes":1720104,"FaultPauses":0,"CaptureSQL":{"count":2,"p50_ms":2.710334,"p95_ms":2.970333,"p99_ms":2.970333,"p999_ms":2.970333,"max_ms":2.970333},"DiscoverySQL":{"count":1,"p50_ms":1.163792,"p95_ms":1.163792,"p99_ms":1.163792,"p999_ms":1.163792,"max_ms":1.163792},"FetchSQL":{"count":1,"p50_ms":2.16225,"p95_ms":2.16225,"p99_ms":2.16225,"p999_ms":2.16225,"max_ms":2.16225},"ElapsedSeconds":0.009388707999999999}}
+            domain_capture_bench_test.go:1305: DOMAIN_SAMPLE {"config":{"name":"history-trace","mode":"snapshot-routed","tenants":64,"roots_per_tenant":16,"rows":1,"payload":256,"keys":4096,"rate":1000,"skew":"pareto","fault":"","history":2000000,"workers":4,"snapshot_fetch":"fair","snapshot_wake":"notify","notify_batch_ms":2,"fallback_ms":100},"operations":20000,"WriteTPS":1000.0229505267146,"ApplyTPS":999.9483255703848,"WriteSeconds":19.999541,"DrainSeconds":0.001492542,"Write":{"count":20000,"p50_ms":0.617625,"p95_ms":0.7535,"p99_ms":0.83525,"p999_ms":1.257709,"max_ms":6.534917},"AppendCommit":{"count":20000,"p50_ms":0.272292,"p95_ms":0.36375,"p99_ms":0.412833,"p999_ms":0.557917,"max_ms":3.190625},"Freshness":{"count":20000,"p50_ms":2.24825,"p95_ms":3.128292,"p99_ms":3.294666,"p999_ms":4.6115,"max_ms":12.926167},"Arrival":{"count":20000,"p50_ms":2.902334,"p95_ms":3.874584,"p99_ms":4.022542,"p999_ms":5.950125,"max_ms":18.938542},"Cohorts":{"affected-root":{"count":1442,"p50_ms":2.243208,"p95_ms":3.141,"p99_ms":3.294709,"p999_ms":4.433,"max_ms":9.484208},"other-tenants":{"count":15331,"p50_ms":2.247042,"p95_ms":3.12875,"p99_ms":3.294666,"p999_ms":4.712625,"max_ms":12.322541},"quiet-roots":{"count":18558,"p50_ms":2.248375,"p95_ms":3.127541,"p99_ms":3.294666,"p999_ms":4.693209,"max_ms":12.926167},"sibling-roots":{"count":3227,"p50_ms":2.253333,"p95_ms":3.121583,"p99_ms":3.286291,"p999_ms":3.540667,"max_ms":12.926167}},"CohortWrites":{"affected-root":{"count":1442,"p50_ms":0.614666,"p95_ms":0.745375,"p99_ms":0.820125,"p999_ms":1.474083,"max_ms":5.443458},"other-tenants":{"count":15331,"p50_ms":0.617958,"p95_ms":0.754208,"p99_ms":0.839084,"p999_ms":1.252208,"max_ms":6.534917},"quiet-roots":{"count":18558,"p50_ms":0.617875,"p95_ms":0.754042,"p99_ms":0.83775,"p999_ms":1.257709,"max_ms":6.534917},"sibling-roots":{"count":3227,"p50_ms":0.617458,"p95_ms":0.752792,"p99_ms":0.834125,"p999_ms":1.305292,"max_ms":5.97225}},"CohortArrivals":{"affected-root":{"count":1442,"p50_ms":2.903917,"p95_ms":3.86775,"p99_ms":4.027834,"p999_ms":5.950125,"max_ms":14.983625},"other-tenants":{"count":15331,"p50_ms":2.901834,"p95_ms":3.873375,"p99_ms":4.025584,"p999_ms":6.002667,"max_ms":17.94},"quiet-roots":{"count":18558,"p50_ms":2.902167,"p95_ms":3.874875,"p99_ms":4.022542,"p999_ms":5.986709,"max_ms":18.938542},"sibling-roots":{"count":3227,"p50_ms":2.903459,"p95_ms":3.879334,"p99_ms":4.016209,"p999_ms":4.354125,"max_ms":18.938542}},"Queries":49077,"Cuts":9815,"RootTasks":19865,"MaxQueued":0,"ApplyBeforeAck":0,"RootTop20Share":0.7845999999999992,"RootTop1Share":0.27905,"WALBytes":25604096,"JournalBytes":915390464,"SourceBytes":7626752,"snapshot":{"FetchQueries":9815,"DiscoveryQueries":9815,"EmptyEpochs":0,"SkippedCaptures":1,"FallbackCaptures":1,"WakeCaptures":9815,"NotifySent":9817,"NotifyReceived":9817,"CommitHints":20000,"DroppedHints":0,"CoalescedHints":10183,"ReadWireBytes":12152351,"WriteWireBytes":11845948,"PeakBufferedPayload":2816,"PeakRootPayload":768,"PeakStagedIDs":3,"PeakPendingEpochs":12,"PeakHeapBytes":11076352,"FaultPauses":0,"CaptureSQL":{"count":9816,"p50_ms":0.871792,"p95_ms":1.003625,"p99_ms":1.111708,"p999_ms":1.747084,"max_ms":6.140167},"DiscoverySQL":{"count":9815,"p50_ms":0.26875,"p95_ms":0.375459,"p99_ms":0.426709,"p999_ms":0.523417,"max_ms":2.965584},"FetchSQL":{"count":9815,"p50_ms":0.325958,"p95_ms":0.4315,"p99_ms":0.510208,"p999_ms":0.671459,"max_ms":3.701625},"ElapsedSeconds":20.001033542000002}}
+        BenchmarkDomainCapture-14    	   20000	   1000052 ns/op	         4.023 arrival-p99-ms	         3.295 fresh-p99-ms	      1000 writes/s
+        PASS
+    snapshot_fetch_plan_test.go:150: SERVER LOG
+        The files belonging to this database system will be owned by user "postgres".
+        This user must also own the server process.
+        
+        The database cluster will be initialized with locale "en_US.utf8".
+        The default database encoding has accordingly been set to "UTF8".
+        The default text search configuration will be set to "english".
+        
+        Data page checksums are enabled.
+        
+        fixing permissions on existing directory /var/lib/postgresql/18/docker ... ok
+        creating subdirectories ... ok
+        selecting dynamic shared memory implementation ... posix
+        selecting default "max_connections" ... 100
+        selecting default "shared_buffers" ... 128MB
+        selecting default time zone ... UTC
+        creating configuration files ... ok
+        running bootstrap script ... ok
+        sh: locale: not found
+        2026-10-03 04:07:24.774 UTC [35] WARNING:  no usable system locales were found
+        performing post-bootstrap initialization ... ok
+        syncing data to disk ... ok
+        
+        
+        Success. You can now start the database server using:
+        
+            pg_ctl -D /var/lib/postgresql/18/docker -l logfile start
+        
+        initdb: warning: enabling "trust" authentication for local connections
+        initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+        waiting for server to start....2026-10-03 04:07:25.004 UTC [41] LOG:  starting PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+        2026-10-03 04:07:25.004 UTC [41] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+        2026-10-03 04:07:25.006 UTC [47] LOG:  database system was shut down at 2026-10-03 04:07:24 UTC
+        2026-10-03 04:07:25.007 UTC [41] LOG:  database system is ready to accept connections
+         done
+        server started
+        CREATE DATABASE
+        
+        
+        /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+        
+        waiting for server to shut down....2026-10-03 04:07:25.130 UTC [41] LOG:  received fast shutdown request
+        2026-10-03 04:07:25.131 UTC [41] LOG:  aborting any active transactions
+        2026-10-03 04:07:25.132 UTC [41] LOG:  background worker "logical replication launcher" (PID 50) exited with exit code 1
+        2026-10-03 04:07:25.133 UTC [45] LOG:  shutting down
+        2026-10-03 04:07:25.133 UTC [45] LOG:  checkpoint starting: shutdown immediate
+        2026-10-03 04:07:25.152 UTC [45] LOG:  checkpoint complete: wrote 943 buffers (0.7%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.007 s, sync=0.012 s, total=0.020 s; sync files=303, longest=0.004 s, average=0.001 s; distance=4362 kB, estimate=4362 kB; lsn=0/1BA8930, redo lsn=0/1BA8930
+        2026-10-03 04:07:25.157 UTC [41] LOG:  database system is shut down
+         done
+        server stopped
+        
+        PostgreSQL init process complete; ready for start up.
+        
+        2026-10-03 04:07:25.259 UTC [1] LOG:  starting PostgreSQL 18.6 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+        2026-10-03 04:07:25.259 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+        2026-10-03 04:07:25.259 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+        2026-10-03 04:07:25.259 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+        2026-10-03 04:07:25.261 UTC [63] LOG:  database system was shut down at 2026-10-03 04:07:25 UTC
+        2026-10-03 04:07:25.262 UTC [1] LOG:  database system is ready to accept connections
+        2026-10-03 04:07:25.376 UTC [1] LOG:  received SIGHUP, reloading configuration files
+        2026-10-03 04:07:25.376 UTC [1] LOG:  parameter "shared_buffers" cannot be changed without restarting the server
+        2026-10-03 04:07:25.376 UTC [1] LOG:  parameter "log_min_duration_statement" changed to "10ms"
+        2026-10-03 04:07:25.376 UTC [1] LOG:  configuration file "/var/lib/postgresql/18/docker/postgresql.conf" contains errors; unaffected changes were applied
+        2026-10-03 04:07:31.123 UTC [68] LOG:  duration: 5673.818 ms  execute stmtcache_d502dde61f47de4995825b2380aae6f4a0a47263a500b881: INSERT INTO replication_bench_journal_18dae96a7e197038_1(root_id,batch_id,payload) SELECT n % $2,0,decode(repeat('ab',$3),'hex') FROM generate_series(1,$1) n
+        2026-10-03 04:07:31.123 UTC [68] DETAIL:  Parameters: $1 = '2000000', $2 = '1024', $3 = '256'
+        2026-10-03 04:07:31.196 UTC [68] LOG:  duration: 62.618 ms  statement: ANALYZE replication_bench_journal_18dae96a7e197038_1
+        2026-10-03 04:07:31.338 UTC [86] LOG:  duration: 23.860 ms  statement: DROP TABLE IF EXISTS replication_bench_journal_18dae96a7e197038_1, replication_bench_clock_18dae96a7e197038_1
+        2026-10-03 04:07:36.055 UTC [61] LOG:  checkpoints are occurring too frequently (11 seconds apart)
+        2026-10-03 04:07:36.055 UTC [61] HINT:  Consider increasing the configuration parameter "max_wal_size".
+        2026-10-03 04:07:36.062 UTC [61] LOG:  checkpoint starting: wal
+        2026-10-03 04:07:37.048 UTC [91] LOG:  duration: 5697.265 ms  execute stmtcache_47240a302dd2fe90cebb9c9ec0f9fb0af0e9e052e063c959: INSERT INTO replication_bench_journal_18dae96bde353190_2(root_id,batch_id,payload) SELECT n % $2,0,decode(repeat('ab',$3),'hex') FROM generate_series(1,$1) n
+        2026-10-03 04:07:37.048 UTC [91] DETAIL:  Parameters: $1 = '2000000', $2 = '1024', $3 = '256'
+        2026-10-03 04:07:37.146 UTC [91] LOG:  duration: 83.904 ms  statement: ANALYZE replication_bench_journal_18dae96bde353190_2
+        2026-10-03 04:07:48.703 UTC [100] LOG:  duration: 12.472 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:48.703 UTC [107] LOG:  duration: 11.232 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:48.704 UTC [102] LOG:  duration: 10.465 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:48.704 UTC [104] LOG:  duration: 12.506 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:48.721 UTC [113] LOG:  duration: 167.182 ms  execute stmtcache_e413c9a8f010844725344852eb36fe59d7000d47922e66d8: SELECT EXISTS(SELECT 1 FROM(SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid >= $1::text::xid8 AND writer_xid < $2::text::xid8 AND position>$3 UNION ALL SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid=ANY($4::text[]::xid8[]) AND position>$3)c WHERE pg_visible_in_snapshot(writer_xid,$5::text::pg_snapshot))
+        2026-10-03 04:07:48.721 UTC [113] DETAIL:  Parameters: $1 = '22655', $2 = '22659', $3 = '0', $4 = '{}', $5 = '22656:22659:22656,22657'
+        2026-10-03 04:07:48.965 UTC [113] LOG:  duration: 162.974 ms  execute stmtcache_e413c9a8f010844725344852eb36fe59d7000d47922e66d8: SELECT EXISTS(SELECT 1 FROM(SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid >= $1::text::xid8 AND writer_xid < $2::text::xid8 AND position>$3 UNION ALL SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid=ANY($4::text[]::xid8[]) AND position>$3)c WHERE pg_visible_in_snapshot(writer_xid,$5::text::pg_snapshot))
+        2026-10-03 04:07:48.965 UTC [113] DETAIL:  Parameters: $1 = '23045', $2 = '23049', $3 = '0', $4 = '{}', $5 = '23046:23049:23046,23047'
+        2026-10-03 04:07:49.229 UTC [108] LOG:  duration: 10.071 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.325 UTC [98] LOG:  duration: 10.631 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.325 UTC [106] LOG:  duration: 10.028 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.419 UTC [112] LOG:  duration: 198.951 ms  execute stmtcache_e413c9a8f010844725344852eb36fe59d7000d47922e66d8: SELECT EXISTS(SELECT 1 FROM(SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid >= $1::text::xid8 AND writer_xid < $2::text::xid8 AND position>$3 UNION ALL SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid=ANY($4::text[]::xid8[]) AND position>$3)c WHERE pg_visible_in_snapshot(writer_xid,$5::text::pg_snapshot))
+        2026-10-03 04:07:49.419 UTC [112] DETAIL:  Parameters: $1 = '23753', $2 = '23757', $3 = '0', $4 = '{23751}', $5 = '23754:23757:23754,23755'
+        2026-10-03 04:07:49.567 UTC [108] LOG:  duration: 14.385 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [104] LOG:  duration: 14.164 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [97] LOG:  duration: 13.509 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [96] LOG:  duration: 18.480 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [102] LOG:  duration: 17.541 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [105] LOG:  duration: 16.609 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [100] LOG:  duration: 12.679 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [101] LOG:  duration: 11.954 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [109] LOG:  duration: 15.920 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [106] LOG:  duration: 11.000 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.573 UTC [103] LOG:  duration: 10.050 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.584 UTC [95] LOG:  duration: 13.889 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.584 UTC [91] LOG:  duration: 14.083 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.584 UTC [108] LOG:  duration: 14.869 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.585 UTC [107] LOG:  duration: 11.310 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.585 UTC [96] LOG:  duration: 11.203 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.585 UTC [104] LOG:  duration: 11.579 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.585 UTC [97] LOG:  duration: 11.544 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.585 UTC [106] LOG:  duration: 11.255 ms  execute stmtcache_79663c1d3b43ceaf9ee728e501c64b57ae2e4d6cb36ff5c6: COMMIT
+        2026-10-03 04:07:49.625 UTC [113] LOG:  duration: 161.810 ms  execute stmtcache_e413c9a8f010844725344852eb36fe59d7000d47922e66d8: SELECT EXISTS(SELECT 1 FROM(SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid >= $1::text::xid8 AND writer_xid < $2::text::xid8 AND position>$3 UNION ALL SELECT position,root_id,writer_xid,batch_id,payload FROM replication_bench_journal_18dae96bde353190_2 WHERE writer_xid=ANY($4::text[]::xid8[]) AND position>$3)c WHERE pg_visible_in_snapshot(writer_xid,$5::text::pg_snapshot))
+        2026-10-03 04:07:49.625 UTC [113] DETAIL:  Parameters: $1 = '24115', $2 = '24119', $3 = '0', $4 = '{}', $5 = '24116:24119:24116,24117'
+        2026-10-03 04:07:57.522 UTC [106] LOG:  duration: 15.860 ms  statement: DROP TABLE IF EXISTS replication_bench_journal_18dae96bde353190_2, replication_bench_clock_18dae96bde353190_2
+        2026-10-03 04:08:02.961 UTC [123] LOG:  duration: 5389.810 ms  execute stmtcache_e1c161a8fea3550a0aa6886736978946908bf4ce413a9ca5: INSERT INTO replication_bench_journal_18dae971f913b8c8_1(root_id,batch_id,payload) SELECT n % $2,0,decode(repeat('ab',$3),'hex') FROM generate_series(1,$1) n
+        2026-10-03 04:08:02.961 UTC [123] DETAIL:  Parameters: $1 = '2000000', $2 = '1024', $3 = '256'
+        2026-10-03 04:08:03.033 UTC [123] LOG:  duration: 63.419 ms  statement: ANALYZE replication_bench_journal_18dae971f913b8c8_1
+        2026-10-03 04:08:03.127 UTC [141] LOG:  duration: 19.726 ms  statement: DROP TABLE IF EXISTS replication_bench_journal_18dae971f913b8c8_1, replication_bench_clock_18dae971f913b8c8_1
+        2026-10-03 04:08:03.382 UTC [61] LOG:  checkpoint complete: wrote 36214 buffers (27.6%), wrote 3 SLRU buffers; 0 WAL file(s) added, 1 removed, 134 recycled; write=27.247 s, sync=0.017 s, total=27.328 s; sync files=103, longest=0.005 s, average=0.001 s; distance=2199901 kB, estimate=2199901 kB; lsn=1/1998140, redo lsn=0/880000A0
+        2026-10-03 04:08:04.186 UTC [61] LOG:  checkpoints are occurring too frequently (28 seconds apart)
+        2026-10-03 04:08:04.186 UTC [61] HINT:  Consider increasing the configuration parameter "max_wal_size".
+        2026-10-03 04:08:04.186 UTC [61] LOG:  checkpoint starting: wal
+        2026-10-03 04:08:08.111 UTC [146] LOG:  duration: 4970.521 ms  execute stmtcache_c551d70398fbfef9053b1465d928501d476edb940dc5f351: INSERT INTO replication_bench_journal_18dae973450f5100_2(root_id,batch_id,payload) SELECT n % $2,0,decode(repeat('ab',$3),'hex') FROM generate_series(1,$1) n
+        2026-10-03 04:08:08.111 UTC [146] DETAIL:  Parameters: $1 = '2000000', $2 = '1024', $3 = '256'
+        2026-10-03 04:08:08.195 UTC [146] LOG:  duration: 78.364 ms  statement: ANALYZE replication_bench_journal_18dae973450f5100_2
+        2026-10-03 04:08:28.563 UTC [161] LOG:  duration: 24.155 ms  statement: DROP TABLE IF EXISTS replication_bench_journal_18dae973450f5100_2, replication_bench_clock_18dae973450f5100_2
+2026/10/03 00:08:28 🐳 Stopping container: 92a9b371c403
+2026/10/03 00:08:28 ✅ Container stopped: 92a9b371c403
+2026/10/03 00:08:28 🐳 Terminating container: 92a9b371c403
+2026/10/03 00:08:29 🚫 Container terminated: 92a9b371c403
+--- PASS: TestSnapshotFetchHistoryCaptureTrace (64.52s)
+PASS
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	72.503s

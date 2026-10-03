@@ -1,0 +1,40 @@
+=== RUN   TestSnapshotIndexedProbeLateCommit
+--- PASS: TestSnapshotIndexedProbeLateCommit (1.27s)
+=== RUN   TestSnapshotFairFetchProtocols
+--- PASS: TestSnapshotFairFetchProtocols (0.98s)
+=== RUN   TestSnapshotFetchMissingWakeAndEmptyCapture
+=== RUN   TestSnapshotFetchMissingWakeAndEmptyCapture/global/
+=== RUN   TestSnapshotFetchMissingWakeAndEmptyCapture/fair/
+=== RUN   TestSnapshotFetchMissingWakeAndEmptyCapture/global/indexed
+=== RUN   TestSnapshotFetchMissingWakeAndEmptyCapture/fair/indexed
+--- PASS: TestSnapshotFetchMissingWakeAndEmptyCapture (1.47s)
+    --- PASS: TestSnapshotFetchMissingWakeAndEmptyCapture/global/ (0.15s)
+    --- PASS: TestSnapshotFetchMissingWakeAndEmptyCapture/fair/ (0.13s)
+    --- PASS: TestSnapshotFetchMissingWakeAndEmptyCapture/global/indexed (0.15s)
+    --- PASS: TestSnapshotFetchMissingWakeAndEmptyCapture/fair/indexed (0.16s)
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (1.26s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.09s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.06s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (1.16s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.09s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.04s)
+PASS

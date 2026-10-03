@@ -1,0 +1,14 @@
+backlog: 36 successful samples; empty before/after inventories
+capacity: 24 successful samples; empty before/after inventories
+latency: 36 successful samples; empty before/after inventories
+burst: 24 successful samples; empty before/after inventories
+apply-stall: 24 successful samples; empty before/after inventories
+history: 12 successful samples; empty before/after inventories
+batch32: 24 successful samples; empty before/after inventories
+180 samples / 60 configurations / three repetitions
+9,612,000 measured source transactions
+One binary hash and one six-file implementation hash set; both match current artifacts
+Every measured row fetched; per-run checksum, root order, readiness, and latest-state validation passed
+Zero payload-budget waits in incremental arms; buffered large-backlog controls waited 11-14 ms per run while feeding after EOF
+No container leaks or run failures reported by harness; final post-run inventory empty
+Python syntax, report links, and 180-row CSV checked
