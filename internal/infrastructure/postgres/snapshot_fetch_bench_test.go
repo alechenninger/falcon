@@ -451,6 +451,12 @@ func startSnapshotFetchWakeups(ctx context.Context, url, channel string, minInte
 // manifests. The last durable cut remains the previous boundary after an empty
 // check. This adds an indexed EXISTS check to nonempty notification captures.
 func captureSnapshotFetchCut(ctx context.Context, p *pgxpool.Pool, o replicationBenchObjects, c domainCaptureConfig, epoch int64, a snapshotBenchCut, m *domainCaptureMetrics) (snapshotBenchCut, bool, error) {
+	if c.SnapshotCapture == "single" {
+		return captureSnapshotSingleRequest(ctx, p, o, c, epoch, a, m)
+	}
+	if c.SnapshotCapture != "" && c.SnapshotCapture != "multi" {
+		return snapshotBenchCut{}, false, fmt.Errorf("invalid snapshot capture %q", c.SnapshotCapture)
+	}
 	if c.SnapshotWake == "poll" {
 		z, e := captureDomainSnapshot(ctx, p, o, epoch, a, m)
 		return z, e == nil, e

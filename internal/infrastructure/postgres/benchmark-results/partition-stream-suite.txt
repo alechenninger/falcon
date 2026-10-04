@@ -1,0 +1,11 @@
+RUN {"phase": "suite", "utc": "2026-10-03T23:27:22.232599+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-partitions.test", "binary_sha256": "30832d347b6dac54e5e646d15dcb15de3db41de3fc69451bf2deb7b30551509d", "implementation": {"domain_capture_bench_test.go": "3764b9b3bff14b34dd0f2859349985628f4affde297ef48fbafbd24a220cd070", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "b5626f781f2558d6d3f417c9ae5d310ab78e7f468b48fae0f64341abb50b52f0", "snapshot_pipeline_protocol_test.go": "9e20782caabd84922c1c83afa35a49dbcdc5cbb5c7d5aa6da259cd0e4b2f135d", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e", "snapshot_partition_bench_test.go": "ecff50c6a400dfc11cf89b5300177056fee18fa1580e7c923a08ea4f30d2dc7b", "snapshot_partition_protocol_test.go": "d6d3fd8f833f78704f8beec4754688f6cd8fd5ac558351eff02183cfdf63954e", "snapshot_partition_plan_test.go": "f813f94b07ad233fbce502bedc1df09382c677f01c5e2752a2473d75de317e2c"}}
+?   	github.com/alechenninger/falcon/cmd/falcon	[no test files]
+ok  	github.com/alechenninger/falcon/internal/application	0.231s
+?   	github.com/alechenninger/falcon/internal/application/observability	[no test files]
+ok  	github.com/alechenninger/falcon/internal/domain	0.245s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/grpc	0.382s
+?   	github.com/alechenninger/falcon/internal/infrastructure/grpc/proto	[no test files]
+ok  	github.com/alechenninger/falcon/internal/infrastructure/memory	0.478s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	27.257s
+?   	github.com/alechenninger/falcon/internal/transport/grpc	[no test files]
+END {"exit": 0, "elapsed": 28.585024458006956, "container_inventory": [], "index": null}

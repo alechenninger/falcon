@@ -1,0 +1,91 @@
+fixture,arm,plan,mode,samples,rows,prepare_ms,first_ms,total_ms,total_min_ms,total_max_ms,planning_ms,execution_ms,startup_ms,scanned_rows,scan_nodes,executed_scans,subplans_removed,jit_ms,sort_method,sort_kib,temp_written_blocks
+small-cut,flat-position,any,auto,6,16,0.511917,0.350104,0.3697085,0.322541,0.653459,0.006,0.037,0.019,32.0,2,2,0,0,quicksort,29,0
+small-cut,flat-position,any,force_custom_plan,6,16,0.279208,0.341917,0.3583545,0.297917,0.5065,0.086,0.027,0.012,32.0,2,2,0,0,quicksort,29,0
+small-cut,flat-position,any,force_generic_plan,6,16,0.198792,0.225063,0.240125,0.224833,0.335625,0.004,0.034,0.015,32.0,2,2,0,0,quicksort,29,0
+small-cut,flat-position,guarded,auto,6,16,0.422958,0.3234585,0.33489599999999997,0.311042,0.372042,0.005,0.042,0.017,16.0,2,1,0,0,quicksort;,29,0
+small-cut,flat-position,guarded,force_custom_plan,6,16,0.233,0.3474795,0.357167,0.339458,0.42775,0.097,0.03,0.012,16.0,2,1,0,0,quicksort;,29,0
+small-cut,flat-position,guarded,force_generic_plan,6,16,0.249958,0.23183350000000003,0.24585449999999998,0.223125,0.330417,0.004,0.035,0.019,16.0,2,1,0,0,quicksort;,29,0
+small-cut,flat-compound,any,auto,6,16,0.468292,0.315875,0.332625,0.317834,0.624125,0.006,0.038,0.019,32.0,2,2,0,0,quicksort,29,0
+small-cut,flat-compound,any,force_custom_plan,6,16,0.235209,0.32229149999999995,0.3637085,0.325917,0.480708,0.073,0.027,0.014,32.0,2,2,0,0,quicksort,29,0
+small-cut,flat-compound,any,force_generic_plan,6,16,0.256042,0.2124995,0.2256665,0.216583,0.308916,0.004,0.033,0.015,32.0,2,2,0,0,quicksort,29,0
+small-cut,flat-compound,guarded,auto,6,16,0.368458,0.3609795,0.372667,0.323667,0.38675,0.005,0.037,0.016,16.0,2,1,0,0,quicksort;,29,0
+small-cut,flat-compound,guarded,force_custom_plan,6,16,0.270125,0.35854149999999996,0.372042,0.354167,0.419209,0.107,0.035,0.015,16.0,2,1,0,0,quicksort;,29,0
+small-cut,flat-compound,guarded,force_generic_plan,6,16,0.243208,0.2275625,0.2351665,0.227083,0.317416,0.004,0.034,0.019,16.0,2,1,0,0,quicksort;,29,0
+small-cut,partitioned,any,auto,6,16,0.392125,0.507521,0.5172915,0.477875,1.521541,0.011,0.17,0.063,32.0,33,33,31,0,quicksort,29,0
+small-cut,partitioned,any,force_custom_plan,6,16,0.190459,0.482562,0.4906665,0.467125,0.526583,0.257,0.018,0.01,16.0,1,1,0,0,quicksort,29,0
+small-cut,partitioned,any,force_generic_plan,6,16,0.191458,0.3247505,0.3323545,0.324959,1.3875,0.01,0.144,0.053,32.0,33,33,31,0,quicksort,29,0
+small-cut,partitioned,guarded,auto,6,16,0.392292,0.83775,0.8449375,0.822541,1.335042,0.01,0.094,0.017,16.0,33,1,31,0,quicksort;,29,0
+small-cut,partitioned,guarded,force_custom_plan,6,16,0.239583,0.846729,0.853458,0.814167,0.8765,0.542,0.086,0.013,16.0,33,1,0,0,quicksort;,29,0
+small-cut,partitioned,guarded,force_generic_plan,6,16,0.245666,0.281875,0.289458,0.275375,1.325125,0.009,0.091,0.016,16.0,33,1,31,0,quicksort;,29,0
+diverse-history,flat-position,any,auto,6,16,0.625833,0.473563,0.477875,0.4315,3.854,0.008,2.924,2.074,16.0,2,2,0,0,quicksort,29,0
+diverse-history,flat-position,any,force_custom_plan,6,16,0.265875,0.3893335,0.394667,0.361167,0.489959,0.117,0.032,0.016,16.0,2,2,0,0,quicksort,29,0
+diverse-history,flat-position,any,force_generic_plan,6,16,0.261167,2.924729,2.9471249999999998,2.848834,3.284708,0.006,2.691,1.881,16.0,2,2,0,0,quicksort,29,0
+diverse-history,flat-position,guarded,auto,6,16,0.440833,0.395104,0.4059795,0.373625,0.428292,0.005,0.041,0.018,16.0,2,1,0,0,quicksort,29,0
+diverse-history,flat-position,guarded,force_custom_plan,6,16,0.269584,0.3887295,0.399521,0.380833,0.421542,0.152,0.036,0.017,16.0,2,1,0,0,quicksort,29,0
+diverse-history,flat-position,guarded,force_generic_plan,6,16,0.253333,0.2471875,0.25712500000000005,0.249125,0.362,0.005,0.044,0.022,16.0,2,1,0,0,quicksort,29,0
+diverse-history,flat-compound,any,auto,6,16,0.553125,0.4369165,0.442375,0.346666,3.92275,0.008,2.94,2.113,16.0,2,2,0,0,quicksort,29,0
+diverse-history,flat-compound,any,force_custom_plan,6,16,0.2565,0.397291,0.4012705,0.367459,0.531917,0.112,0.04,0.015,16.0,2,2,0,0,quicksort,29,0
+diverse-history,flat-compound,any,force_generic_plan,6,16,0.242167,2.9827500000000002,2.987146,2.838,3.1785,0.007,2.853,1.81,16.0,2,2,0,0,quicksort,29,0
+diverse-history,flat-compound,guarded,auto,6,16,0.443167,0.3728545,0.387042,0.33925,0.44675,0.005,0.037,0.017,16.0,2,1,0,0,quicksort,29,0
+diverse-history,flat-compound,guarded,force_custom_plan,6,16,0.260333,0.386771,0.3968125,0.38525,0.423541,0.145,0.054,0.021,16.0,2,1,0,0,quicksort,29,0
+diverse-history,flat-compound,guarded,force_generic_plan,6,16,0.236791,0.238875,0.24772899999999998,0.241542,0.361917,0.004,0.043,0.021,16.0,2,1,0,0,quicksort,29,0
+diverse-history,partitioned,any,auto,6,16,0.586458,0.6791245,0.6995205,0.655333,2.658625,0.386,0.026,0.015,16.0,1,1,0,0,quicksort,29,0
+diverse-history,partitioned,any,force_custom_plan,6,16,0.274042,0.6350834999999999,0.652792,0.627958,0.677708,0.339,0.018,0.009,16.0,1,1,0,0,quicksort,29,0
+diverse-history,partitioned,any,force_generic_plan,6,16,0.286334,13.8383535,13.859416,13.1305,16.4865,0.016,13.23,11.839,124192.0,49,49,47,0,quicksort,29,0
+diverse-history,partitioned,guarded,auto,6,16,0.498625,1.49375,1.5110000000000001,1.420042,2.99175,0.928,0.227,0.016,16.0,49,1,0,0,quicksort,29,0
+diverse-history,partitioned,guarded,force_custom_plan,6,16,0.26125,1.507313,1.52475,1.497292,1.550083,0.927,0.227,0.017,16.0,49,1,0,0,quicksort,29,0
+diverse-history,partitioned,guarded,force_generic_plan,6,16,0.302375,0.399625,0.417458,0.405208,1.960416,0.009,0.125,0.015,16.0,49,1,47,0,quicksort;,29,0
+bulk-history,flat-position,any,auto,6,16,0.52625,0.42925,0.433833,0.338708,0.640833,0.124,0.044,0.022,16.0,2,2,0,0,quicksort,29,0
+bulk-history,flat-position,any,force_custom_plan,6,16,0.168083,0.263021,0.2674795,0.24925,0.298166,0.116,0.038,0.019,16.0,2,2,0,0,quicksort,29,0
+bulk-history,flat-position,any,force_generic_plan,6,16,0.152583,152.879875,152.9128125,150.269958,168.718542,0.016,150.713,144.713,2000032.0,2,2,0,17.304,quicksort,25,0
+bulk-history,flat-position,guarded,auto,6,16,0.59875,0.49112500000000003,0.50925,0.4705,0.63375,0.117,0.037,0.017,16.0,2,1,0,0,quicksort,29,0
+bulk-history,flat-position,guarded,force_custom_plan,6,16,0.290834,0.420375,0.43756249999999997,0.426416,0.545334,0.098,0.039,0.019,16.0,2,1,0,0,quicksort,29,0
+bulk-history,flat-position,guarded,force_generic_plan,6,16,0.299916,0.3023755,0.323292,0.307042,0.416041,0.006,0.043,0.019,16.0,2,1,0,0,quicksort,29,0
+bulk-history,flat-compound,any,auto,6,16,0.548292,0.40902099999999997,0.41922950000000003,0.331584,0.645666,0.11,0.045,0.019,16.0,2,2,0,0,quicksort,29,0
+bulk-history,flat-compound,any,force_custom_plan,6,16,0.323416,0.3221665,0.3264165,0.30575,0.426667,0.087,0.035,0.015,16.0,2,2,0,0,quicksort,29,0
+bulk-history,flat-compound,any,force_generic_plan,6,16,0.199209,146.26458350000001,146.289479,144.9735,161.5415,0.015,143.894,138.23,2000032.0,2,2,0,16.931,quicksort,25,0
+bulk-history,flat-compound,guarded,auto,6,16,0.594916,0.523583,0.543104,0.46175,0.647,0.136,0.039,0.02,16.0,2,1,0,0,quicksort,29,0
+bulk-history,flat-compound,guarded,force_custom_plan,6,16,0.307417,0.44397949999999997,0.463146,0.429208,1.230458,0.102,0.041,0.018,16.0,2,1,0,0,quicksort,29,0
+bulk-history,flat-compound,guarded,force_generic_plan,6,16,0.311417,0.3183125,0.33868699999999996,0.320375,0.425209,0.006,0.041,0.019,16.0,2,1,0,0,quicksort,29,0
+bulk-history,partitioned,any,auto,6,16,0.463125,0.6992085,0.719375,0.633625,2.311542,0.331,0.022,0.012,16.0,1,1,0,0,quicksort,29,0
+bulk-history,partitioned,any,force_custom_plan,6,16,0.280208,0.632979,0.6504995,0.640375,0.679459,0.321,0.019,0.011,16.0,1,1,0,0,quicksort,29,0
+bulk-history,partitioned,any,force_generic_plan,6,16,0.238416,207.4792915,207.5055625,206.224209,220.892333,0.027,206.253,194.671,2000033.0,49,49,47,179.482,quicksort,29,0
+bulk-history,partitioned,guarded,auto,6,16,2.019875,1.4191875,1.43975,1.350291,2.902791,0.791,0.231,0.017,16.0,49,1,0,0,quicksort,29,0
+bulk-history,partitioned,guarded,force_custom_plan,6,16,0.322375,1.3179375,1.3359795,1.290792,1.379084,0.748,0.225,0.015,16.0,49,1,0,0,quicksort,29,0
+bulk-history,partitioned,guarded,force_generic_plan,6,16,0.391209,0.3755415,0.3925625,0.371292,1.876208,0.01,0.118,0.013,16.0,49,1,47,0,quicksort;,29,0
+dense-cut,flat-position,any,auto,6,100000,0.561125,13.415813,94.9759795,94.363958,106.857375,0.016,45.312,36.626,100000.0,2,2,0,0,external merge,28808,3609
+dense-cut,flat-position,any,force_custom_plan,6,100000,0.326958,13.1095,97.5291045,95.302375,99.440459,0.235,33.128,15.85,99999.99,2,2,0,0,external merge,10968,3607
+dense-cut,flat-position,any,force_generic_plan,6,100000,0.345,28.238771,108.206771,107.011625,110.427959,0.017,46.354,37.013,100000.0,2,2,0,0,external merge,28808,3609
+dense-cut,flat-position,guarded,auto,6,100000,0.588,22.420583,102.241083,99.4395,107.254791,0.016,45.571,36.891,100000.0,2,1,0,0,external merge,28808,3609
+dense-cut,flat-position,guarded,force_custom_plan,6,100000,0.347792,21.917708,100.92462499999999,99.350084,103.315042,0.258,40.129,31.425,100000.0,2,1,0,0,external merge,28808,3609
+dense-cut,flat-position,guarded,force_generic_plan,6,100000,0.372959,28.433771,108.302146,104.686959,109.870667,0.016,47.671,38.398,100000.0,2,1,0,0,external merge,28808,3609
+dense-cut,flat-compound,any,auto,6,100000,0.514084,13.775646,97.7228745,95.608125,109.7195,0.014,47.057,37.75,100000.0,2,2,0,0,external merge,28808,3609
+dense-cut,flat-compound,any,force_custom_plan,6,100000,0.315042,13.8049585,98.36325,95.86525,100.469125,0.241,33.664,16.615,99999.99,2,2,0,0,external merge,11016,3608
+dense-cut,flat-compound,any,force_generic_plan,6,100000,0.3555,28.9962295,111.3547295,109.013583,114.527,0.018,47.983,38.202,100000.0,2,2,0,0,external merge,28808,3609
+dense-cut,flat-compound,guarded,auto,6,100000,0.576083,23.2257705,104.11156249999999,102.648083,109.366625,0.018,47.249,37.909,100000.0,2,1,0,0,external merge,28808,3609
+dense-cut,flat-compound,guarded,force_custom_plan,6,100000,0.379,23.224063,105.1931045,101.229459,108.94975,0.266,41.832,32.282,100000.0,2,1,0,0,external merge,28808,3609
+dense-cut,flat-compound,guarded,force_generic_plan,6,100000,0.379375,29.3904585,110.7371455,108.63675,112.690791,0.015,47.665,38.285,100000.0,2,1,0,0,external merge,28808,3609
+dense-cut,partitioned,any,auto,6,100000,0.483208,16.3921875,99.0500835,97.052084,113.718167,0.041,55.701,43.835,101984.0,77,77,51,0,external merge,28808,3609
+dense-cut,partitioned,any,force_custom_plan,6,100000,0.330584,15.352145499999999,98.2273955,96.7675,99.885625,1.517,34.691,18.397,100000.01,13,13,0,0,external merge,10776,3607
+dense-cut,partitioned,any,force_generic_plan,6,100000,0.310625,31.6346875,111.327229,110.283792,112.224708,0.032,54.067,43.297,101984.0,77,77,51,0,external merge,28808,3609
+dense-cut,partitioned,guarded,auto,6,100000,0.5495,26.6201875,106.9361665,104.522833,113.688375,0.032,54.079,42.344,100000.0,77,13,51,0,external merge;,28808,3609
+dense-cut,partitioned,guarded,force_custom_plan,6,100000,0.31925,25.9220835,107.9593545,106.500792,110.008,2.348,46.522,35.902,100000.0,77,13,0,0,external merge;,28808,3609
+dense-cut,partitioned,guarded,force_generic_plan,6,100000,0.347209,30.980625500000002,111.487896,110.379542,114.201125,0.027,53.118,42.352,100000.0,77,13,51,0,external merge;,28808,3609
+many-leaves,flat-position,any,auto,6,16,0.442666,0.3045,0.313771,0.266375,0.561459,0.005,0.04,0.021,32.0,2,2,0,0,quicksort,29,0
+many-leaves,flat-position,any,force_custom_plan,6,16,0.192834,0.3121875,0.326292,0.308334,0.364709,0.075,0.027,0.013,32.0,2,2,0,0,quicksort,29,0
+many-leaves,flat-position,any,force_generic_plan,6,16,0.206375,0.226312,0.23904150000000002,0.228375,0.308375,0.004,0.039,0.017,32.0,2,2,0,0,quicksort,29,0
+many-leaves,flat-position,guarded,auto,6,16,0.367459,0.35268750000000004,0.364375,0.337208,0.385583,0.004,0.037,0.015,16.0,2,1,0,0,quicksort;,29,0
+many-leaves,flat-position,guarded,force_custom_plan,6,16,0.251792,0.349167,0.358854,0.342084,0.412125,0.094,0.034,0.014,16.0,2,1,0,0,quicksort;,29,0
+many-leaves,flat-position,guarded,force_generic_plan,6,16,0.257041,0.2459375,0.256229,0.236084,0.340917,0.003,0.034,0.018,16.0,2,1,0,0,quicksort;,29,0
+many-leaves,flat-compound,any,auto,6,16,0.454792,0.315125,0.326438,0.301125,0.587125,0.006,0.039,0.02,32.0,2,2,0,0,quicksort,29,0
+many-leaves,flat-compound,any,force_custom_plan,6,16,0.206791,0.3011665,0.3175,0.291417,0.375542,0.071,0.035,0.018,32.0,2,2,0,0,quicksort,29,0
+many-leaves,flat-compound,any,force_generic_plan,6,16,0.214959,0.2120415,0.2315005,0.22225,0.375708,0.003,0.036,0.017,32.0,2,2,0,0,quicksort,29,0
+many-leaves,flat-compound,guarded,auto,6,16,0.372166,0.3054585,0.315125,0.287958,0.382042,0.004,0.038,0.015,16.0,2,1,0,0,quicksort;,29,0
+many-leaves,flat-compound,guarded,force_custom_plan,6,16,0.2325,0.353375,0.3637505,0.341208,0.423625,0.117,0.045,0.019,16.0,2,1,0,0,quicksort;,29,0
+many-leaves,flat-compound,guarded,force_generic_plan,6,16,0.258292,0.24425000000000002,0.254271,0.234542,0.358958,0.005,0.04,0.019,16.0,2,1,0,0,quicksort;,29,0
+many-leaves,partitioned,any,auto,6,16,0.594834,6.454625,6.477354500000001,6.14925,24.580167,0.121,2.394,0.687,32.0,513,513,511,0,quicksort,29,0
+many-leaves,partitioned,any,force_custom_plan,6,16,0.265792,6.278729,6.298249500000001,6.160917,7.256208,5.747,0.031,0.015,16.0,1,1,0,0,quicksort,29,0
+many-leaves,partitioned,any,force_generic_plan,6,16,0.298083,2.5946875,2.613396,2.586833,24.595292,0.094,2.387,0.692,32.0,513,513,511,0,quicksort,29,0
+many-leaves,partitioned,guarded,auto,6,16,0.497125,12.0166665,12.037728999999999,11.85225,22.7155,0.109,1.345,0.028,16.0,513,1,511,0,quicksort;,29,0
+many-leaves,partitioned,guarded,force_custom_plan,6,16,0.317417,11.846916,11.86625,11.721958,13.307,10.476,1.416,0.024,16.0,513,1,0,0,quicksort;,29,0
+many-leaves,partitioned,guarded,force_generic_plan,6,16,0.305167,1.7124165,1.731354,1.631,24.47725,0.105,1.345,0.02,16.0,513,1,511,0,quicksort;,29,0

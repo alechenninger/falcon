@@ -1,0 +1,23 @@
+backlog: 36 measured invocations; all exit 0; all before/after inventories empty
+capacity: 24 measured invocations; all exit 0; all before/after inventories empty
+latency: 24 measured invocations; all exit 0; all before/after inventories empty
+history: 24 measured invocations; all exit 0; all before/after inventories empty
+index: 12 measured invocations; all exit 0; all before/after inventories empty
+120 samples, 40 configurations, 3 repetitions each, 6,660,000 measured source transactions
+All samples verify exact journal/payload counts and Pareto-root configuration
+All eight frozen source hashes and the measured binary match current files
+Measured binary SHA256: 099f3acd51c4fa13715166aa76a4d813cdf624baef6b127db5637011b9404ccc
+smoke: 8 completed invocations; latest exit 0; all inventories empty; earlier failed invocation indices []
+validate: 3 completed invocations; latest exit 0; all inventories empty; earlier failed invocation indices []
+Normal and race-enabled protocol checks passed
+suite: 3 completed invocations; latest exit 0; all inventories empty; earlier failed invocation indices [1]
+diagnostics: 1 completed invocations; latest exit 0; all inventories empty; earlier failed invocation indices []
+diagnostics-cover: 1 completed invocations; latest exit 0; all inventories empty; earlier failed invocation indices []
+diagnostics-stats: 1 completed invocations; latest exit 0; all inventories empty; earlier failed invocation indices []
+Supplemental statistics source hash matches its separately compiled diagnostic binary invocation
+Previous pipeline source archive: 6 hash-verified .go.txt files
+Runner/report syntax and report local links verified
+gofmt -l and git diff --check clean
+No manual container polling; final empty inventory comes from the completed suite harness
+diagnostics: 420 client reads; 70 saved plans
+diagnostics-stats: 432 client reads; 90 saved plans

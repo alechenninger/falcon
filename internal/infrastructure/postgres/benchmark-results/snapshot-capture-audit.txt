@@ -1,0 +1,13 @@
+{
+  "measured_runs": 96,
+  "configurations": 32,
+  "source_transactions": 3639000,
+  "repetitions": 3,
+  "plan_combinations": 24,
+  "diagnostic_captures": 144,
+  "normal_binary_sha256": [
+    "ff68f996661b3131f787c6f48e616ff74b5d2b992cd6e2c1149601d90464f860"
+  ],
+  "all_checked_inventories_empty": true,
+  "partial": false
+}

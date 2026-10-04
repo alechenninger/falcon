@@ -39,9 +39,10 @@ type domainCaptureConfig struct {
 	History         int     `json:"history"`
 	Workers         int     `json:"workers"`
 	CounterFetch    string  `json:"counter_fetch,omitempty"`
-	SnapshotFetch   string  `json:"snapshot_fetch,omitempty"` // global or fair; follow-up experiment only
-	SnapshotWake    string  `json:"snapshot_wake,omitempty"`  // poll or notify
-	SnapshotProbe   string  `json:"snapshot_probe,omitempty"` // empty: original probe; indexed: bounded per-xid probe
+	SnapshotFetch   string  `json:"snapshot_fetch,omitempty"`   // global or fair; follow-up experiment only
+	SnapshotWake    string  `json:"snapshot_wake,omitempty"`    // poll or notify
+	SnapshotProbe   string  `json:"snapshot_probe,omitempty"`   // empty: original probe; indexed: bounded per-xid probe
+	SnapshotCapture string  `json:"snapshot_capture,omitempty"` // empty/multi: sequential calls; single: one atomic SQL statement
 	NotifyBatchMS   int     `json:"notify_batch_ms,omitempty"`
 	FallbackMS      int     `json:"fallback_ms,omitempty"`
 	FetchBatchRoots int     `json:"fetch_batch_roots,omitempty"`
@@ -52,6 +53,15 @@ type domainCaptureConfig struct {
 	QueueBytes      int64   `json:"queue_bytes,omitempty"`
 	Backlog         bool    `json:"backlog,omitempty"`
 	BurstSize       int     `json:"burst_size,omitempty"`
+	FetchPlan       string  `json:"fetch_plan,omitempty"`
+	PositionCover   bool    `json:"position_cover,omitempty"`
+	PlanCache       string  `json:"plan_cache,omitempty"`
+	CompoundKey     bool    `json:"compound_key,omitempty"`
+	PartitionSpan   int64   `json:"partition_span,omitempty"`
+	PartitionAhead  int     `json:"partition_ahead,omitempty"`
+	PartitionGC     bool    `json:"partition_gc,omitempty"`
+	HistoryTx       int     `json:"history_tx,omitempty"`
+	partitions      *snapshotPartitionManager
 }
 
 func (c domainCaptureConfig) roots() int     { return c.Tenants * c.RootsPerTenant }
@@ -90,6 +100,9 @@ func (c domainCaptureConfig) defaults() domainCaptureConfig {
 	}
 	if c.Skew == "" {
 		c.Skew = "uniform"
+	}
+	if c.PartitionSpan > 0 && c.partitions == nil {
+		c.partitions = newSnapshotPartitionManager(c)
 	}
 	return c
 }
@@ -271,6 +284,9 @@ func prepareDomainCapture(ctx context.Context, p *pgxpool.Pool, o replicationBen
 		_, err = p.Exec(ctx, "CREATE PUBLICATION "+o.publication+" FOR TABLE "+o.table)
 		return err
 	}
+	if c.snapshot() && (c.CompoundKey || c.PartitionSpan > 0 || c.HistoryTx > 0) {
+		return prepareSnapshotPartitionFixture(ctx, p, o, c)
+	}
 	if c.snapshot() {
 		_, err = p.Exec(ctx, fmt.Sprintf(`CREATE SEQUENCE %s CACHE 1; CREATE TABLE %s(position BIGINT PRIMARY KEY DEFAULT nextval('%s'),root_id INT NOT NULL,writer_xid XID8 NOT NULL DEFAULT pg_current_xact_id(),batch_id BIGINT NOT NULL,payload BYTEA NOT NULL); ALTER SEQUENCE %s OWNED BY %s.position; ALTER TABLE %s ALTER COLUMN payload SET STORAGE EXTERNAL; CREATE INDEX ON %s(writer_xid,position); CREATE INDEX ON %s(root_id,writer_xid,position); CREATE TABLE %s(epoch BIGINT PRIMARY KEY,previous_snapshot PG_SNAPSHOT NOT NULL,snapshot PG_SNAPSHOT NOT NULL);`, o.sequence, o.journal, o.sequence, o.sequence, o.journal, o.journal, o.journal, o.journal, o.clock))
 	} else {
@@ -285,6 +301,15 @@ func prepareDomainCapture(ctx context.Context, p *pgxpool.Pool, o replicationBen
 	}
 	if err != nil {
 		return err
+	}
+	if c.PositionCover {
+		if !c.snapshot() {
+			return fmt.Errorf("position covering index requires a snapshot journal")
+		}
+		_, err = p.Exec(ctx, fmt.Sprintf(`ALTER TABLE %s DROP CONSTRAINT %s_pkey; ALTER TABLE %s ADD PRIMARY KEY(position) INCLUDE(writer_xid)`, o.journal, o.journal, o.journal))
+		if err != nil {
+			return err
+		}
 	}
 	if c.History > 0 {
 		if c.snapshot() {
@@ -1047,7 +1072,8 @@ type domainCaptureResult struct {
 	ApplyBeforeAck                                 int
 	RootTop20Share, RootTop1Share                  float64
 	WALBytes, JournalBytes, SourceBytes            int64
-	Snapshot                                       *snapshotFetchResult `json:"snapshot,omitempty"`
+	Snapshot                                       *snapshotFetchResult     `json:"snapshot,omitempty"`
+	Partitions                                     *snapshotPartitionResult `json:"partitions,omitempty"`
 }
 
 func runDomainCapture(b *testing.B, c domainCaptureConfig) {
@@ -1071,6 +1097,9 @@ func runDomainCapture(b *testing.B, c domainCaptureConfig) {
 	defer writers.Close()
 	consumerConfig := config.Copy()
 	consumerConfig.MaxConns = 5
+	if c.PlanCache != "" {
+		consumerConfig.ConnConfig.RuntimeParams["plan_cache_mode"] = c.PlanCache
+	}
 	if experiment != nil {
 		consumerConfig.ConnConfig.DialFunc = experiment.dial
 	}
@@ -1100,6 +1129,11 @@ func runDomainCapture(b *testing.B, c domainCaptureConfig) {
 		default:
 		}
 		stop()
+	}
+	if c.PartitionGC {
+		if err = c.partitions.start(runCtx, connString, o, fail, &wg); err != nil {
+			b.Fatal(err)
+		}
 	}
 	if c.Mode != "snapshot-coupled" && c.SnapshotFetch != "fair" && !c.pipeline() {
 		domainCaptureWorkers(runCtx, consumers, o, c, m, s, &wg, fail)
@@ -1152,6 +1186,9 @@ func runDomainCapture(b *testing.B, c domainCaptureConfig) {
 	}
 	b.ResetTimer()
 	started := time.Now()
+	if c.partitions != nil {
+		c.partitions.beginMeasurement()
+	}
 	if m.experiment != nil {
 		m.experiment.start(started)
 	}
@@ -1327,7 +1364,12 @@ func runDomainCapture(b *testing.B, c domainCaptureConfig) {
 		b.Fatal(err)
 	}
 	if c.Mode != "wal" {
-		if err = writers.QueryRow(ctx, "SELECT pg_total_relation_size($1::regclass)", o.journal).Scan(&r.JournalBytes); err != nil {
+		sizeQuery := "SELECT pg_total_relation_size($1::regclass)"
+		if c.PartitionSpan > 0 {
+			sizeQuery = "SELECT COALESCE(sum(pg_total_relation_size(relid)),0)::bigint FROM pg_partition_tree($1::regclass) WHERE isleaf"
+			r.Partitions = c.partitions.result()
+		}
+		if err = writers.QueryRow(ctx, sizeQuery, o.journal).Scan(&r.JournalBytes); err != nil {
 			b.Fatal(err)
 		}
 	}

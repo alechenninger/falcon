@@ -1,0 +1,11 @@
+Measured runs: 126
+Configurations: 42; three distinct repetitions each
+Source transactions: 5,190,000
+All measured source/binary hashes identical
+Binary SHA256: 30832d347b6dac54e5e646d15dcb15de3db41de3fc69451bf2deb7b30551509d
+9 current and archived source hashes match measured implementation
+All 126 measured invocations have exit 0 and empty before/after container inventories
+Every measured sample delivered the exact expected entry and payload-byte counts; no premature apply acknowledgement
+Diagnostics: 90 plans / 540 verified full client reads
+Excluded invocation audit: {"diagnostics": 1, "smoke": 13, "suite": 1, "validate": 3}; all exit 0 and inventories empty
+Frozen normal and race protocol validation confirmed

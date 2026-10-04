@@ -185,10 +185,10 @@ func TestSnapshotFetchMissingWakeAndEmptyCapture(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer p.Close()
-	for _, variant := range []struct{ fetch, probe string }{{"global", ""}, {"fair", ""}, {"global", "indexed"}, {"fair", "indexed"}} {
+	for _, variant := range []struct{ fetch, probe, capture string }{{"global", "", ""}, {"fair", "", ""}, {"global", "indexed", ""}, {"fair", "indexed", ""}, {"pipeline-stream", "indexed", "single"}} {
 		fetch := variant.fetch
-		t.Run(fetch+"/"+variant.probe, func(t *testing.T) {
-			c := domainCaptureConfig{Mode: "snapshot-routed", Tenants: 1, RootsPerTenant: 2, SnapshotFetch: fetch, SnapshotWake: "notify", SnapshotProbe: variant.probe, NotifyBatchMS: 2, FallbackMS: 50, DropWakeEvery: 1, Fault: "rollback"}.defaults()
+		t.Run(fetch+"/"+variant.probe+"/"+variant.capture, func(t *testing.T) {
+			c := domainCaptureConfig{Mode: "snapshot-routed", Tenants: 1, RootsPerTenant: 2, SnapshotFetch: fetch, SnapshotWake: "notify", SnapshotProbe: variant.probe, SnapshotCapture: variant.capture, NotifyBatchMS: 2, FallbackMS: 50, DropWakeEvery: 1, Fault: "rollback"}.defaults()
 			o := newReplicationBenchObjects()
 			if e = prepareDomainCapture(ctx, p, o, c); e != nil {
 				t.Fatal(e)

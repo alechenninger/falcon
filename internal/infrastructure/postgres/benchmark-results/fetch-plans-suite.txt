@@ -1,0 +1,47 @@
+RUN {"phase": "suite", "utc": "2026-10-03T20:58:48.652874+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-fetch-plans.test", "binary_sha256": "099f3acd51c4fa13715166aa76a4d813cdf624baef6b127db5637011b9404ccc", "implementation": {"domain_capture_bench_test.go": "dd5ee7e307b69f4a5c9f656509005fe65e127f23c2748406a6f59387ffb08eef", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "9cda8e94e8d58da831a1cb582a76fd9f46ad6bd3955b826ebeca929dc06df39b", "snapshot_pipeline_protocol_test.go": "a61756846efc0da6be23d704f7f974bb0b62d163c386050b1172580da32edb10", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "snapshot_fetch_optimization_plan_test.go": "e8b660e9cb4b387a2e963723f335bb672bd9d744a0c295906a848a947f46d5bc", "snapshot_fetch_optimization_protocol_test.go": "0d4e148474bd78357ee303c265f3b1bf5774afba86afb61fdb40e55cdb92583a", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e"}}
+?   	github.com/alechenninger/falcon/cmd/falcon	[no test files]
+# github.com/alechenninger/falcon/internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source_test [github.com/alechenninger/falcon/internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source.test]
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/domain_capture_bench_test.go:123:17: undefined: snapshotBenchCut
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/domain_capture_bench_test.go:464:97: undefined: snapshotBenchCut
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/domain_capture_bench_test.go:512:108: undefined: snapshotBenchCut
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/snapshot_fetch_bench_test.go:36:91: undefined: snapshotBenchWakeups
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/snapshot_fetch_bench_test.go:166:8: undefined: snapshotBenchCut
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/replication_bench_test.go:88:16: undefined: sequenceBenchFault
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/replication_bench_test.go:95:25: undefined: snapshotBenchWakeMode
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/replication_bench_test.go:96:25: undefined: snapshotBenchPollMode
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/replication_bench_test.go:679:19: undefined: snapshotBenchPollMode
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/replication_bench_test.go:680:20: undefined: snapshotBenchWakeups
+internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source/domain_capture_bench_test.go:512:108: too many errors
+ok  	github.com/alechenninger/falcon/internal/application	0.458s
+?   	github.com/alechenninger/falcon/internal/application/observability	[no test files]
+ok  	github.com/alechenninger/falcon/internal/domain	0.252s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/grpc	0.408s
+?   	github.com/alechenninger/falcon/internal/infrastructure/grpc/proto	[no test files]
+ok  	github.com/alechenninger/falcon/internal/infrastructure/memory	0.519s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	22.464s
+FAIL	github.com/alechenninger/falcon/internal/infrastructure/postgres/benchmark-results/snapshot-pipeline-source [build failed]
+?   	github.com/alechenninger/falcon/internal/transport/grpc	[no test files]
+FAIL
+END {"exit": 1, "elapsed": 23.744101124932058, "container_inventory": [], "index": null}
+RUN {"phase": "suite", "utc": "2026-10-03T21:01:31.897471+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-fetch-plans.test", "binary_sha256": "099f3acd51c4fa13715166aa76a4d813cdf624baef6b127db5637011b9404ccc", "implementation": {"domain_capture_bench_test.go": "dd5ee7e307b69f4a5c9f656509005fe65e127f23c2748406a6f59387ffb08eef", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "9cda8e94e8d58da831a1cb582a76fd9f46ad6bd3955b826ebeca929dc06df39b", "snapshot_pipeline_protocol_test.go": "a61756846efc0da6be23d704f7f974bb0b62d163c386050b1172580da32edb10", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "snapshot_fetch_optimization_plan_test.go": "e8b660e9cb4b387a2e963723f335bb672bd9d744a0c295906a848a947f46d5bc", "snapshot_fetch_optimization_protocol_test.go": "0d4e148474bd78357ee303c265f3b1bf5774afba86afb61fdb40e55cdb92583a", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e"}}
+?   	github.com/alechenninger/falcon/cmd/falcon	[no test files]
+ok  	github.com/alechenninger/falcon/internal/application	0.245s
+?   	github.com/alechenninger/falcon/internal/application/observability	[no test files]
+ok  	github.com/alechenninger/falcon/internal/domain	0.248s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/grpc	0.396s
+?   	github.com/alechenninger/falcon/internal/infrastructure/grpc/proto	[no test files]
+ok  	github.com/alechenninger/falcon/internal/infrastructure/memory	0.486s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	22.733s
+?   	github.com/alechenninger/falcon/internal/transport/grpc	[no test files]
+END {"exit": 0, "elapsed": 23.86233258410357, "container_inventory": [], "index": null}
+RUN {"phase": "suite", "utc": "2026-10-03T22:19:39.697793+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-fetch-plans-extra.test", "binary_sha256": "5bd7db3401d10339ee3840713c8b1ba7425c7651b880a6d7d49d8fa618961d76", "implementation": {"domain_capture_bench_test.go": "dd5ee7e307b69f4a5c9f656509005fe65e127f23c2748406a6f59387ffb08eef", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "9cda8e94e8d58da831a1cb582a76fd9f46ad6bd3955b826ebeca929dc06df39b", "snapshot_pipeline_protocol_test.go": "a61756846efc0da6be23d704f7f974bb0b62d163c386050b1172580da32edb10", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "snapshot_fetch_optimization_plan_test.go": "e8b660e9cb4b387a2e963723f335bb672bd9d744a0c295906a848a947f46d5bc", "snapshot_fetch_optimization_protocol_test.go": "0d4e148474bd78357ee303c265f3b1bf5774afba86afb61fdb40e55cdb92583a", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e"}}
+?   	github.com/alechenninger/falcon/cmd/falcon	[no test files]
+ok  	github.com/alechenninger/falcon/internal/application	0.235s
+?   	github.com/alechenninger/falcon/internal/application/observability	[no test files]
+ok  	github.com/alechenninger/falcon/internal/domain	0.426s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/grpc	0.229s
+?   	github.com/alechenninger/falcon/internal/infrastructure/grpc/proto	[no test files]
+ok  	github.com/alechenninger/falcon/internal/infrastructure/memory	0.512s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	22.683s
+?   	github.com/alechenninger/falcon/internal/transport/grpc	[no test files]
+END {"exit": 0, "elapsed": 23.987737042014487, "container_inventory": [], "index": null}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"hash/crc32"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,20 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func pipelineProtocolStrategies() []string {
+	return []string{"pipeline-paged", "pipeline-stream", "pipeline-buffered", "pipeline-stream/guarded", "pipeline-stream/metadata", "pipeline-stream/ordered", "pipeline-stream/bounded", "pipeline-stream/adaptive", "pipeline-stream/partition", "pipeline-stream/partition-gc"}
+}
+
+func pipelineProtocolConfig(strategy string) domainCaptureConfig {
+	base, plan, _ := strings.Cut(strategy, "/")
+	c := domainCaptureConfig{Mode: "snapshot-routed", SnapshotFetch: base, SnapshotWake: "poll", FetchPageRows: 128, FetchPlan: plan}
+	if strings.HasPrefix(plan, "partition") {
+		c.FetchPlan, c.PartitionSpan, c.PartitionAhead = "guarded", 64, 64
+		c.PartitionGC = plan == "partition-gc"
+	}
+	return c.defaults()
+}
 
 func pipelineTestFixture(t *testing.T, db *pgxpool.Pool, c domainCaptureConfig, n int) (replicationBenchObjects, *domainCaptureMetrics, *snapshotPipelineSink, snapshotBenchCut) {
 	t.Helper()
@@ -55,10 +70,10 @@ func TestSnapshotPipelineIncrementalAndFailedFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, strategy := range []string{"pipeline-paged", "pipeline-stream", "pipeline-buffered"} {
+	for _, strategy := range pipelineProtocolStrategies() {
 		for _, broken := range []bool{false, true} {
 			t.Run(strategy+map[bool]string{false: "-complete", true: "-failure"}[broken], func(t *testing.T) {
-				c := domainCaptureConfig{Mode: "snapshot-routed", SnapshotFetch: strategy, SnapshotWake: "poll", FetchPageRows: 128}.defaults()
+				c := pipelineProtocolConfig(strategy)
 				o, m, p, a := pipelineTestFixture(t, db, c, 260)
 				tx, err := db.Begin(ctx)
 				if err != nil {
@@ -138,8 +153,11 @@ func TestSnapshotPipelineIncrementalAndFailedFetch(t *testing.T) {
 					t.Fatalf("delivered %d/260", m.applied)
 				}
 				wantQueries := int64(3)
-				if strategy == "pipeline-stream" {
+				if c.SnapshotFetch == "pipeline-stream" {
 					wantQueries = 1
+				}
+				if c.FetchPlan == "bounded" || c.FetchPlan == "adaptive" {
+					wantQueries = 2
 				}
 				if m.experiment.fetchQueries.Load() != wantQueries {
 					t.Fatalf("paging did not immediately drain: %d queries", m.experiment.fetchQueries.Load())
@@ -164,9 +182,9 @@ func TestSnapshotPipelineRootProgressAndLateCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, strategy := range []string{"pipeline-paged", "pipeline-stream", "pipeline-buffered"} {
+	for _, strategy := range pipelineProtocolStrategies() {
 		t.Run(strategy, func(t *testing.T) {
-			c := domainCaptureConfig{Mode: "snapshot-routed", SnapshotFetch: strategy, SnapshotWake: "poll"}.defaults()
+			c := pipelineProtocolConfig(strategy)
 			o, m, p, a := pipelineTestFixture(t, db, c, 133)
 			pending, err := db.Begin(ctx)
 			if err != nil {

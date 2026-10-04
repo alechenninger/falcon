@@ -1,0 +1,229 @@
+RUN {"phase": "validate", "utc": "2026-10-03T20:45:51.202216+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-fetch-plans.test", "binary_sha256": "dd0d5716f541925df9b132d9612b37245143d5cb25e7cd9fcab8a10b9f32b589", "implementation": {"domain_capture_bench_test.go": "dd5ee7e307b69f4a5c9f656509005fe65e127f23c2748406a6f59387ffb08eef", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "9cda8e94e8d58da831a1cb582a76fd9f46ad6bd3955b826ebeca929dc06df39b", "snapshot_pipeline_protocol_test.go": "a61756846efc0da6be23d704f7f974bb0b62d163c386050b1172580da32edb10", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "snapshot_fetch_optimization_plan_test.go": "5c765c42d13ea3c68429f6e833bb4c9e9bebf8c2d2674a6fe79cb55634990900", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e"}}
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (1.91s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.07s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure (0.05s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (1.18s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.06s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive (0.03s)
+PASS
+END {"exit": 0, "elapsed": 3.6231212499551475, "container_inventory": [], "index": null}
+RUN {"phase": "validate", "utc": "2026-10-03T20:53:47.724072+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-fetch-plans.test", "binary_sha256": "5758af9276f7ce97dd5c0198f7bd12dde7b322815f27e486810b3744a03dbd6f", "implementation": {"domain_capture_bench_test.go": "dd5ee7e307b69f4a5c9f656509005fe65e127f23c2748406a6f59387ffb08eef", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "9cda8e94e8d58da831a1cb582a76fd9f46ad6bd3955b826ebeca929dc06df39b", "snapshot_pipeline_protocol_test.go": "a61756846efc0da6be23d704f7f974bb0b62d163c386050b1172580da32edb10", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "snapshot_fetch_optimization_plan_test.go": "5c765c42d13ea3c68429f6e833bb4c9e9bebf8c2d2674a6fe79cb55634990900", "snapshot_fetch_optimization_protocol_test.go": "0d4e148474bd78357ee303c265f3b1bf5774afba86afb61fdb40e55cdb92583a", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e"}}
+=== RUN   TestSnapshotFetchPlanDiagnostics
+    snapshot_fetch_optimization_plan_test.go:21: opt-in fetch-plan diagnostics
+--- SKIP: TestSnapshotFetchPlanDiagnostics (0.00s)
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-true
+--- PASS: TestSnapshotFetchPlanSparseAndEmpty (1.99s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-false (0.09s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-true (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-false (0.05s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-true (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-true (0.05s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-true (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-true (0.05s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-true (0.06s)
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (1.81s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.08s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure (0.05s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (1.21s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.06s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive (0.03s)
+PASS
+END {"exit": 0, "elapsed": 5.50634462502785, "container_inventory": [], "index": null}
+RUN {"phase": "validate", "utc": "2026-10-03T21:02:50.015338+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-fetch-plans-race.test", "binary_sha256": "188f682c7dcbe3d4f0b843a57b70391dfe0dca6931f568d0bac7a9d1bdefe471", "implementation": {"domain_capture_bench_test.go": "dd5ee7e307b69f4a5c9f656509005fe65e127f23c2748406a6f59387ffb08eef", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "9cda8e94e8d58da831a1cb582a76fd9f46ad6bd3955b826ebeca929dc06df39b", "snapshot_pipeline_protocol_test.go": "a61756846efc0da6be23d704f7f974bb0b62d163c386050b1172580da32edb10", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "snapshot_fetch_optimization_plan_test.go": "e8b660e9cb4b387a2e963723f335bb672bd9d744a0c295906a848a947f46d5bc", "snapshot_fetch_optimization_protocol_test.go": "0d4e148474bd78357ee303c265f3b1bf5774afba86afb61fdb40e55cdb92583a", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e"}}
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-true
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-false
+=== RUN   TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-true
+--- PASS: TestSnapshotFetchPlanSparseAndEmpty (1.91s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-false (0.10s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/guarded/cover-true (0.07s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-false (0.05s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/metadata/cover-true (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered/cover-true (0.05s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/ordered-full/cover-true (0.07s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/bounded/cover-true (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-false (0.06s)
+    --- PASS: TestSnapshotFetchPlanSparseAndEmpty/adaptive/cover-true (0.06s)
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (1.92s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.09s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure (0.06s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (1.21s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.08s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive (0.04s)
+PASS
+END {"exit": 0, "elapsed": 6.7372257499955595, "container_inventory": [], "index": null}

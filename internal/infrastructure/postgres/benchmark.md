@@ -235,3 +235,25 @@ python3 internal/infrastructure/postgres/benchmark-results/report-snapshot-pipel
 ```
 
 The runner records source/binary hashes, requires empty container inventories between invocations, and refuses external databases. Archive prior pipeline raw files before repeating phases so implementations and samples are not mixed.
+
+## Snapshot fetch-plan experiments
+
+[The fetch-plan report](benchmark-results/fetch-plans.md) compares the streamed control, explicit indexed old-XID lookups, narrow position sorting followed by server-side payload lookups, and adaptive bounded position scans. It includes 120 measured samples and 6.66 million source transactions across Pareto-shaped capacity, healthy-load, backlog, retained-history, and index-cost cases, plus prepared-plan and protocol diagnostics.
+
+Explicit old-XID lookups retain comparable write capacity and avoid a reproduced generic-plan retained-history scan. In the forced-generic two-million-history stress case, freshness p99 falls from an 11.21-second median to 3.14 ms; automatic planning keeps both queries near 3 ms. Narrow sorting and bounded scans do not improve end-to-end backlog drain or sustained throughput here. The report separates payload startup from bounds discovery, accounts for TOAST and point-lookup costs, and preserves shared source/capture arrival outliers. Production Falcon remains unchanged.
+
+## XID-partitioned streamed journal
+
+[The partitioned-stream report](benchmark-results/partition-stream.md) contains 126 measured runs and 5.19 million source transactions, comparing the flat position primary key, a flat compound-key control, XID-range partitions, and online partition rotation/reclamation. It includes three Pareto-shaped repetitions per configuration, two million retained rows, custom/generic plan diagnostics, late-writer retention checks, and source/binary/cleanup audits.
+
+Partitioned small-write capacity stays within about 2% of the original flat median and large-backlog drain remains about 0.89 seconds. Attached partition count adds setup cost: in the forty-second 1k/sec comparison, freshness p99 is 3.01 ms flat, 4.27 ms with 32 static leaves, and 3.16 ms with rotation ending at three leaves. Live reclamation removes roughly 835–839 MiB of historical journal storage while maintaining 1k offered writes/sec and approximately 3.1–3.3 ms freshness p99. The guarded old-XID query remains essential; partitioning alone does not fix the original generic-plan scan regression.
+
+These are benchmark-only changes. The report distinguishes verified online reclamation from production recovery, durable application, read leases, and provisioning guarantees, and links the implementation and raw measurements.
+
+## Single-request snapshot capture
+
+[The capture report](benchmark-results/snapshot-capture.md) compares the existing five-exchange notified publisher, a single atomic SQL statement, and matched WAL controls across 96 measured runs and 3.639 million source transactions. It preserves the global snapshot clock, durable manifests, independent streamed fetching, notification policy, and per-root application. Production Falcon remains unchanged.
+
+At 1k and 3k small writes/sec, freshness p99 improves from 2.95 to 2.55 ms and 3.65 to 2.73 ms. Saturation freshness p99 improves by about 42% for both payload sizes, with approximately unchanged write capacity: 7.73k small and 3.14k large transactions/sec, versus WAL's 7.82k and 5.19k. A separate immediate-notification control reaches 0.94 ms median freshness p99 at 1k/sec, while reducing small-write capacity by about 6.7% relative to the 2 ms spacing policy. Shared source/capture stalls and mixed maintenance p999 remain in the report.
+
+The matrix includes two million retained rows, automatic/generic plans, live partition rotation, sparse source faults, protocol and race checks, frozen sources, and cleanup audits. One command snapshot serves the existence probe and manifest INSERT; the client confirms implicit commit before publishing, including a tested deferred-commit failure. The report links implementation, diagnostics, raw samples, and reproduction commands.

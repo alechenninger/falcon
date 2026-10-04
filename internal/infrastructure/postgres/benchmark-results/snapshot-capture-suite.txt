@@ -1,0 +1,11 @@
+RUN {"phase": "suite", "utc": "2026-10-04T02:43:08.225807+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-capture.test", "binary_sha256": "ff68f996661b3131f787c6f48e616ff74b5d2b992cd6e2c1149601d90464f860", "implementation": {"domain_capture_bench_test.go": "13797bede74ee2fff48f7a508ecabb2686b0c1dc0f7fe87a233cffb39276af5c", "snapshot_fetch_bench_test.go": "0e4d649f827420d86a62038b6ce85e9a6c976b959fc7d9446ec97290ac4d5fe3", "snapshot_pipeline_bench_test.go": "b5626f781f2558d6d3f417c9ae5d310ab78e7f468b48fae0f64341abb50b52f0", "snapshot_pipeline_protocol_test.go": "9e20782caabd84922c1c83afa35a49dbcdc5cbb5c7d5aa6da259cd0e4b2f135d", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e", "snapshot_partition_bench_test.go": "ecff50c6a400dfc11cf89b5300177056fee18fa1580e7c923a08ea4f30d2dc7b", "snapshot_capture_bench_test.go": "5c7d4e22169515f9473f61bc800b4e344f9c218982aeb3e6a860edd41138a5ff", "snapshot_capture_protocol_test.go": "b5f465df25a1653fd25a821e73dda247bfceb77550536316f498ac12bb09d759", "snapshot_capture_plan_test.go": "621b152898d861fce672f2e3f8934dc0715ca704a8bb0a0a3bdf50947f7064db", "snapshot_fetch_protocol_test.go": "2389568e6bee0f3e1bb3730ce82b37fbc933b610c3c5ee70019274386941bec9"}}
+?   	github.com/alechenninger/falcon/cmd/falcon	[no test files]
+ok  	github.com/alechenninger/falcon/internal/application	0.249s
+?   	github.com/alechenninger/falcon/internal/application/observability	[no test files]
+ok  	github.com/alechenninger/falcon/internal/domain	0.246s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/grpc	0.526s
+?   	github.com/alechenninger/falcon/internal/infrastructure/grpc/proto	[no test files]
+ok  	github.com/alechenninger/falcon/internal/infrastructure/memory	0.326s
+ok  	github.com/alechenninger/falcon/internal/infrastructure/postgres	30.925s
+?   	github.com/alechenninger/falcon/internal/transport/grpc	[no test files]
+END {"exit": 0, "elapsed": 32.22896145796403, "container_inventory": [], "index": null}

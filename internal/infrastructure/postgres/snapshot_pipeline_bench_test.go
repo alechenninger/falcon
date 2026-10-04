@@ -24,9 +24,12 @@ type snapshotPipelineResult struct {
 	FetchedRows, FetchedBytes, RootEpochs, StagedBeforeEOF int64
 	FetchSeconds, PayloadMiBPerFetchSecond                 float64
 	EpochFetch, StatementFirstRow, RootCompletionWait      domainCaptureSummary
+	EpochFirstRow                                          domainCaptureSummary
 	CommitToFetch, CommitToStage, FetchToStage             domainCaptureSummary
 	BackpressureCount                                      int64
 	BackpressureSeconds                                    float64
+	BoundsQueries, BoundedCuts, FallbackCuts               int64
+	CandidatePositions, PositionSpan                       int64
 }
 
 type snapshotPipelineMetrics struct {
@@ -36,6 +39,9 @@ type snapshotPipelineMetrics struct {
 	fetchSeconds, pressureSeconds               float64
 	pressureCount                               int64
 	epochFetch, firstRow, rootWait              []time.Duration
+	epochFirstRow                               []time.Duration
+	boundsQueries, boundedCuts, fallbackCuts    int64
+	candidatePositions, positionSpan            int64
 }
 
 func (x *snapshotPipelineMetrics) result() *snapshotPipelineResult {
@@ -46,6 +52,8 @@ func (x *snapshotPipelineMetrics) result() *snapshotPipelineResult {
 		StagedBeforeEOF: x.beforeEOF, FetchSeconds: x.fetchSeconds,
 		EpochFetch: summarizeDomainDurations(x.epochFetch), StatementFirstRow: summarizeDomainDurations(x.firstRow),
 		RootCompletionWait: summarizeDomainDurations(x.rootWait), BackpressureCount: x.pressureCount, BackpressureSeconds: x.pressureSeconds,
+		EpochFirstRow: summarizeDomainDurations(x.epochFirstRow), BoundsQueries: x.boundsQueries, BoundedCuts: x.boundedCuts, FallbackCuts: x.fallbackCuts,
+		CandidatePositions: x.candidatePositions, PositionSpan: x.positionSpan,
 	}
 	if x.fetchSeconds > 0 {
 		r.PayloadMiBPerFetchSecond = float64(x.fetchedBytes) / (1 << 20) / x.fetchSeconds
@@ -194,6 +202,9 @@ func (p *snapshotPipelineSink) process(t domainCaptureTask) error {
 		if err := p.m.completeVerified(r.staged); err != nil {
 			return err
 		}
+		if p.c.PartitionGC {
+			p.c.partitions.rootReady(t.pipelineEpoch)
+		}
 		p.m.experiment.ids(-int64(len(r.staged)))
 		p.m.experiment.queue(-1)
 		p.x.mu.Lock()
@@ -274,6 +285,9 @@ func snapshotPipelineQuery(o replicationBenchObjects, paged bool) string {
 // cursor and no per-row query. The immutable journal + durable cuts make the
 // epoch's membership fixed even when page statements use different snapshots.
 func fetchSnapshotPipelineRows(ctx context.Context, db *pgxpool.Pool, o replicationBenchObjects, cut snapshotFetchCut, c domainCaptureConfig, m *domainCaptureMetrics, row func(domainCaptureFrame) error) error {
+	if c.FetchPlan != "" {
+		return fetchSnapshotOptimizedRows(ctx, db, o, cut, c, m, row)
+	}
 	paged := c.SnapshotFetch != "pipeline-stream"
 	limit := c.FetchPageRows
 	if limit == 0 {
@@ -342,6 +356,11 @@ func runSnapshotPipelineCut(ctx context.Context, db *pgxpool.Pool, o replication
 			return fmt.Errorf("unexpected pipeline operation %d", f.id)
 		}
 		p.m.events[f.id].fetched = time.Now()
+		if rows == 0 {
+			p.x.mu.Lock()
+			p.x.epochFirstRow = append(p.x.epochFirstRow, time.Since(start))
+			p.x.mu.Unlock()
+		}
 		p.m.experiment.buffer([]domainCaptureFrame{f}, 1)
 		rows++
 		bytes += int64(len(f.payload))
@@ -371,6 +390,9 @@ func runSnapshotPipelineCut(ctx context.Context, db *pgxpool.Pool, o replication
 	p.x.mu.Unlock()
 	if rows == 0 {
 		p.m.experiment.empty.Add(1)
+	}
+	if p.c.PartitionGC {
+		p.c.partitions.seal(cut, len(roots))
 	}
 	for i := range buffered {
 		f := buffered[i]

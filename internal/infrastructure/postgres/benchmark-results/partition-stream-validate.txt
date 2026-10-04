@@ -1,0 +1,244 @@
+RUN {"phase": "validate", "utc": "2026-10-03T23:13:36.374113+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-partitions.test", "binary_sha256": "231f2ad4116e0ceede017421616054d5b7b774c7d604235e49590785292544f0", "implementation": {"domain_capture_bench_test.go": "3764b9b3bff14b34dd0f2859349985628f4affde297ef48fbafbd24a220cd070", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "b5626f781f2558d6d3f417c9ae5d310ab78e7f468b48fae0f64341abb50b52f0", "snapshot_pipeline_protocol_test.go": "9e20782caabd84922c1c83afa35a49dbcdc5cbb5c7d5aa6da259cd0e4b2f135d", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e", "snapshot_partition_bench_test.go": "ecff50c6a400dfc11cf89b5300177056fee18fa1580e7c923a08ea4f30d2dc7b", "snapshot_partition_protocol_test.go": "9952e54b2ac8a8aed33d4ff5d0a13cc5a0f2d8743c79ac00b9a516549a5a8010"}}
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-false
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-true
+--- PASS: TestSnapshotPartitionRetentionAndLateWriter (1.23s)
+    --- PASS: TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-false (0.08s)
+    --- PASS: TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-true (0.05s)
+=== RUN   TestSnapshotPartitionCheckpointWaitsForAllRoots
+--- PASS: TestSnapshotPartitionCheckpointWaitsForAllRoots (0.00s)
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (3.49s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.08s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-complete (0.30s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-failure (0.31s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-complete (0.33s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-failure (0.35s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition-gc
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (2.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.06s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition (0.31s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition-gc (0.31s)
+PASS
+END {"exit": 0, "elapsed": 7.290770124993287, "container_inventory": [], "index": null}
+RUN {"phase": "validate", "utc": "2026-10-03T23:24:06.031502+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-partitions.test", "binary_sha256": "30832d347b6dac54e5e646d15dcb15de3db41de3fc69451bf2deb7b30551509d", "implementation": {"domain_capture_bench_test.go": "3764b9b3bff14b34dd0f2859349985628f4affde297ef48fbafbd24a220cd070", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "b5626f781f2558d6d3f417c9ae5d310ab78e7f468b48fae0f64341abb50b52f0", "snapshot_pipeline_protocol_test.go": "9e20782caabd84922c1c83afa35a49dbcdc5cbb5c7d5aa6da259cd0e4b2f135d", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e", "snapshot_partition_bench_test.go": "ecff50c6a400dfc11cf89b5300177056fee18fa1580e7c923a08ea4f30d2dc7b", "snapshot_partition_protocol_test.go": "d6d3fd8f833f78704f8beec4754688f6cd8fd5ac558351eff02183cfdf63954e", "snapshot_partition_plan_test.go": "f813f94b07ad233fbce502bedc1df09382c677f01c5e2752a2473d75de317e2c"}}
+=== RUN   TestSnapshotPartitionPlans
+    snapshot_partition_plan_test.go:19: opt-in partition plans
+--- SKIP: TestSnapshotPartitionPlans (0.00s)
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-false
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-true
+--- PASS: TestSnapshotPartitionRetentionAndLateWriter (1.21s)
+    --- PASS: TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-false (0.08s)
+    --- PASS: TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-true (0.05s)
+=== RUN   TestSnapshotPartitionCheckpointWaitsForAllRoots
+--- PASS: TestSnapshotPartitionCheckpointWaitsForAllRoots (0.00s)
+=== RUN   TestSnapshotPartitionCompoundKeySemantics
+--- PASS: TestSnapshotPartitionCompoundKeySemantics (0.98s)
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (3.52s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.08s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure (0.05s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-complete (0.30s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-failure (0.31s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-complete (0.33s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-failure (0.35s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition-gc
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (2.06s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.06s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive (0.03s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition (0.30s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition-gc (0.31s)
+PASS
+END {"exit": 0, "elapsed": 8.310987708042376, "container_inventory": [], "index": null}
+RUN {"phase": "validate", "utc": "2026-10-03T23:29:29.024196+00:00", "container_inventory": [], "binary": "/tmp/falcon-snapshot-partitions-race.test", "binary_sha256": "ee23f8f76c20855caf9461e9ce55dd526327b4d5edc82675920c3447459d891d", "implementation": {"domain_capture_bench_test.go": "3764b9b3bff14b34dd0f2859349985628f4affde297ef48fbafbd24a220cd070", "snapshot_fetch_bench_test.go": "96aa9b40c0c00a5ad50ee7a1567277ce758574c03545ac1259ac7a1fe13d5e54", "snapshot_pipeline_bench_test.go": "b5626f781f2558d6d3f417c9ae5d310ab78e7f468b48fae0f64341abb50b52f0", "snapshot_pipeline_protocol_test.go": "9e20782caabd84922c1c83afa35a49dbcdc5cbb5c7d5aa6da259cd0e4b2f135d", "snapshot_fetch_optimization_bench_test.go": "e73913926a8da230d08ba398a66eeb0508f3c446ae721a9dc802663f466554ef", "replication_bench_test.go": "ab6671c0b37a3b85794c4dec8157325a531060f6211d29173812b6a6137f905e", "snapshot_partition_bench_test.go": "ecff50c6a400dfc11cf89b5300177056fee18fa1580e7c923a08ea4f30d2dc7b", "snapshot_partition_protocol_test.go": "d6d3fd8f833f78704f8beec4754688f6cd8fd5ac558351eff02183cfdf63954e", "snapshot_partition_plan_test.go": "f813f94b07ad233fbce502bedc1df09382c677f01c5e2752a2473d75de317e2c"}}
+=== RUN   TestSnapshotPartitionPlans
+    snapshot_partition_plan_test.go:19: opt-in partition plans
+--- SKIP: TestSnapshotPartitionPlans (0.00s)
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-false
+=== RUN   TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-true
+--- PASS: TestSnapshotPartitionRetentionAndLateWriter (1.19s)
+    --- PASS: TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-false (0.09s)
+    --- PASS: TestSnapshotPartitionRetentionAndLateWriter/pause-before-append-true (0.05s)
+=== RUN   TestSnapshotPartitionCheckpointWaitsForAllRoots
+--- PASS: TestSnapshotPartitionCheckpointWaitsForAllRoots (0.00s)
+=== RUN   TestSnapshotPartitionCompoundKeySemantics
+--- PASS: TestSnapshotPartitionCompoundKeySemantics (0.92s)
+=== RUN   TestSnapshotPipelinePlans
+    snapshot_pipeline_plan_test.go:19: opt-in pipeline query plans
+--- SKIP: TestSnapshotPipelinePlans (0.00s)
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-failure
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-complete
+=== RUN   TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-failure
+--- PASS: TestSnapshotPipelineIncrementalAndFailedFetch (3.66s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-complete (0.09s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-paged-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-buffered-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/guarded-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/metadata-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/ordered-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/bounded-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-complete (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/adaptive-failure (0.06s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-complete (0.31s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-failure (0.33s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-complete (0.36s)
+    --- PASS: TestSnapshotPipelineIncrementalAndFailedFetch/pipeline-stream/partition-gc-failure (0.37s)
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition
+=== RUN   TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition-gc
+--- PASS: TestSnapshotPipelineRootProgressAndLateCommit (2.01s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-paged (0.08s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-buffered (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/guarded (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/metadata (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/ordered (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/bounded (0.04s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/adaptive (0.05s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition (0.31s)
+    --- PASS: TestSnapshotPipelineRootProgressAndLateCommit/pipeline-stream/partition-gc (0.33s)
+PASS
+END {"exit": 0, "elapsed": 9.417894084006548, "container_inventory": [], "index": null}
