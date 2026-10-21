@@ -10,7 +10,8 @@ import (
 )
 
 // Schema is the SQL DDL for the tuples and id_mappings tables.
-// Uses compact integer types for type/relation IDs (SMALLINT = 2 bytes, supports 0-255).
+// Uses compact integer types for type/relation IDs
+// (SMALLINT = 2 bytes, supports schema IDs through 32767).
 // BIGINT is used for object/subject IDs (8 bytes, supports 64-bit IDs).
 const Schema = `
 CREATE TABLE IF NOT EXISTS tuples (
@@ -107,6 +108,8 @@ func (s *Store) LoadAll(ctx context.Context) (domain.TupleIterator, error) {
 }
 
 // pgxTx implements domain.Tx using pgx.
+// Schema IDs use int32 parameters so pgx checks the SMALLINT range before encoding.
+// Narrowing to int16 here would wrap unsupported IDs into negative values.
 type pgxTx struct {
 	tx pgx.Tx
 }
@@ -117,7 +120,7 @@ func (t *pgxTx) GetID(ctx context.Context, ref domain.ObjectRef) (domain.ID, err
 	var internalID int64
 	err := t.tx.QueryRow(ctx, `
 		SELECT internal_id FROM id_mappings WHERE type_id = $1 AND external_id = $2
-	`, int16(ref.Type), string(ref.ID)).Scan(&internalID)
+	`, int32(ref.Type), string(ref.ID)).Scan(&internalID)
 	if err == pgx.ErrNoRows {
 		return 0, domain.ErrIDNotFound
 	}
@@ -145,7 +148,7 @@ func (t *pgxTx) GetOrProvisionID(ctx context.Context, ref domain.ObjectRef, root
 		VALUES ($1, $2)
 		ON CONFLICT (type_id, external_id) DO UPDATE SET external_id = EXCLUDED.external_id
 		RETURNING internal_id
-	`, int16(ref.Type), string(ref.ID)).Scan(&internalID)
+	`, int32(ref.Type), string(ref.ID)).Scan(&internalID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to provision ID: %w", err)
 	}
@@ -158,7 +161,7 @@ func (t *pgxTx) GetRef(ctx context.Context, typeID domain.TypeID, id domain.ID) 
 	var externalID string
 	err := t.tx.QueryRow(ctx, `
 		SELECT external_id FROM id_mappings WHERE type_id = $1 AND internal_id = $2
-	`, int16(typeID), int64(id)).Scan(&externalID)
+	`, int32(typeID), int64(id)).Scan(&externalID)
 	if err == pgx.ErrNoRows {
 		return domain.ObjectRef{}, domain.ErrIDNotFound
 	}
@@ -178,15 +181,15 @@ func (t *pgxTx) Write(ctx context.Context, mutations []domain.Mutation) error {
 				INSERT INTO tuples (object_type, object_id, relation, subject_type, subject_id, subject_relation)
 				VALUES ($1, $2, $3, $4, $5, $6)
 				ON CONFLICT DO NOTHING
-			`, int16(m.Tuple.ObjectType), int64(m.Tuple.ObjectID), int16(m.Tuple.Relation),
-				int16(m.Tuple.SubjectType), int64(m.Tuple.SubjectID), int16(m.Tuple.SubjectRelation))
+			`, int32(m.Tuple.ObjectType), int64(m.Tuple.ObjectID), int32(m.Tuple.Relation),
+				int32(m.Tuple.SubjectType), int64(m.Tuple.SubjectID), int32(m.Tuple.SubjectRelation))
 		case domain.OpDelete:
 			_, err = t.tx.Exec(ctx, `
 				DELETE FROM tuples
 				WHERE object_type = $1 AND object_id = $2 AND relation = $3 
 				  AND subject_type = $4 AND subject_id = $5 AND subject_relation = $6
-			`, int16(m.Tuple.ObjectType), int64(m.Tuple.ObjectID), int16(m.Tuple.Relation),
-				int16(m.Tuple.SubjectType), int64(m.Tuple.SubjectID), int16(m.Tuple.SubjectRelation))
+			`, int32(m.Tuple.ObjectType), int64(m.Tuple.ObjectID), int32(m.Tuple.Relation),
+				int32(m.Tuple.SubjectType), int64(m.Tuple.SubjectID), int32(m.Tuple.SubjectRelation))
 		default:
 			return fmt.Errorf("unknown mutation op: %v", m.Op)
 		}
@@ -378,36 +381,38 @@ func fieldPredicateToSQL(pred domain.FieldPredicate, paramStart int) (string, []
 	case domain.OpEq:
 		// Both type and external_id must match
 		return fmt.Sprintf("(%s = $%d AND %s = $%d)", typeCol, paramStart, extIDCol, paramStart+1),
-			[]any{int16(ref.Type), string(ref.ID)}
+			[]any{int32(ref.Type), string(ref.ID)}
 	case domain.OpNeq:
 		// Either type or external_id can differ
 		return fmt.Sprintf("(%s <> $%d OR %s <> $%d)", typeCol, paramStart, extIDCol, paramStart+1),
-			[]any{int16(ref.Type), string(ref.ID)}
+			[]any{int32(ref.Type), string(ref.ID)}
 	case domain.OpStartsWith:
 		// Match type exactly, external_id starts with prefix
 		return fmt.Sprintf("(%s = $%d AND %s LIKE $%d || '%%')", typeCol, paramStart, extIDCol, paramStart+1),
-			[]any{int16(ref.Type), string(ref.ID)}
+			[]any{int32(ref.Type), string(ref.ID)}
 	default:
 		// For Lt, Lte, Gt, Gte: compare type first, then external_id within type
 		// This gives lexicographic ordering: (type, external_id)
 		op := compareOpToSQL(pred.Op)
 		return fmt.Sprintf("(%s = $%d AND %s %s $%d)", typeCol, paramStart, extIDCol, op, paramStart+1),
-			[]any{int16(ref.Type), string(ref.ID)}
+			[]any{int32(ref.Type), string(ref.ID)}
 	}
 }
 
 // fieldValue converts the predicate value to the appropriate SQL type.
+// Schema IDs use int32 parameters so pgx checks the SMALLINT range before encoding.
+// Narrowing to int16 here would wrap unsupported IDs into negative values.
 func fieldValue(f domain.TupleField, v any) any {
 	switch f {
 	case domain.FieldObjectType, domain.FieldSubjectType:
 		// TypeID -> SMALLINT
 		if tid, ok := v.(domain.TypeID); ok {
-			return int16(tid)
+			return int32(tid)
 		}
 	case domain.FieldRelation, domain.FieldSubjectRelation:
 		// RelationID -> SMALLINT
 		if rid, ok := v.(domain.RelationID); ok {
-			return int16(rid)
+			return int32(rid)
 		}
 	case domain.FieldObjectID, domain.FieldSubjectID:
 		// ObjectRef or ExternalID - handled by fieldPredicateToSQL

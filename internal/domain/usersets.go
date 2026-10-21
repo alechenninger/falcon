@@ -12,12 +12,12 @@ import (
 // subject type, and subject relation.
 //
 // Uses compact TypeID/RelationID instead of strings for memory efficiency.
-// Total size: 12 bytes (vs ~72 bytes with strings).
+// Total size: 16 bytes (vs ~72 bytes with strings).
 type usersetKey struct {
-	ObjectType      TypeID     // 1 byte
-	Relation        RelationID // 1 byte
-	SubjectType     TypeID     // 1 byte
-	SubjectRelation RelationID // 1 byte (0 = no relation)
+	ObjectType      TypeID     // 2 bytes
+	Relation        RelationID // 2 bytes
+	SubjectType     TypeID     // 2 bytes
+	SubjectRelation RelationID // 2 bytes (0 = no relation)
 	ObjectID        ID         // 8 bytes
 }
 

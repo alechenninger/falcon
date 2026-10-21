@@ -74,16 +74,20 @@ func (g *RemoteGraph) CheckUnion(ctx context.Context,
 		return domain.CheckResult{}, err
 	}
 
-	return checkResultFromProto(resp), nil
+	return checkResultFromProto(resp)
 }
 
 // checkResultFromProto converts a proto CheckUnionResponse to domain.CheckResult.
-func checkResultFromProto(resp *graphpb.CheckUnionResponse) domain.CheckResult {
+func checkResultFromProto(resp *graphpb.CheckUnionResponse) (domain.CheckResult, error) {
+	sets, err := DependentSetsFromProto(resp.DependentSets)
+	if err != nil {
+		return domain.CheckResult{}, err
+	}
 	return domain.CheckResult{
 		Found:         resp.Allowed,
-		DependentSets: DependentSetsFromProto(resp.DependentSets),
+		DependentSets: sets,
 		Window:        SnapshotWindowFromProto(resp.Window),
-	}
+	}, nil
 }
 
 // Schema returns the authorization domain.

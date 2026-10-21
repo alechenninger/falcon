@@ -109,10 +109,10 @@ func (p *applyChangeProbe) End() {
 	}
 	p.logger.LogAttrs(p.ctx, slog.LevelDebug, "change applied",
 		slog.String("request_id", RequestIDFromContext(p.ctx)),
-		slog.String("object_type", string(p.change.Tuple.ObjectType)),
+		slog.Uint64("object_type", uint64(p.change.Tuple.ObjectType)),
 		slog.Any("object_id", p.change.Tuple.ObjectID),
-		slog.String("relation", string(p.change.Tuple.Relation)),
-		slog.String("subject_type", string(p.change.Tuple.SubjectType)),
+		slog.Uint64("relation", uint64(p.change.Tuple.Relation)),
+		slog.Uint64("subject_type", uint64(p.change.Tuple.SubjectType)),
 		slog.Any("subject_id", p.change.Tuple.SubjectID),
 		slog.Any("op", p.change.Op),
 		slog.Any("applied_time", p.applied),
@@ -393,7 +393,7 @@ func (p *checkUnionProbe) End() {
 		}
 		p.logger.LogAttrs(p.ctx, slog.LevelDebug, "check union empty",
 			slog.String("request_id", RequestIDFromContext(p.ctx)),
-			slog.String("subject_type", string(p.subjectType)),
+			slog.Uint64("subject_type", uint64(p.subjectType)),
 			slog.Any("subject_id", p.subjectID),
 			slog.Duration("duration", time.Since(p.startTime)))
 		return
@@ -401,7 +401,7 @@ func (p *checkUnionProbe) End() {
 	if len(p.failed) > 0 {
 		p.logger.LogAttrs(p.ctx, slog.LevelWarn, "check union inconclusive",
 			slog.String("request_id", RequestIDFromContext(p.ctx)),
-			slog.String("subject_type", string(p.subjectType)),
+			slog.Uint64("subject_type", uint64(p.subjectType)),
 			slog.Any("subject_id", p.subjectID),
 			slog.Any("failed_shards", p.failed),
 			slog.Duration("duration", time.Since(p.startTime)))
@@ -412,7 +412,7 @@ func (p *checkUnionProbe) End() {
 	}
 	p.logger.LogAttrs(p.ctx, slog.LevelInfo, "check union completed",
 		slog.String("request_id", RequestIDFromContext(p.ctx)),
-		slog.String("subject_type", string(p.subjectType)),
+		slog.Uint64("subject_type", uint64(p.subjectType)),
 		slog.Any("subject_id", p.subjectID),
 		slog.Bool("found", p.found),
 		slog.Uint64("window_min", uint64(p.window.Min())),

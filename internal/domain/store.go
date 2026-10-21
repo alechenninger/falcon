@@ -75,13 +75,15 @@ func (a *AtomicStoreTime) Store(t StoreTime) {
 //
 // For userset subjects: object_type:object_id#relation@subject_type:subject_id#subject_relation
 // Example: document:100#viewer@group:1#member (all members of group 1 are viewers)
+//
+// The four schema IDs are grouped to avoid padding; a Tuple occupies 24 bytes.
 type Tuple struct {
 	ObjectType      TypeID
-	ObjectID        ID
 	Relation        RelationID
 	SubjectType     TypeID
-	SubjectID       ID
 	SubjectRelation RelationID // Optional: NoRelation for direct subjects
+	ObjectID        ID
+	SubjectID       ID
 }
 
 // ChangeOp represents the type of change (insert or delete).

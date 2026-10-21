@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"testing"
 )
 
@@ -68,6 +69,7 @@ func RunStoreTests(t *testing.T, factory StoreFactory) {
 
 	// Tuple Key Semantics
 	t.Run("Write_LargeIDs", func(t *testing.T) { testWriteLargeIDs(t, factory) })
+	t.Run("Write_SchemaIDs", func(t *testing.T) { testWriteSchemaIDs(t, factory) })
 	t.Run("Write_DifferentSubjectTypes", func(t *testing.T) { testWriteDifferentSubjectTypes(t, factory) })
 	t.Run("Write_UsersetSubject", func(t *testing.T) { testWriteUsersetSubject(t, factory) })
 }
@@ -997,6 +999,71 @@ func deleteTuple(t *testing.T, s Store, ctx context.Context, tuple Tuple) {
 }
 
 // --- Tuple Key Semantics Tests ---
+
+func testWriteSchemaIDs(t *testing.T, factory StoreFactory) {
+	for _, id := range []uint16{256, 257, 16384, 32767} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			s := factory(t)
+			defer s.Close()
+			ctx := context.Background()
+			tx, err := s.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			objectRef := ObjectRef{Type: TypeID(id), ID: "doc"}
+			objectID, err := tx.GetOrProvisionID(ctx, objectRef, NoObject)
+			if err != nil {
+				t.Fatal(err)
+			}
+			subjectRef := ObjectRef{Type: TypeID(id), ID: "subject"}
+			subjectID, err := tx.GetOrProvisionID(ctx, subjectRef, NoObject)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tuple := Tuple{
+				ObjectType: TypeID(id), ObjectID: objectID, Relation: RelationID(id),
+				SubjectType: TypeID(id), SubjectID: subjectID, SubjectRelation: RelationID(id),
+			}
+			if err := tx.Write(ctx, []Mutation{{Op: OpInsert, Tuple: tuple}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if got := collectTuples(t, s, ctx); len(got) != 1 || got[0] != tuple {
+				t.Fatalf("loaded tuples = %+v, want %+v", got, tuple)
+			}
+			tx, err = s.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			if got, err := tx.GetID(ctx, objectRef); err != nil || got != objectID {
+				t.Fatalf("GetID = %d, %v; want %d", got, err, objectID)
+			}
+			if got, err := tx.GetRef(ctx, subjectRef.Type, subjectID); err != nil || got != subjectRef {
+				t.Fatalf("GetRef = %+v, %v; want %+v", got, err, subjectRef)
+			}
+			for _, predicate := range []TuplePredicate{
+				And(Eq(FieldObjectType, tuple.ObjectType), Eq(FieldRelation, tuple.Relation),
+					Eq(FieldSubjectType, tuple.SubjectType), Eq(FieldSubjectRelation, tuple.SubjectRelation)),
+				And(Eq(FieldObjectID, objectRef), Eq(FieldSubjectID, subjectRef)),
+			} {
+				if found, err := tx.Contains(ctx, predicate); err != nil || !found {
+					t.Fatalf("Contains = %v, %v; want true", found, err)
+				}
+			}
+			if err := tx.Rollback(ctx); err != nil {
+				t.Fatal(err)
+			}
+			deleteTuple(t, s, ctx, tuple)
+			if got := collectTuples(t, s, ctx); len(got) != 0 {
+				t.Fatalf("tuple remains after delete: %+v", got)
+			}
+		})
+	}
+}
 
 func testWriteLargeIDs(t *testing.T, factory StoreFactory) {
 	s := factory(t)

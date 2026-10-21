@@ -24,11 +24,11 @@ type Store struct {
 // tupleKey is the map key for deduplication.
 type tupleKey struct {
 	ObjectType      domain.TypeID
-	ObjectID        domain.ID
 	Relation        domain.RelationID
 	SubjectType     domain.TypeID
-	SubjectID       domain.ID
 	SubjectRelation domain.RelationID
+	ObjectID        domain.ID
+	SubjectID       domain.ID
 }
 
 func toKey(t domain.Tuple) tupleKey {

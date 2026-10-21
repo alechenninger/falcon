@@ -3,11 +3,28 @@ package grpc
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/RoaringBitmap/roaring/roaring64"
 	"github.com/alechenninger/falcon/internal/domain"
 	graphpb "github.com/alechenninger/falcon/internal/infrastructure/grpc/proto"
 )
+
+// TypeIDFromProto converts a protobuf type ID, rejecting unsupported values.
+func TypeIDFromProto(id uint32) (domain.TypeID, error) {
+	if id == 0 || id > uint32(domain.MaxTypeID) {
+		return 0, fmt.Errorf("type ID %d must be between 1 and %d", id, domain.MaxTypeID)
+	}
+	return domain.TypeID(id), nil
+}
+
+// RelationIDFromProto converts a protobuf relation ID, rejecting unsupported values.
+func RelationIDFromProto(id uint32) (domain.RelationID, error) {
+	if id == 0 || id > uint32(domain.MaxRelationID) {
+		return 0, fmt.Errorf("relation ID %d must be between 1 and %d", id, domain.MaxRelationID)
+	}
+	return domain.RelationID(id), nil
+}
 
 // byteReader wraps a byte slice to implement io.Reader.
 type byteReader struct {
@@ -68,19 +85,28 @@ func VisitedKeysToProto(visited []domain.VisitedKey) []*graphpb.VisitedNode {
 }
 
 // VisitedKeysFromProto converts proto VisitedNodes to a slice of domain.VisitedKey.
-func VisitedKeysFromProto(visited []*graphpb.VisitedNode) []domain.VisitedKey {
+// It returns an error if a type or relation ID is outside the supported range.
+func VisitedKeysFromProto(visited []*graphpb.VisitedNode) ([]domain.VisitedKey, error) {
 	if visited == nil {
-		return nil
+		return nil, nil
 	}
 	result := make([]domain.VisitedKey, len(visited))
 	for i, v := range visited {
+		objectType, err := TypeIDFromProto(v.GetObjectTypeId())
+		if err != nil {
+			return nil, err
+		}
+		relation, err := RelationIDFromProto(v.GetRelationId())
+		if err != nil {
+			return nil, err
+		}
 		result[i] = domain.VisitedKey{
-			ObjectType: domain.TypeID(v.ObjectTypeId),
+			ObjectType: objectType,
 			ObjectID:   domain.ID(v.ObjectId),
-			Relation:   domain.RelationID(v.RelationId),
+			Relation:   relation,
 		}
 	}
-	return result
+	return result, nil
 }
 
 // RelationChecksToProto converts a slice of domain.RelationCheck to proto representation.
@@ -104,9 +130,18 @@ func RelationChecksToProto(checks []domain.RelationCheck) []*graphpb.RelationChe
 }
 
 // RelationChecksFromProto converts proto RelationChecks to a slice of domain.RelationCheck.
+// It returns an error if a schema ID or serialized bitmap is invalid.
 func RelationChecksFromProto(checks []*graphpb.RelationCheck) ([]domain.RelationCheck, error) {
 	result := make([]domain.RelationCheck, len(checks))
 	for i, c := range checks {
+		objectType, err := TypeIDFromProto(c.GetObjectTypeId())
+		if err != nil {
+			return nil, err
+		}
+		relation, err := RelationIDFromProto(c.GetRelationId())
+		if err != nil {
+			return nil, err
+		}
 		bitmap := roaring64.New()
 		if len(c.ObjectIds) > 0 {
 			if _, err := bitmap.ReadFrom(newByteReader(c.ObjectIds)); err != nil {
@@ -114,9 +149,9 @@ func RelationChecksFromProto(checks []*graphpb.RelationCheck) ([]domain.Relation
 			}
 		}
 		result[i] = domain.RelationCheck{
-			ObjectType: domain.TypeID(c.ObjectTypeId),
+			ObjectType: objectType,
 			ObjectIDs:  bitmap,
-			Relation:   domain.RelationID(c.RelationId),
+			Relation:   relation,
 			Window:     SnapshotWindowFromProto(c.Window),
 		}
 	}
@@ -146,22 +181,31 @@ func DependentSetsToProto(sets []domain.DependentSet) []*graphpb.DependentSet {
 }
 
 // DependentSetsFromProto converts proto DependentSets to Go type.
-func DependentSetsFromProto(sets []*graphpb.DependentSet) []domain.DependentSet {
+// It returns an error if a type or relation ID is outside the supported range.
+func DependentSetsFromProto(sets []*graphpb.DependentSet) ([]domain.DependentSet, error) {
 	if sets == nil {
-		return nil
+		return nil, nil
 	}
 	result := make([]domain.DependentSet, len(sets))
 	for i, s := range sets {
+		objectType, err := TypeIDFromProto(s.GetObjectTypeId())
+		if err != nil {
+			return nil, err
+		}
+		relation, err := RelationIDFromProto(s.GetRelationId())
+		if err != nil {
+			return nil, err
+		}
 		var bitmap *roaring64.Bitmap
 		if len(s.ObjectIds) > 0 {
 			bitmap = roaring64.New()
 			bitmap.ReadFrom(newByteReader(s.ObjectIds))
 		}
 		result[i] = domain.DependentSet{
-			ObjectType: domain.TypeID(s.ObjectTypeId),
-			Relation:   domain.RelationID(s.RelationId),
+			ObjectType: objectType,
+			Relation:   relation,
 			ObjectIDs:  bitmap,
 		}
 	}
-	return result
+	return result, nil
 }

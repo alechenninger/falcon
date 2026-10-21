@@ -15,13 +15,19 @@ type ID uint64
 
 // TypeID is a stable numeric identifier for an object type.
 // Like protobuf field numbers, these must be stable across schema versions.
-// Valid values are 1-255; 0 is reserved.
-type TypeID uint8
+// Valid values are 1 through [MaxTypeID]; 0 is reserved.
+type TypeID uint16
+
+// MaxTypeID is the largest supported type ID, matching PostgreSQL SMALLINT.
+const MaxTypeID TypeID = 32767
 
 // RelationID is a stable numeric identifier for a relation.
 // Unique within each object type.
-// Valid values are 1-255; 0 means "no relation" (direct subject).
-type RelationID uint8
+// Valid values are 1 through [MaxRelationID]; 0 means "no relation" (direct subject).
+type RelationID uint16
+
+// MaxRelationID is the largest supported relation ID, matching PostgreSQL SMALLINT.
+const MaxRelationID RelationID = 32767
 
 // NoRelation is the RelationID for direct subjects (no relation).
 const NoRelation RelationID = 0
@@ -175,12 +181,20 @@ func (r *Relation) DirectTargetTypes() []SubjectRef {
 // Compile builds the reverse lookup maps for efficient ID-based access.
 // This must be called after constructing the schema and before using
 // the lookup methods.
+// It panics if a type or relation ID is zero or exceeds its supported maximum.
+// TODO: return an err instead of panic
 func (s *Schema) Compile() {
 	s.typesByID = make(map[TypeID]*ObjectType, len(s.Types))
 	for _, ot := range s.Types {
+		if ot.ID == 0 || ot.ID > MaxTypeID {
+			panic(fmt.Sprintf("schema: type %q ID %d must be between 1 and %d", ot.Name, ot.ID, MaxTypeID))
+		}
 		s.typesByID[ot.ID] = ot
 		ot.relationsByID = make(map[RelationID]*Relation, len(ot.Relations))
 		for _, rel := range ot.Relations {
+			if rel.ID == 0 || rel.ID > MaxRelationID {
+				panic(fmt.Sprintf("schema: relation %q on type %q ID %d must be between 1 and %d", rel.Name, ot.Name, rel.ID, MaxRelationID))
+			}
 			ot.relationsByID[rel.ID] = rel
 		}
 	}
